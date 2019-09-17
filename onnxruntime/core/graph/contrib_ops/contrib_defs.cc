@@ -275,17 +275,17 @@ is applied to the tensor elementwise.
       .TypeConstraint(
           "T",
           {"tensor(float16)", "tensor(float)", "tensor(double)"},
-          "Constrain input and output types to float tensors.")
-      .FunctionBody(ONNX_NAMESPACE::FunctionBodyHelper::BuildNodes(
-          {// nodes: {outputs, op, inputs, attributes}
-           ONNX_NAMESPACE::FunctionBodyHelper::Const<float>("Sqrt_two", static_cast<float>(M_SQRT2)),
-           ONNX_NAMESPACE::FunctionBodyHelper::Const<float>("One_half", 0.5f),
-           ONNX_NAMESPACE::FunctionBodyHelper::Const<float>("One", 1.0f),
-           {{"X_1"}, "Mul", {"X", "One_half"}},
-           {{"X_2"}, "Div", {"X", "Sqrt_two"}},
-           {{"X_3"}, "Erf", {"X_2"}},
-           {{"X_4"}, "Add", {"X_3", "One"}},
-           {{"Y"}, "Mul", {"X_1", "X_4"}}}));
+          "Constrain input and output types to float tensors.");
+  //.FunctionBody(ONNX_NAMESPACE::FunctionBodyHelper::BuildNodes(
+  //    {// nodes: {outputs, op, inputs, attributes}
+  //     ONNX_NAMESPACE::FunctionBodyHelper::Const<float>("Sqrt_two", static_cast<float>(M_SQRT2)),
+  //     ONNX_NAMESPACE::FunctionBodyHelper::Const<float>("One_half", 0.5f),
+  //     ONNX_NAMESPACE::FunctionBodyHelper::Const<float>("One", 1.0f),
+  //     {{"X_1"}, "Mul", {"X", "One_half"}},
+  //     {{"X_2"}, "Div", {"X", "Sqrt_two"}},
+  //     {{"X_3"}, "Erf", {"X_2"}},
+  //     {{"X_4"}, "Add", {"X_3", "One"}},
+  //     {{"Y"}, "Mul", {"X_1", "X_4"}}}));
 
   ONNX_CONTRIB_OPERATOR_SCHEMA(Attention)
       .SetDomain(kOnnxDomain)
@@ -299,7 +299,7 @@ is applied to the tensor elementwise.
       .Input(0, "input", "3D input tensor with shape (B, S, 3 * N * H), B is batch size, S is max sequence length, N is number of heads, H is size per head", "T")
       .Input(1, "mask", "attention mask with shape (B, S)", "Tm")
       .Output(0, "output", "3D output tensor with shape (B, S, N * H)", "T")
-      .TypeConstraint("T", {"tensor(float)"}, "Constrain input and output types to float tensors.")
+      .TypeConstraint("T", {"tensor(float)", "tensor(float16)"}, "Constrain input and output types to float tensors.")
       .TypeConstraint("Tm", {"tensor(int32)"},
                       "Constrain mask to integer types")
       .TypeAndShapeInferenceFunction([](ONNX_NAMESPACE::InferenceContext& ctx) {
