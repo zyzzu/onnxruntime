@@ -188,6 +188,60 @@ void RegisterNchwcSchemas() {
 }
 
 void RegisterBertSchemas() {
+  ONNX_CONTRIB_OPERATOR_SCHEMA(LayerNormalization)
+      .SetDomain(kOnnxDomain)
+      .SinceVersion(9)
+      .SetSupportLevel(OpSchema::SupportType::EXPERIMENTAL)
+      .SetDoc("LayerNormalization")
+      .Attr("axis",
+            "The first normalization dimension: normalization will be performed along dimensions axis : rank(inputs).",
+            AttributeProto::INT, static_cast<int64_t>(-1))
+      .Attr("epsilon", "The epsilon value to use to avoid division by zero.", AttributeProto::FLOAT, 1e-5f)
+      .AllowUncheckedAttributes()
+      .Input(0, "X", "Input data tensor from the previous layer.", "T")
+      .Input(1, "scale", "Scale tensor.", "T")
+      .Input(2, "B", "Bias tensor.", "T")
+      .Output(0, "Y", "Output data tensor.", "T")
+      .Output(1, "mean", "Saved mean used during training to speed up gradient computation", "U", OpSchema::Optional)
+      .Output(2, "inv_std_var", "Saved inverse standard variance used during training to speed up gradient computation.", "U", OpSchema::Optional)
+      .TypeConstraint(
+          "T",
+          {"tensor(float16)", "tensor(float)", "tensor(double)"},
+          "Constrain input and output types (except mean and inv_std_var) to float tensors.")
+      .TypeConstraint(
+          "U",
+          {"tensor(float)"},
+          "Constrain mean and inv_std_var to be float tensors.")
+      .TypeAndShapeInferenceFunction([](ONNX_NAMESPACE::InferenceContext& ctx) {
+        propagateShapeAndTypeFromFirstInput(ctx);
+        propagateElemTypeFromInputToOutput(ctx, 0, 0);
+        if (!hasNInputShapes(ctx, 1)) {
+          return;
+        }
+        auto& input_shape = ctx.getInputType(0)->tensor_type().shape();
+        int64_t input_ndim = input_shape.dim_size();
+        int64_t axis = -1;
+        auto axis_proto = ctx.getAttribute("axis");
+        if (axis_proto) {
+          axis = axis_proto->i();
+        }
+        if (axis < 0) {
+          axis += input_ndim;
+        }
+
+        if (ctx.getNumOutputs() > 1) {
+          auto saved_mean_shape = ctx.getOutputType(1)->mutable_tensor_type()->mutable_shape();
+          saved_mean_shape->CopyFrom(input_shape);
+          saved_mean_shape->mutable_dim(static_cast<int>(axis))->set_dim_value(1);
+        }
+
+        if (ctx.getNumOutputs() > 2) {
+          auto saved_inv_std_var_shape = ctx.getOutputType(2)->mutable_tensor_type()->mutable_shape();
+          saved_inv_std_var_shape->CopyFrom(input_shape);
+          saved_inv_std_var_shape->mutable_dim(static_cast<int>(axis))->set_dim_value(1);
+        }
+      });
+
   static const char* Normalize_ver1_doc = R"DOC(
 Affine takes one input data (Tensor<T>) and produces one output data
 (Tensor<T>) where the affine function, y = alpha * x + beta,
@@ -221,17 +275,17 @@ is applied to the tensor elementwise.
       .TypeConstraint(
           "T",
           {"tensor(float16)", "tensor(float)", "tensor(double)"},
-          "Constrain input and output types to float tensors.")
-      .FunctionBody(ONNX_NAMESPACE::FunctionBodyHelper::BuildNodes(
-          {// nodes: {outputs, op, inputs, attributes}
-           ONNX_NAMESPACE::FunctionBodyHelper::Const<float>("Sqrt_two", static_cast<float>(M_SQRT2)),
-           ONNX_NAMESPACE::FunctionBodyHelper::Const<float>("One_half", 0.5f),
-           ONNX_NAMESPACE::FunctionBodyHelper::Const<float>("One", 1.0f),
-           {{"X_1"}, "Mul", {"X", "One_half"}},
-           {{"X_2"}, "Div", {"X", "Sqrt_two"}},
-           {{"X_3"}, "Erf", {"X_2"}},
-           {{"X_4"}, "Add", {"X_3", "One"}},
-           {{"Y"}, "Mul", {"X_1", "X_4"}}}));
+          "Constrain input and output types to float tensors.");
+  //.FunctionBody(ONNX_NAMESPACE::FunctionBodyHelper::BuildNodes(
+  //    {// nodes: {outputs, op, inputs, attributes}
+  //     ONNX_NAMESPACE::FunctionBodyHelper::Const<float>("Sqrt_two", static_cast<float>(M_SQRT2)),
+  //     ONNX_NAMESPACE::FunctionBodyHelper::Const<float>("One_half", 0.5f),
+  //     ONNX_NAMESPACE::FunctionBodyHelper::Const<float>("One", 1.0f),
+  //     {{"X_1"}, "Mul", {"X", "One_half"}},
+  //     {{"X_2"}, "Div", {"X", "Sqrt_two"}},
+  //     {{"X_3"}, "Erf", {"X_2"}},
+  //     {{"X_4"}, "Add", {"X_3", "One"}},
+  //     {{"Y"}, "Mul", {"X_1", "X_4"}}}));
 
   ONNX_CONTRIB_OPERATOR_SCHEMA(Attention)
       .SetDomain(kOnnxDomain)
@@ -245,7 +299,7 @@ is applied to the tensor elementwise.
       .Input(0, "input", "3D input tensor with shape (B, S, 3 * N * H), B is batch size, S is max sequence length, N is number of heads, H is size per head", "T")
       .Input(1, "mask", "attention mask with shape (B)", "Tm")
       .Output(0, "output", "3D output tensor with shape (B, S, N * H)", "T")
-      .TypeConstraint("T", {"tensor(float)"}, "Constrain input and output types to float tensors.")
+      .TypeConstraint("T", {"tensor(float)", "tensor(float16)"}, "Constrain input and output types to float tensors.")
       .TypeConstraint("Tm", {"tensor(int32)"},
                       "Constrain mask to integer types")
       .TypeAndShapeInferenceFunction([](ONNX_NAMESPACE::InferenceContext& ctx) {
