@@ -17,6 +17,7 @@
 #include "core/framework/session_state.h"
 #include "core/framework/sequential_executor.h"
 #include "core/mlas/inc/mlas.h"
+#include "core/providers/cuda/gpu_data_transfer.h"
 
 namespace onnxruntime {
 namespace utils {
@@ -628,6 +629,7 @@ void DumpNodeOutputs(OpKernelContext& context, const Node& node, const SessionSt
 
   const auto& execution_providers = session_state.GetExecutionProviders();
   const auto* cpu_execution_provider = execution_providers.Get(onnxruntime::kCpuExecutionProvider);
+  const auto* cuda_execution_provider = execution_providers.Get(onnxruntime::kCudaExecutionProvider);
 
   for (auto i = 0, end = context.OutputCount(); i < end; ++i) {
     if (output_defs[i]->Exists()) {
@@ -654,6 +656,21 @@ void DumpNodeOutputs(OpKernelContext& context, const Node& node, const SessionSt
             DispatchOnTensorType(data_type, DumpTensor, tensor, shape);
           } else {
             std::cout << " is not on CPU. Provider=" << provider->Type() << "\n";
+
+            if (provider == cuda_execution_provider) {
+              // copy tensor from gpu to cpu then dump
+              auto cpu_allocator = cpu_execution_provider->GetAllocator(0, OrtMemTypeDefault);
+              std::unique_ptr<Tensor> cpu_tensor = std::make_unique<Tensor>(data_type,
+                                                                            shape,
+                                                                            cpu_allocator);
+              GPUDataTransfer data_transfer;
+              auto status = data_transfer.CopyTensor(tensor, *cpu_tensor.get(), 0);
+              if (status == common::Status::OK()) {
+                DispatchOnTensorType(data_type, DumpTensor, *cpu_tensor.get(), shape);
+              } else {
+                std::cout << " failed to transfer data to cpu.\n";
+              }
+            } 
           }
         } else {
           std::cout << " is non-tensor type.\n";
