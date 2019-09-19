@@ -25,8 +25,8 @@ static IntType alignTo(IntType a, IntType b) {
   return CeilDiv(a, b) * b;
 }
 
-size_t scratchSize(size_t element_size, int batchsize, int num_heads, int sequence_length) {
-  const size_t len = batchsize * num_heads * sequence_length * sequence_length;
+size_t scratchSize(size_t element_size, int batch_size, int num_heads, int sequence_length) {
+  const size_t len = batch_size * num_heads * sequence_length * sequence_length;
   const size_t bytes = len * element_size;
 
   const size_t alignment = 256;
@@ -34,29 +34,28 @@ size_t scratchSize(size_t element_size, int batchsize, int num_heads, int sequen
   return bytesAligned;
 }
 
-size_t getAttentionWorkspaceSize(size_t element_size, int batchsize, int num_heads, int head_size, int sequence_length) {
-  size_t qkv_size = 3 * batchsize * sequence_length * num_heads * head_size * element_size;
-  return qkv_size + 2 * scratchSize(element_size, batchsize, num_heads, sequence_length);
+size_t getAttentionWorkspaceSize(size_t element_size, int batch_size, int num_heads, int head_size, int sequence_length) {
+  size_t qkv_size = 3 * batch_size * sequence_length * num_heads * head_size * element_size;
+  return qkv_size + 2 * scratchSize(element_size, batch_size, num_heads, sequence_length);
 }
 
 template <typename T, unsigned TPB>
-__device__ inline void scaledSoftmax(
-    const int ld, const int last_valid, const float rsqrt_head_size, const T* input, T* output) {
+__device__ inline void softmax(
+    const int sequence_length, const int last_valid, const T* input, T* output) {
   using BlockReduce = cub::BlockReduce<float, TPB>;
   __shared__ typename BlockReduce::TempStorage tmp_storage;
 
   __shared__ float reverse_z;
 
-  const int offset = (blockIdx.y * gridDim.x + blockIdx.x) * ld;
+  const int offset = (blockIdx.y * gridDim.x + blockIdx.x) * sequence_length;
 
-  const float w(rsqrt_head_size);
   cub::Sum sum;
   float thread_data(0);
 
   for (int i = threadIdx.x; i < last_valid; i += TPB) {
     const int idx = offset + i;
     const float val = input[idx];
-    thread_data += exp(val * w);
+    thread_data += exp(val);
   }
 
   const auto z = BlockReduce(tmp_storage).Reduce(thread_data, sum);
@@ -66,32 +65,31 @@ __device__ inline void scaledSoftmax(
   }
   __syncthreads();
 
-  for (int i = threadIdx.x; i < ld; i += TPB) {
+  for (int i = threadIdx.x; i < sequence_length; i += TPB) {
     const int idx = offset + i;
-    const float val = (i < last_valid) ? exp(float(input[idx]) * w) * reverse_z : 0.f;
+    const float val = (i < last_valid) ? exp(float(input[idx])) * reverse_z : 0.f;
     output[idx] = T(val);
   }
 }
 
 template <typename T, unsigned TPB>
-__device__ inline void scaledSoftmaxSmall(
-    const int ld, const int last_valid, const float rsqrt_head_size, const T* input, T* output) {
+__device__ inline void softmaxSmall(
+    const int sequence_length, const int last_valid, const T* input, T* output) {
   using BlockReduce = cub::BlockReduce<float, TPB>;
 
   __shared__ typename BlockReduce::TempStorage tmp_storage;
 
   __shared__ float reverse_z;
 
-  const int offset = (blockIdx.y * gridDim.x + blockIdx.x) * ld;
+  const int offset = (blockIdx.y * gridDim.x + blockIdx.x) * sequence_length;
 
-  const float w(rsqrt_head_size);
   cub::Sum sum;
   float thread_data(0);
 
   const int idx = offset + threadIdx.x;
   if (threadIdx.x < last_valid) {
     const float val = input[idx];
-    thread_data = exp(val * w);
+    thread_data = exp(val);
   }
 
   const auto z = BlockReduce(tmp_storage).Reduce(thread_data, sum);
@@ -101,61 +99,61 @@ __device__ inline void scaledSoftmaxSmall(
   }
   __syncthreads();
 
-  if (threadIdx.x < ld) {
+  if (threadIdx.x < sequence_length) {
     // this will be 0 for threadIdx.x >= last_valid
     output[idx] = T(thread_data * reverse_z);
   }
 }
 
 template <typename T, unsigned TPB>
-__global__ void maskedScaledSoftmaxKernelSmall(
-    const int ld, const float rsqrt_head_size, const int* mask, const T* input, T* output) {
+__global__ void maskedSoftmaxKernelSmall(
+    const int sequence_length, const int* mask, const T* input, T* output) {
   __shared__ int last_valid;
 
   if (threadIdx.x == 0) {
-    last_valid = min(ld, mask[blockIdx.y]);
+    last_valid = min(sequence_length, mask[blockIdx.y]);
   }
   __syncthreads();
 
-  scaledSoftmaxSmall<T, TPB>(ld, last_valid, rsqrt_head_size, input, output);
+  softmaxSmall<T, TPB>(sequence_length, last_valid, input, output);
 }
 
 template <typename T, unsigned TPB>
-__global__ void maskedScaledSoftmaxKernel(
-    const int ld, const float rsqrt_head_size, const int* mask, const T* input, T* output) {
+__global__ void maskedSoftmaxKernel(
+    const int sequence_length, const int* mask, const T* input, T* output) {
   __shared__ int last_valid;
 
   if (threadIdx.x == 0) {
-    last_valid = min(ld, mask[blockIdx.y]);
+    last_valid = min(sequence_length, mask[blockIdx.y]);
   }
   __syncthreads();
-  scaledSoftmax<T, TPB>(ld, last_valid, rsqrt_head_size, input, output);
+  softmax<T, TPB>(sequence_length, last_valid, input, output);
 }
 
 template <typename T>
-int computeMaskedScaledSoftmax(cudaStream_t stream, const int ld, const int batch_size, const int num_heads, const float rsqrt_head_size,
-                               const int* mask, const T* input, T* output) {
-  // Mask idx is of length batch_size and assumes the valid region is contiguous starting
+int computeMaskedSoftmax(cudaStream_t stream, const int sequence_length, const int batch_size, const int num_heads, 
+                         const int* mask, const T* input, T* output) {
+  // Mask is of length batch_size and assumes the valid region is contiguous starting
   // from the beginning of the sequence
 
-  const dim3 grid(ld * num_heads, batch_size, 1);
+  const dim3 grid(sequence_length * num_heads, batch_size, 1);
 
-  if (ld <= 32) {
+  if (sequence_length <= 32) {
     const int blockSize = 32;
-    maskedScaledSoftmaxKernelSmall<T, blockSize>
-        <<<grid, blockSize, 0, stream>>>(ld, rsqrt_head_size, mask, input, output);
-  } else if (ld <= 128) {
+    maskedSoftmaxKernelSmall<T, blockSize>
+        <<<grid, blockSize, 0, stream>>>(sequence_length, mask, input, output);
+  } else if (sequence_length <= 128) {
     const int blockSize = 128;
-    maskedScaledSoftmaxKernelSmall<T, blockSize>
-        <<<grid, blockSize, 0, stream>>>(ld, rsqrt_head_size, mask, input, output);
-  } else if (ld == 384) {
+    maskedSoftmaxKernelSmall<T, blockSize>
+        <<<grid, blockSize, 0, stream>>>(sequence_length, mask, input, output);
+  } else if (sequence_length == 384) {
     const int blockSize = 384;
-    maskedScaledSoftmaxKernelSmall<T, blockSize>
-        <<<grid, blockSize, 0, stream>>>(ld, rsqrt_head_size, mask, input, output);
+    maskedSoftmaxKernelSmall<T, blockSize>
+        <<<grid, blockSize, 0, stream>>>(sequence_length, mask, input, output);
   } else {
     const int blockSize = 256;
-    maskedScaledSoftmaxKernel<T, blockSize>
-        <<<grid, blockSize, 0, stream>>>(ld, rsqrt_head_size, mask, input, output);
+    maskedSoftmaxKernel<T, blockSize>
+        <<<grid, blockSize, 0, stream>>>(sequence_length, mask, input, output);
   }
 
   CUDA_CALL(cudaPeekAtLastError());
@@ -330,14 +328,14 @@ struct CublasConfigHelper {
 
 template <typename T>
 int qkvToCtx(cublasHandle_t& cublas, cudaStream_t stream,
-             const int batch_size, const int sequence_length, const int num_heads, const int head_size, const int element_size,
+             const int batch_size, const int sequence_length, const int num_heads, const int head_size, const size_t element_size,
              const T* input, T* output, T* workspace,
              const int* mask = nullptr) {
   const size_t bytes = scratchSize(element_size, batch_size, num_heads, sequence_length);
   T* scratch1 = workspace;
   T* scratch2 = scratch1 + (bytes / element_size);
   T* scratch3 = scratch2 + (bytes / element_size);
-
+ 
   // input should be BxSx3xNxH => scratch3: 3xBxNxSxH
   launchTransQkv(stream, sequence_length, batch_size, head_size, num_heads, input, scratch3);
 
@@ -354,13 +352,13 @@ int qkvToCtx(cublasHandle_t& cublas, cudaStream_t stream,
   cublasSetStream(cublas, stream);
   CublasConfigHelper helper(cublas);
 
-  // compute Q*K' (as K'*Q) and store in scratch1: BxNxSxS
-  CUBLAS_CALL(cublasGemmStridedBatched<T>(cublas, CUBLAS_OP_T, CUBLAS_OP_N, sequence_length, sequence_length, head_size, 1.f, k, head_size, size_per_batch,
+  // compute Q*K' (as K'*Q), scaled by 1/sqrt(H) and store in scratch1: BxNxSxS
+  const float rsqrt_head_size = 1.f / sqrt(static_cast<float>(head_size));
+  CUBLAS_CALL(cublasGemmStridedBatched<T>(cublas, CUBLAS_OP_T, CUBLAS_OP_N, sequence_length, sequence_length, head_size, rsqrt_head_size, k, head_size, size_per_batch,
                                           q, head_size, size_per_batch, 0.f, scratch1, sequence_length, temp_matrix_size, batches));
 
   // apply softmax and store result P to scratch2: BxNxSxS
-  const float rsqrt_head_size = 1.f / sqrt(static_cast<float>(head_size));
-  computeMaskedScaledSoftmax<T>(stream, sequence_length, batch_size, num_heads, rsqrt_head_size, mask, scratch1, scratch2);
+  computeMaskedSoftmax<T>(stream, sequence_length, batch_size, num_heads, mask, scratch1, scratch2);
 
   // compute P*V (as V*P), and store in scratch3: BxNxSxH
   CUBLAS_CALL(cublasGemmStridedBatched<T>(cublas, CUBLAS_OP_N, CUBLAS_OP_N, head_size, sequence_length, sequence_length, 1.f, v, head_size, size_per_batch,
