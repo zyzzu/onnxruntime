@@ -243,7 +243,7 @@ is applied to the tensor elementwise.
       .Attr("batch_size", "Batch size", AttributeProto::INT)
       .Attr("sequence_length", "Sequence length", AttributeProto::INT)
       .Input(0, "input", "3D input tensor with shape (B, S, 3 * N * H), B is batch size, S is max sequence length, N is number of heads, H is size per head", "T")
-      .Input(1, "mask", "attention mask with shape (B, S)", "Tm")
+      .Input(1, "mask", "attention mask with shape (B)", "Tm")
       .Output(0, "output", "3D output tensor with shape (B, S, N * H)", "T")
       .TypeConstraint("T", {"tensor(float)"}, "Constrain input and output types to float tensors.")
       .TypeConstraint("Tm", {"tensor(int32)"},

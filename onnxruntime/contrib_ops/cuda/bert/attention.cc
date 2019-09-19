@@ -72,16 +72,16 @@ Status Attention<T>::ComputeInternal(OpKernelContext* context) const {
                            "input dimension does not match with node attributes");
   }
 
-  // Attention mask (1 or 0) for each word in each sequence: shape (B, S)
+  // Attention mask (sequence length) for each instance of batch: shape (B)
   const Tensor* mask = context->Input<Tensor>(1);
   const auto mask_dims = mask->Shape().GetDims();
-  if (mask_dims.size() != 2) {
+  if (mask_dims.size() != 1) {
     return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT,
-                           "mask is expected to have 2 dimensions, got ", mask_dims.size());
+                           "mask is expected to have 1 dimension, got ", mask_dims.size());
   }
-  if (mask_dims[0] != batch_size_ || mask_dims[1] != sequence_length_) {
+  if (mask_dims[0] != batch_size_) {
     return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT,
-                           "mask dimensions does not match input ");
+                           "The first dimension of mask does not match with batch size");
   }
 
   std::vector<int64_t> out_dims;
