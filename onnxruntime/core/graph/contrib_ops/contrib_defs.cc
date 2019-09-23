@@ -300,6 +300,16 @@ is applied to the tensor elementwise.
       .Output(0, "output", "3D output tensor with shape (B, S, N * H)", "T")
       .TypeConstraint("T", {"tensor(float)", "tensor(float16)"}, "Constrain input and output types to float or half tensors.")
       .TypeAndShapeInferenceFunction(ONNX_NAMESPACE::propagateShapeAndTypeFromFirstInput);
+
+  ONNX_CONTRIB_OPERATOR_SCHEMA(FastGelu)
+      .SetDomain(kOnnxDomain)
+      .SinceVersion(1)
+      .SetSupportLevel(OpSchema::SupportType::EXPERIMENTAL)
+      .SetDoc("Gelu")
+      .Input(0, "input", "3D input tensor with shape (B, S, N * H), B is batch size, S is max sequence length, N is number of heads, H is size per head", "T")
+      .Output(0, "output", "3D output tensor with shape (B, S, N * H)", "T")
+      .TypeConstraint("T", {"tensor(float)", "tensor(float16)"}, "Constrain input and output types to float or half tensors.")
+      .TypeAndShapeInferenceFunction(ONNX_NAMESPACE::propagateShapeAndTypeFromFirstInput);
 #endif
 
   ONNX_CONTRIB_OPERATOR_SCHEMA(Attention)
