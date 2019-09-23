@@ -75,6 +75,7 @@ Use the individual flags to only run the specified stages.
 
     # CUDA related
     parser.add_argument("--use_cuda", action='store_true', help="Enable CUDA.")
+    parser.add_argument("--use_cuda_fp16", action='store_true', help="Enable FP16 for CUDA.")
     parser.add_argument("--cuda_version", help="The version of CUDA toolkit to use. Auto-detect if not specified. e.g. 9.0")
     parser.add_argument("--cuda_home", help="Path to CUDA home."
                                             "Read from CUDA_HOME environment variable if --use_cuda is true and --cuda_home is not specified.")
@@ -322,9 +323,10 @@ def generate_build_tree(cmake_path, source_dir, build_dir, cuda_home, cudnn_home
                  "-Donnxruntime_DEV_MODE=" + ("OFF" if args.android else "ON"),
                  "-DPYTHON_EXECUTABLE=" + sys.executable,
                  "-Donnxruntime_USE_CUDA=" + ("ON" if args.use_cuda else "OFF"),
+                 "-Donnxruntime_USE_CUDA_FP16=" + ("ON" if args.use_cuda_fp16 else "OFF"),
                  "-Donnxruntime_USE_NSYNC=" + ("OFF" if is_windows() or not args.use_nsync else "ON"),
                  "-Donnxruntime_CUDNN_HOME=" + (cudnn_home if args.use_cuda else ""),
-                 "-Donnxruntime_USE_AUTOML=" + ("ON" if args.use_automl else "OFF"),				 
+                 "-Donnxruntime_USE_AUTOML=" + ("ON" if args.use_automl else "OFF"),
                  "-Donnxruntime_CUDA_HOME=" + (cuda_home if args.use_cuda else ""),
                  "-Donnxruntime_USE_JEMALLOC=" + ("ON" if args.use_jemalloc else "OFF"),
                  "-Donnxruntime_ENABLE_PYTHON=" + ("ON" if args.enable_pybind else "OFF"),

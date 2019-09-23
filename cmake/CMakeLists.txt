@@ -46,6 +46,7 @@ option(onnxruntime_GENERATE_TEST_REPORTS "Enable test report generation" OFF)
 option(onnxruntime_ENABLE_STATIC_ANALYSIS "Enable static analysis" OFF)
 option(onnxruntime_ENABLE_PYTHON "Enable python buildings" OFF)
 option(onnxruntime_USE_CUDA "Build with CUDA support" OFF)
+option(onnxruntime_USE_CUDA_FP16 "Build with CUDA fp16 support" OFF)
 option(onnxruntime_USE_OPENVINO "Build with OpenVINO support" OFF)
 option(onnxruntime_USE_NSYNC "Build with NSYNC support. This option only takes effect on Linux" OFF)
 option(onnxruntime_USE_EIGEN_FOR_BLAS "Use eign for blas" ON)
@@ -586,11 +587,21 @@ if (onnxruntime_USE_CUDA)
   endif()
   list(APPEND onnxruntime_EXTERNAL_LIBRARIES ${ONNXRUNTIME_CUDA_LIBRARIES})
 
-  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_30,code=sm_30") # K series
-  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_50,code=sm_50") # M series
-  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_60,code=sm_60") # P series
-  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_70,code=sm_70") # V series
-  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --default-stream legacy")
+  if (NOT onnxruntime_USE_CUDA_FP16)
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_30,code=sm_30") # K series
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_50,code=sm_50") # M series
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_60,code=sm_60") # P series
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_70,code=sm_70") # V series
+  else()
+    add_definitions(-DUSE_CUDA_FP16=1)
+	# FP16 computation requires a GPU with Compute Capability 5.3 or later 
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_60,code=sm_60") # Tesla P100
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_61,code=sm_61") # GTX 10x0, Titan X, Titan Xp, Tesla P40, Tesla P4
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_70,code=sm_70") # Tesla V100, Titan V
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_75,code=sm_75") # Tesla T4, RTX 20x0
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_75,code=compute_75")
+  endif()
+
   if (NOT WIN32)
     set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} --compiler-options -fPIC")
   endif()
