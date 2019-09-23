@@ -297,8 +297,6 @@ is applied to the tensor elementwise.
       .Attr("beta", "Value of alpha", AttributeProto::TENSOR)
       .Input(0, "input", "3D input tensor with shape (B, S, N * H), B is batch size, S is max sequence length, N is number of heads, H is size per head", "T")
       .Input(1, "skip", "3D skip tensor with shape (B, S, N * H)", "T")
-//      .Input(2, "gamma", "scale tensor with shape (N * H)", "T")
-//      .Input(3, "beta", "bias tensor with shape (N * H)", "T")
       .Output(0, "output", "3D output tensor with shape (B, S, N * H)", "T")
       .TypeConstraint("T", {"tensor(float)", "tensor(float16)"}, "Constrain input and output types to float or half tensors.")
       .TypeAndShapeInferenceFunction(ONNX_NAMESPACE::propagateShapeAndTypeFromFirstInput);

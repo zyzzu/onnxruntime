@@ -74,30 +74,6 @@ Status SkipLayerNorm<T>::ComputeInternal(OpKernelContext* ctx) const {
                            "skip is expected to have same shape as input");
   }
 
-  /*
-  const Tensor* gamma = ctx->Input<Tensor>(2);
-  const Tensor* beta = ctx->Input<Tensor>(3);
-  const auto gamma_dims = gamma->Shape().GetDims();
-  if (gamma_dims.size() != 1) {
-    return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT,
-                           "gamma is expected to have 1 dimension, got ", gamma_dims.size());
-  }
-  if (gamma_dims[0] != input_dims[2]) {
-    return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT,
-                           "gamma shape does not match with input");
-  }
-
-  const auto beta_dims = beta->Shape().GetDims();
-  if (beta_dims.size() != 1) {
-    return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT,
-                           "beta is expected to have 1 dimension, got ", beta_dims.size());
-  }
-  if (beta_dims[0] != input_dims[2]) {
-    return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT,
-                           "beta shape does not match with input");
-  }
-  */
-
   if (gamma_.size() != input_dims[2]) {
     return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT,
                            "gamma shape does not match with input");
