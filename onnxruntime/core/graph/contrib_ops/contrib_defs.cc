@@ -319,7 +319,7 @@ is applied to the tensor elementwise.
       .SetDoc("Multi-Head Self Attention")
       .Attr("num_heads", "Number of attention heads", AttributeProto::INT)
       .Attr("head_size", "Size per attention head", AttributeProto::INT)
-      .Attr("batch_size", "Batch size", AttributeProto::INT)
+      .Attr("batch_size", "Batch size. It can be 0 for dynamic batch count.", AttributeProto::INT)
       .Attr("sequence_length", "Sequence length", AttributeProto::INT)
       .Input(0, "input", "3D input tensor with shape (B, S, 3 * N * H), B is batch size, S is max sequence length, N is number of heads, H is size per head", "T")
       .Input(1, "mask", "attention mask with shape (B)", "M")

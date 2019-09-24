@@ -30,6 +30,10 @@ REGISTER_KERNEL_TYPED(MLFloat16)
 
 template <typename T>
 Attention<T>::Attention(const OpKernelInfo& info) : CudaKernel(info) {
+  int64_t batch_size = 0;
+  ORT_ENFORCE(info.GetAttr("batch_size", &batch_size).IsOK() && batch_size >= 0);
+  batch_size_ = static_cast<int>(batch_size);
+
   int64_t num_heads = 0;
   ORT_ENFORCE(info.GetAttr("num_heads", &num_heads).IsOK() && num_heads > 0);
   num_heads_ = static_cast<int>(num_heads);
@@ -38,17 +42,16 @@ Attention<T>::Attention(const OpKernelInfo& info) : CudaKernel(info) {
   ORT_ENFORCE(info.GetAttr("head_size", &head_size).IsOK() && head_size > 0);
   head_size_ = static_cast<int>(head_size);
 
-  int64_t batch_size = 0;
-  ORT_ENFORCE(info.GetAttr("batch_size", &batch_size).IsOK() && batch_size > 0);
-  batch_size_ = static_cast<int>(batch_size);
-
   int64_t sequence_length = 0;
   ORT_ENFORCE(info.GetAttr("sequence_length", &sequence_length).IsOK() && sequence_length > 0);
   sequence_length_ = static_cast<int>(sequence_length);
 
-  const size_t element_size = sizeof(T);
-  size_t wordSpaceSize = getAttentionWorkspaceSize(element_size, batch_size_, num_heads_, head_size_, sequence_length_);
-  word_space_ = GetScratchBuffer<void>(wordSpaceSize);
+  if (batch_size > 0)
+  {
+      const size_t element_size = sizeof(T);
+      size_t workSpaceSize = getAttentionWorkspaceSize(element_size, batch_size_, num_heads_, head_size_, sequence_length_);
+      work_buffer_ = GetScratchBuffer<void>(workSpaceSize);
+  }
 }
 
 template <typename T>
@@ -64,7 +67,9 @@ Status Attention<T>::ComputeInternal(OpKernelContext* context) const {
                            "input is expected to have 3 dimensions, got ", dims.size());
   }
 
-  if (static_cast<int>(dims[0]) != batch_size_ 
+  int batch_size = batch_size_ > 0 ? batch_size_ : static_cast<int>(dims[0]);
+
+  if (static_cast<int>(dims[0]) != batch_size
       || static_cast<int>(dims[1]) != sequence_length_ 
       || static_cast<int>(dims[2]) != 3 * num_heads_ * head_size_)
   {
@@ -79,7 +84,7 @@ Status Attention<T>::ComputeInternal(OpKernelContext* context) const {
     return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT,
                            "mask is expected to have 1 dimension, got ", mask_dims.size());
   }
-  if (mask_dims[0] != batch_size_) {
+  if (mask_dims[0] != batch_size) {
     return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT,
                            "The first dimension of mask does not match with batch size");
   }
@@ -94,18 +99,34 @@ Status Attention<T>::ComputeInternal(OpKernelContext* context) const {
 
   cublasHandle_t cublas = CublasHandle();
   const size_t element_size = sizeof(T);
-  launchAttentionKernel(
-      input->template Data<T>(),
-      mask->template Data<int>(),
-      output->template MutableData<T>(),
-      batch_size_,
-      sequence_length_,
-      num_heads_,
-      head_size_,
-      word_space_.get(),
-      cublas,
-      element_size
-      );
+  
+  if (batch_size_ == 0) {
+    size_t workSpaceSize = getAttentionWorkspaceSize(element_size, batch_size, num_heads_, head_size_, sequence_length_);
+    auto temp_buffer = GetScratchBuffer<void>(workSpaceSize);
+    launchAttentionKernel(
+        input->template Data<T>(),
+        mask->template Data<int>(),
+        output->template MutableData<T>(),
+        batch_size,
+        sequence_length_,
+        num_heads_,
+        head_size_,
+        temp_buffer.get(),
+        cublas,
+        element_size);
+  } else {
+    launchAttentionKernel(
+        input->template Data<T>(),
+        mask->template Data<int>(),
+        output->template MutableData<T>(),
+        batch_size,
+        sequence_length_,
+        num_heads_,
+        head_size_,
+        work_buffer_.get(),
+        cublas,
+        element_size);
+  }
 
   return Status::OK();
 }

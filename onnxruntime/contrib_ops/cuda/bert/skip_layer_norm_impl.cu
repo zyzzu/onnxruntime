@@ -4,12 +4,11 @@
 
 #include "core/providers/cuda/cuda_common.h"
 #include "core/providers/cuda/cu_inc/common.cuh"
-#include "core/providers/cuda/shared_inc/cuda_utils.h"
 #include "core/providers/cuda/shared_inc/cuda_call.h"
 #include <cuda_fp16.h>
 #include <cublas_v2.h>
 #include <cub/cub.cuh>
-#include "layer_norm_impl.h"
+#include "skip_layer_norm_impl.h"
 
 using namespace onnxruntime::cuda;
 using namespace cub;
