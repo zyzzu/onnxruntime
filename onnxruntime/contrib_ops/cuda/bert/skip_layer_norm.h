@@ -21,7 +21,7 @@ class SkipLayerNorm final : public CudaKernel {
  private:
   std::vector<float> gamma_;
   std::vector<float> beta_;
-  IAllocatorUniquePtr<float> gamma_data_;  // gpu copy of bias
+  IAllocatorUniquePtr<float> gamma_data_;  // gpu copy of weights
   IAllocatorUniquePtr<float> beta_data_;   // gpu copy of bias
 };
 

@@ -11,7 +11,7 @@ namespace cuda {
 
   void launchAttentionKernel(
    const void* input,         // input tensor
-   const int* mask,           // Mask per word
+   const int* mask_index,     // mask index where each element is length of a sequence
    void* output,              // output tensor
    int batch_size,            // batch size (B)
    int sequence_length,       // sequence length (S)
@@ -22,6 +22,6 @@ namespace cuda {
    const size_t element_size  // element size of input tensor
    );
 
-  }  // namespace cuda
+}  // namespace cuda
 }  // namespace contrib
 }  // namespace onnxruntime

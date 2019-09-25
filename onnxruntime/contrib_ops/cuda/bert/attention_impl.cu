@@ -1,4 +1,23 @@
+/*
+ The implementation of this file is based on qkvToContext plugin in TensorRT demo:
+ https://github.com/NVIDIA/TensorRT/tree/release/5.1/demo/BERT/
 
+Copyright 2019 NVIDIA Corporation
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+// Modifications: scaling is moved from masked softmax to the gemm before that.
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
@@ -14,12 +33,6 @@ using namespace cub;
 namespace onnxruntime {
 namespace contrib {
 namespace cuda {
-
-/*
- The implementation of this file is based on qkvToContext plugin in TensorRT demo:
- https://github.com/NVIDIA/TensorRT/tree/release/5.1/demo/BERT/
- One change is scaling is moved from masked softmax to the gemm before that.
-*/
 
 static size_t alignTo(size_t a, size_t b) {
   return CeilDiv(a, b) * b;
@@ -107,11 +120,11 @@ __device__ inline void softmaxSmall(
 
 template <typename T, unsigned TPB>
 __global__ void maskedSoftmaxKernelSmall(
-    const int sequence_length, const int* mask, const T* input, T* output) {
+    const int sequence_length, const int* mask_index, const T* input, T* output) {
   __shared__ int last_valid;
 
   if (threadIdx.x == 0) {
-    last_valid = min(sequence_length, mask[blockIdx.y]);
+    last_valid = min(sequence_length, mask_index[blockIdx.y]);
   }
   __syncthreads();
 
@@ -120,11 +133,11 @@ __global__ void maskedSoftmaxKernelSmall(
 
 template <typename T, unsigned TPB>
 __global__ void maskedSoftmaxKernel(
-    const int sequence_length, const int* mask, const T* input, T* output) {
+    const int sequence_length, const int* mask_index, const T* input, T* output) {
   __shared__ int last_valid;
 
   if (threadIdx.x == 0) {
-    last_valid = min(sequence_length, mask[blockIdx.y]);
+    last_valid = min(sequence_length, mask_index[blockIdx.y]);
   }
   __syncthreads();
   softmax<T, TPB>(sequence_length, last_valid, input, output);
@@ -132,7 +145,7 @@ __global__ void maskedSoftmaxKernel(
 
 template <typename T>
 int computeMaskedSoftmax(cudaStream_t stream, const int sequence_length, const int batch_size, const int num_heads, 
-                         const int* mask, const T* input, T* output) {
+                         const int* mask_index, const T* input, T* output) {
   // Mask is of length batch_size and assumes the valid region is contiguous starting
   // from the beginning of the sequence
 
@@ -141,19 +154,19 @@ int computeMaskedSoftmax(cudaStream_t stream, const int sequence_length, const i
   if (sequence_length <= 32) {
     const int blockSize = 32;
     maskedSoftmaxKernelSmall<T, blockSize>
-        <<<grid, blockSize, 0, stream>>>(sequence_length, mask, input, output);
+        <<<grid, blockSize, 0, stream>>>(sequence_length, mask_index, input, output);
   } else if (sequence_length <= 128) {
     const int blockSize = 128;
     maskedSoftmaxKernelSmall<T, blockSize>
-        <<<grid, blockSize, 0, stream>>>(sequence_length, mask, input, output);
+        <<<grid, blockSize, 0, stream>>>(sequence_length, mask_index, input, output);
   } else if (sequence_length == 384) {
     const int blockSize = 384;
     maskedSoftmaxKernelSmall<T, blockSize>
-        <<<grid, blockSize, 0, stream>>>(sequence_length, mask, input, output);
+        <<<grid, blockSize, 0, stream>>>(sequence_length, mask_index, input, output);
   } else {
     const int blockSize = 256;
     maskedSoftmaxKernel<T, blockSize>
-        <<<grid, blockSize, 0, stream>>>(sequence_length, mask, input, output);
+        <<<grid, blockSize, 0, stream>>>(sequence_length, mask_index, input, output);
   }
 
   CUDA_CALL(cudaPeekAtLastError());
@@ -322,7 +335,7 @@ template <typename T>
 int qkvToCtx(cublasHandle_t& cublas, cudaStream_t stream,
              const int batch_size, const int sequence_length, const int num_heads, const int head_size, const size_t element_size,
              const T* input, T* output, T* workspace,
-             const int* mask = nullptr) {
+             const int* mask_index) {
   const size_t bytes = scratchSize(element_size, batch_size, num_heads, sequence_length);
   T* scratch1 = workspace;
   T* scratch2 = scratch1 + (bytes / element_size);
@@ -350,7 +363,7 @@ int qkvToCtx(cublasHandle_t& cublas, cudaStream_t stream,
                                           q, head_size, size_per_batch, 0.f, scratch1, sequence_length, temp_matrix_size, batches));
 
   // apply softmax and store result P to scratch2: BxNxSxS
-  computeMaskedSoftmax<T>(stream, sequence_length, batch_size, num_heads, mask, scratch1, scratch2);
+  computeMaskedSoftmax<T>(stream, sequence_length, batch_size, num_heads, mask_index, scratch1, scratch2);
 
   // compute P*V (as V*P), and store in scratch3: BxNxSxH
   CUBLAS_CALL(cublasGemmStridedBatched(cublas, CUBLAS_OP_N, CUBLAS_OP_N, head_size, sequence_length, sequence_length, 1.f, v, head_size, size_per_batch,
@@ -363,7 +376,7 @@ int qkvToCtx(cublasHandle_t& cublas, cudaStream_t stream,
 
 void launchAttentionKernel(
     const void* input,
-    const int* mask,
+    const int* mask_index,
     void* output,
     const int batch_size,
     const int sequence_length,
@@ -379,12 +392,12 @@ void launchAttentionKernel(
     qkvToCtx(cublas, stream,
              batch_size, sequence_length, num_heads, head_size, element_size,
              reinterpret_cast<const half*>(input), reinterpret_cast<half*>(output), reinterpret_cast<half*>(workspace),
-             mask);
+             mask_index);
   } else {
     qkvToCtx(cublas, stream,
              batch_size, sequence_length, num_heads, head_size, element_size,
              reinterpret_cast<const float*>(input), reinterpret_cast<float*>(output), reinterpret_cast<float*>(workspace),
-             mask);
+             mask_index);
   }
 }
 

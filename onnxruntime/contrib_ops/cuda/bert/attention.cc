@@ -67,7 +67,8 @@ Status Attention<T>::ComputeInternal(OpKernelContext* context) const {
                            "input is expected to have 3 dimensions, got ", dims.size());
   }
 
-  int batch_size = batch_size_ > 0 ? batch_size_ : static_cast<int>(dims[0]);
+  bool is_dynamic_batch = (batch_size_ == 0);
+  int batch_size = is_dynamic_batch ? static_cast<int>(dims[0]) : batch_size_;
 
   if (static_cast<int>(dims[0]) != batch_size
       || static_cast<int>(dims[1]) != sequence_length_ 
@@ -100,7 +101,7 @@ Status Attention<T>::ComputeInternal(OpKernelContext* context) const {
   cublasHandle_t cublas = CublasHandle();
   const size_t element_size = sizeof(T);
   
-  if (batch_size_ == 0) {
+  if (is_dynamic_batch) {
     size_t workSpaceSize = getAttentionWorkspaceSize(element_size, batch_size, num_heads_, head_size_, sequence_length_);
     auto temp_buffer = GetScratchBuffer<void>(workSpaceSize);
     launchAttentionKernel(
