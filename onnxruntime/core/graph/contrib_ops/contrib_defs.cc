@@ -288,13 +288,113 @@ is applied to the tensor elementwise.
   //     {{"Y"}, "Mul", {"X_1", "X_4"}}}));
 
 #ifdef USE_CUDA_FP16
+  ONNX_CONTRIB_OPERATOR_SCHEMA(EmbedLayerNormalization)
+      .SetDomain(kOnnxDomain)
+      .SinceVersion(1)
+      .SetSupportLevel(OpSchema::SupportType::EXPERIMENTAL)
+      .SetDoc("Embedding Layer Normalization")
+      .Attr("gamma", "weights", AttributeProto::TENSOR)
+      .Attr("beta", "bias", AttributeProto::TENSOR)
+      .Attr("word_embedding", "2D with shape (,hidden_size)", AttributeProto::TENSOR)
+      .Attr("position_embedding", "2D with shape (, hidden_size)", AttributeProto::TENSOR)
+      .Attr("segment_embedding", "2D with shape (, hidden_size)", AttributeProto::TENSOR)
+      .Attr("float16", "boolean flag", AttributeProto::INT, static_cast<int64_t>(0))
+      .Input(0, "input_ids", "2D words IDs with shape (batch_size, sequence_length)", "T1")
+      .Input(1, "segment_ids", "2D segment IDs with shape (batch_size, sequence_length)", "T1")
+      .Input(2, "mask", "2D attention mask with shape (batch_size, sequence_length)", "T1")
+      .Output(0, "output", "3D output tensor with shape (batch_size, sequence_length, hidden_size)", "T2")
+      .Output(1, "mask_index", "1D output tensor with shape (batch_size)", "T1")
+      .TypeConstraint("T1", {"tensor(int32)"}, "Constrain input types to integer types")
+      .TypeConstraint("T2", {"tensor(float)", "tensor(float16)"}, "Constrain output types to float tensors.")
+      .TypeAndShapeInferenceFunction([](ONNX_NAMESPACE::InferenceContext& ctx) {
+        if (!hasInputShape(ctx, 0))
+          return;
+
+        auto& input_ids_shape = getInputShape(ctx, 0);
+        auto& input_ids_dims = input_ids_shape.dim();
+
+        auto& segment_ids_shape = getInputShape(ctx, 1);
+        auto& segment_ids_dims = segment_ids_shape.dim();
+
+        auto& mask_shape = getInputShape(ctx, 2);
+        auto& mask_dims = mask_shape.dim();
+
+        if (input_ids_dims.size() != 2 || segment_ids_dims.size() != 2 || mask_dims.size() != 2) {
+          fail_shape_inference("All inputs shall be 2 dimensions");
+        }
+
+        if (input_ids_shape.dim(1).has_dim_value() && segment_ids_shape.dim(1).has_dim_value() && mask_shape.dim(1).has_dim_value()) {
+          if (input_ids_shape.dim(1).dim_value() != segment_ids_shape.dim(1).dim_value() 
+              || input_ids_shape.dim(1).dim_value() != mask_shape.dim(1).dim_value()) {
+            fail_shape_inference("All inputs shall have same value in dimension 1");
+          }
+        } else {
+          fail_shape_inference("All inputs shall have value in dimension 1");
+        }
+
+        // output tensor of mask_index is int32
+        auto mask_index_type = ctx.getOutputType(1);
+        mask_index_type->mutable_tensor_type()->set_elem_type(ONNX_NAMESPACE::TensorProto::INT32);
+
+        // output tensor of embedding layer is float16 if the attribute is set, float32 otherwise.
+        int64_t float16 = 0;
+        auto float16_attribute = ctx.getAttribute("float16");
+        float16 = float16_attribute->i();
+
+        auto output_type = ctx.getOutputType(0);
+        output_type->mutable_tensor_type()->set_elem_type(float16 != 0 ? ONNX_NAMESPACE::TensorProto::FLOAT16 : ONNX_NAMESPACE ::TensorProto::FLOAT);
+
+        // get hidden_size from the last dimension of embedding
+        auto segment_embedding_attribute = ctx.getAttribute("segment_embedding");
+        auto segment_embedding_proto = segment_embedding_attribute->t();
+        if (segment_embedding_proto.dims_size() != 2) {
+          fail_shape_inference("The attribute segment_embedding should have 2 dimensions");
+        }
+        int64_t hidden_size = segment_embedding_proto.dims(1);
+
+        auto word_embedding_attribute = ctx.getAttribute("word_embedding");
+        auto word_embedding_proto = word_embedding_attribute->t();
+        if (word_embedding_proto.dims_size() != 2) {
+          fail_shape_inference("The attribute word_embedding should have 2 dimensions");
+        }
+        if (word_embedding_proto.dims(1) != hidden_size) {
+          fail_shape_inference("The last dimension of word_embedding and segment_embedding attributes does not match.");
+        }
+
+        auto position_embedding_attribute = ctx.getAttribute("position_embedding");
+        auto position_embedding_proto = position_embedding_attribute->t();
+        if (position_embedding_proto.dims_size() != 2) {
+          fail_shape_inference("The attribute position_embedding should have 2 dimensions");
+        }
+        if (position_embedding_proto.dims(1) != hidden_size) {
+          fail_shape_inference("The last dimension of position_embedding and segment_embedding attributes does not match.");
+        }
+
+        // mask shape is (batch_size, sequence_length), output shape is (batch_size, sequence_length, hidden_size)
+        ONNX_NAMESPACE::TensorShapeProto output_shape;
+        for (auto& dim : mask_dims) {
+          *output_shape.add_dim() = dim;
+        }
+        if (hidden_size > 0) {
+          output_shape.add_dim();
+          output_shape.mutable_dim(2)->set_dim_value(hidden_size);
+        }
+        updateOutputShape(ctx, 0, output_shape);
+
+        // mask_index shape is (batch_size)
+        ONNX_NAMESPACE::TensorShapeProto mask_index_shape;
+        *mask_index_shape.add_dim() = mask_shape.dim(0);
+        updateOutputShape(ctx, 1, mask_index_shape);
+      });
+
+
   ONNX_CONTRIB_OPERATOR_SCHEMA(SkipLayerNormalization)
       .SetDomain(kOnnxDomain)
       .SinceVersion(1)
       .SetSupportLevel(OpSchema::SupportType::EXPERIMENTAL)
       .SetDoc("Skip and Layer Normalization Fusion")
-      .Attr("gamma", "Value of alpha", AttributeProto::TENSOR)
-      .Attr("beta", "Value of alpha", AttributeProto::TENSOR)
+      .Attr("gamma", "Value of weights", AttributeProto::TENSOR)
+      .Attr("beta", "Value of bias", AttributeProto::TENSOR)
       .Input(0, "input", "3D input tensor with shape (B, S, N * H), B is batch size, S is max sequence length, N is number of heads, H is size per head", "T")
       .Input(1, "skip", "3D skip tensor with shape (B, S, N * H)", "T")
       .Output(0, "output", "3D output tensor with shape (B, S, N * H)", "T")
@@ -347,6 +447,7 @@ is applied to the tensor elementwise.
         }
         updateOutputShape(ctx, 0, output_shape);
       });
+
 }
 
 void RegisterContribSchemas() {

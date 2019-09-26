@@ -16,13 +16,15 @@ template <typename T>
 class SkipLayerNorm final : public CudaKernel {
  public:
   SkipLayerNorm(const OpKernelInfo& op_kernel_info);
-  Status ComputeInternal(OpKernelContext* ctx) const override;
+  Status ComputeInternal(OpKernelContext* context) const override;
 
  private:
-  std::vector<float> gamma_;
-  std::vector<float> beta_;
-  IAllocatorUniquePtr<float> gamma_data_;  // gpu copy of weights
+  size_t gamma_size_;
+  size_t beta_size_;
+
+  IAllocatorUniquePtr<float> gamma_data_;  // gpu copy of weight
   IAllocatorUniquePtr<float> beta_data_;   // gpu copy of bias
+
 };
 
 }  // namespace cuda
