@@ -246,6 +246,10 @@ Status ReduceKernel<allow_multi_axes>::ComputeImpl(OpKernelContext* ctx, cudnnRe
   REGISTER_KERNEL_TYPED(name, float)     \
   REGISTER_KERNEL_TYPED(name, double)
 
+#define REGISTER_KERNEL_INT(name)      \
+  REGISTER_KERNEL_TYPED(name, int32_t) \
+  REGISTER_KERNEL_TYPED(name, int64_t)
+
 REGISTER_KERNEL_HFD(ArgMax)
 REGISTER_KERNEL_HFD(ArgMin)
 REGISTER_KERNEL_HFD(ReduceL1)
@@ -258,6 +262,8 @@ REGISTER_KERNEL_HFD(ReduceSum)
 REGISTER_KERNEL_HFD(ReduceLogSum)
 REGISTER_KERNEL_HFD(ReduceSumSquare)
 REGISTER_KERNEL_HFD(ReduceLogSumExp)
+
+REGISTER_KERNEL_INT(ReduceSum)
 
 }  // namespace cuda
 }  // namespace onnxruntime
