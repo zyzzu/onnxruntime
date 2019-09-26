@@ -25,7 +25,7 @@ class Attention final : public CudaKernel {
   int batch_size_;       // batch size (B)
   int sequence_length_;  // sequence length (S)
 
-  IAllocatorUniquePtr<void> word_space_;  // gpu scratch buffer
+  IAllocatorUniquePtr<void> work_buffer_;  // gpu scratch buffer
 };
 
 }  // namespace cuda

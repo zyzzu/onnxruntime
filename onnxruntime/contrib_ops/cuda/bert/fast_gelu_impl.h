@@ -8,14 +8,9 @@ namespace contrib {
 namespace cuda {
 
 #ifdef USE_CUDA_FP16
-void launchSkipLayerNormKernel(
-    void* output,              // output tensor
+void launchGeluKernel(
     const void* input,         // input tensor
-    const void* skip,          // skip tensor
-    const float* gamma,        // weight tensor
-    const float* beta,         // bias tensor
-    const int batch_size,      // batch size (B)
-    const int hidden_size,     // hidden size, it is the leading dimension (ld)
+    void* output,              // output tensor
     const int element_count,   // number of elements in input tensor
     const size_t element_size  // element size of input tensor
 );

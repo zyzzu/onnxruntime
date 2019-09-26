@@ -1,15 +1,32 @@
+/*
+ The implementation of this file is based on skipLayerNorm plugin in TensorRT demo:
+ https://github.com/NVIDIA/TensorRT/tree/release/5.1/demo/BERT/
+ 
+Copyright 2019 NVIDIA Corporation
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
 #include "core/providers/cuda/cuda_common.h"
 #include "core/providers/cuda/cu_inc/common.cuh"
-#include "core/providers/cuda/shared_inc/cuda_utils.h"
 #include "core/providers/cuda/shared_inc/cuda_call.h"
 #include <cuda_fp16.h>
 #include <cublas_v2.h>
 #include <cub/cub.cuh>
-#include "layer_norm_impl.h"
+#include "skip_layer_norm_impl.h"
 
 using namespace onnxruntime::cuda;
 using namespace cub;
@@ -19,8 +36,6 @@ namespace contrib {
 namespace cuda {
 
 /*
- The implementation of this file is based on skipLayerNorm plugin in TensorRT demo:
- https://github.com/NVIDIA/TensorRT/tree/release/5.1/demo/BERT/
  It uses FP16 functions (like hrsqrt and __hadd2), which are only supported on arch >= 5.3
 */
 #ifdef USE_CUDA_FP16

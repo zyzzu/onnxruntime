@@ -13,16 +13,10 @@ namespace cuda {
 using namespace onnxruntime::cuda;
 
 template <typename T>
-class SkipLayerNorm final : public CudaKernel {
- public:
-  SkipLayerNorm(const OpKernelInfo& op_kernel_info);
+class FastGelu final : public CudaKernel {
+public:
+  FastGelu(const OpKernelInfo& op_kernel_info);
   Status ComputeInternal(OpKernelContext* ctx) const override;
-
- private:
-  std::vector<float> gamma_;
-  std::vector<float> beta_;
-  IAllocatorUniquePtr<float> gamma_data_;  // gpu copy of weights
-  IAllocatorUniquePtr<float> beta_data_;   // gpu copy of bias
 };
 
 }  // namespace cuda
