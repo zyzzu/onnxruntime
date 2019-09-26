@@ -28,7 +28,7 @@ REGISTER_KERNEL_TYPED(MLFloat16)
 
 using namespace ONNX_NAMESPACE;
 
-#define COPY_ATTRIBUTE_FLOAT_TENSOR_TO_GPU(attribute)                                                 \
+#define COPY_ATTRIBUTE_FLOAT_TENSOR_TO_GPU(attribute)                                         \
   TensorProto attribute##_proto;                                                              \
   op_kernel_info.GetAttr<TensorProto>(#attribute, &attribute##_proto);                        \
   ORT_ENFORCE(attribute##_proto.data_type() == TensorProto::FLOAT);                           \
@@ -42,17 +42,6 @@ EmbedLayerNorm<T>::EmbedLayerNorm(const OpKernelInfo& op_kernel_info) : CudaKern
   TensorProto t_proto;
   COPY_ATTRIBUTE_FLOAT_TENSOR_TO_GPU(gamma);
   COPY_ATTRIBUTE_FLOAT_TENSOR_TO_GPU(beta);
-  COPY_ATTRIBUTE_FLOAT_TENSOR_TO_GPU(word_embedding);
-  COPY_ATTRIBUTE_FLOAT_TENSOR_TO_GPU(segment_embedding);
-  COPY_ATTRIBUTE_FLOAT_TENSOR_TO_GPU(position_embedding);
-
-  ORT_ENFORCE(word_embedding_proto.dims().size() == 2);
-  ORT_ENFORCE(position_embedding_proto.dims().size() == 2);
-  ORT_ENFORCE(segment_embedding_proto.dims().size() == 2);
-  ORT_ENFORCE(word_embedding_proto.dims()[1] == segment_embedding_proto.dims()[1]);
-  ORT_ENFORCE(word_embedding_proto.dims()[1] == position_embedding_proto.dims()[1]);
-
-  hidden_size_ = word_embedding_proto.dims()[1];
 }
 
 template <typename T>
@@ -60,7 +49,11 @@ Status EmbedLayerNorm<T>::ComputeInternal(OpKernelContext* context) const {
   const Tensor* input_ids = context->Input<Tensor>(0);
   const Tensor* segment_ids = context->Input<Tensor>(1);
   const Tensor* mask = context->Input<Tensor>(2);
-
+  
+  const Tensor* word_embedding = context->Input<Tensor>(3);
+  const Tensor* position_embedding = context->Input<Tensor>(4);
+  const Tensor* segment_embedding = context->Input<Tensor>(5);
+  
   if (input_ids->Shape() != segment_ids->Shape() || input_ids->Shape() != mask->Shape()) {
     return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT,
                            "All input tensors shall have same shape");
@@ -69,14 +62,39 @@ Status EmbedLayerNorm<T>::ComputeInternal(OpKernelContext* context) const {
   const auto input_dims = input_ids->Shape().GetDims();
   if (input_dims.size() != 2) {
     return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT,
-                           "input is expected to have 2 dimensions, got ", input_dims.size());
+                           "input_ids is expected to have 2 dimensions, got ", input_dims.size());
   }
 
+  const auto word_embedding_dims = word_embedding->Shape().GetDims();
+  if (word_embedding_dims.size() != 2) {
+    return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT,
+                           "word_embedding is expected to have 2 dimensions, got ", word_embedding_dims.size());
+  }
+
+  const auto position_embedding_dims = position_embedding->Shape().GetDims();
+  if (position_embedding_dims.size() != 2) {
+    return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT,
+                           "position_embedding is expected to have 2 dimensions, got ", position_embedding_dims.size());
+  }
+
+  const auto segment_embedding_dims = segment_embedding->Shape().GetDims();
+  if (segment_embedding_dims.size() != 2) {
+    return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT,
+                           "segment_embedding is expected to have 2 dimensions, got ", segment_embedding_dims.size());
+  }
+
+  if (word_embedding_dims[1] != position_embedding_dims[1])
+  {
+    return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT,
+                           "word_embedding and position_embedding shall have same dimension 1");
+  }
+  int64_t hidden_size = word_embedding_dims[1];
+ 
   std::vector<int64_t> out_dims;
   out_dims.reserve(3);
   out_dims.push_back(input_dims[0]);
   out_dims.push_back(input_dims[1]);
-  out_dims.push_back(hidden_size_);
+  out_dims.push_back(hidden_size);
   TensorShape output_shape(out_dims);
   Tensor* output = context->Output(0, output_shape);
 
@@ -98,10 +116,10 @@ Status EmbedLayerNorm<T>::ComputeInternal(OpKernelContext* context) const {
       mask->template Data<int32_t>(),
       gamma_data_.get(),
       beta_data_.get(),
-      word_embedding_data_.get(),
-      position_embedding_data_.get(),
-      segment_embedding_data_.get(),
-      static_cast<int>(hidden_size_),
+      word_embedding->template Data<T>(),
+      position_embedding->template Data<T>(),
+      segment_embedding->template Data<T>(),
+      static_cast<int>(hidden_size),
       batch_size,
       sequence_length,
       element_size);

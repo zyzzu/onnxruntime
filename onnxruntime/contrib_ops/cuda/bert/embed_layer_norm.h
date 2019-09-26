@@ -21,15 +21,9 @@ class EmbedLayerNorm final : public CudaKernel {
  private:
   size_t gamma_size_;
   size_t beta_size_;
-  size_t word_embedding_size_;
-  size_t position_embedding_size_;
-  size_t segment_embedding_size_;
 
   IAllocatorUniquePtr<float> gamma_data_;               // gpu copy of weight
   IAllocatorUniquePtr<float> beta_data_;                // gpu copy of bias
-  IAllocatorUniquePtr<float> word_embedding_data_;      // gpu copy of word embedding
-  IAllocatorUniquePtr<float> position_embedding_data_;  // gpu copy of position embedding
-  IAllocatorUniquePtr<float> segment_embedding_data_;   // gpu copy of segment embedding
 
   int64_t hidden_size_;
 };

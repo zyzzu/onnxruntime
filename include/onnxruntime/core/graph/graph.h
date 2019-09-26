@@ -523,7 +523,7 @@ class Graph {
   These are overridable initializers. This is a difference between 
   graph_inputs_including_initializers_ and graph_inputs_excluding_initializers_
   @remarks Contains no nullptr values. */
-  const std::vector<const NodeArg*>& GetOverridableInitializers () const {
+  const std::vector<const NodeArg*>& GetOverridableInitializers() const {
     return graph_overridable_initializers_;
   }
 
@@ -771,6 +771,17 @@ class Graph {
   /** Returns the mutable parent graph if this is a subgraph */
   Graph* MutableParentGraph() { return parent_graph_; }
 
+  std::vector<const Node*> GetConsumerNodes(const std::string& node_arg_name) const {
+    std::vector<const Node*> results;
+    auto iter = node_arg_to_consumer_nodes_.find(node_arg_name);
+    if (iter != node_arg_to_consumer_nodes_.end()) {
+      for (auto node_index : iter->second) {
+        results.push_back(GetNode(node_index));
+      }
+    }
+    return results;
+  }
+
   /** Returns the Node containing the GraphProto for this Graph instance if IsSubgraph is true */
   const Node* ParentNode() const { return parent_node_; }
 
@@ -994,6 +1005,9 @@ class Graph {
 
   // All node args owned by <*this> graph. Key is node arg name.
   std::unordered_map<std::string, std::unique_ptr<NodeArg>> node_args_;
+
+  // node arg to its consumer nodes
+  std::unordered_map<std::string, std::unordered_set<NodeIndex>> node_arg_to_consumer_nodes_;
 
   const std::unordered_map<std::string, int> domain_to_version_;
 

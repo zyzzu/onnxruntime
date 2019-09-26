@@ -107,8 +107,8 @@ inline int computeMaskIdx(cudaStream_t stream, const int sequence_length, const 
 }
 
 template <typename T, unsigned TPB>
-__global__ void embLayerNormKernel(int hidden_size, const int* input_ids, const int* token_ids, const float* beta, const float* gamma,
-                                   const float* word_embedding, const float* position_embedding, const float* segment_embedding,
+__global__ void embLayerNormKernel(int hidden_size, const int* input_ids, const int* segment_ids, const float* beta, const float* gamma,
+                                   const T* word_embedding, const T* position_embedding, const T* segment_embedding,
                                    T* output) {
   KeyValuePairSum pairSum;
   // 1. lookup word and token of the block
@@ -117,13 +117,13 @@ __global__ void embLayerNormKernel(int hidden_size, const int* input_ids, const 
   // gridDim.x = sequence_length
   // gridDim.y = batch_size
   __shared__ int word_id;
-  __shared__ int token_id;
+  __shared__ int segment_id;
 
   const T rld = T(1.f) / T(hidden_size);
   const int sequence_position = blockIdx.y * gridDim.x + blockIdx.x;
   if (threadIdx.x == 0) {
     word_id = input_ids[sequence_position];
-    token_id = token_ids[sequence_position];
+    segment_id = segment_ids[sequence_position];
   }
   __syncthreads();
 
@@ -131,7 +131,7 @@ __global__ void embLayerNormKernel(int hidden_size, const int* input_ids, const 
   // offset into embeddings is given by word_id * hidden_size
   const int position_offset = blockIdx.x * hidden_size;
   const int word_offset = word_id * hidden_size;
-  const int token_offset = token_id * hidden_size;
+  const int segment_offset = segment_id * hidden_size;
   // the output offset is given by b * (sequence_length*hidden_size) + s * hidden_size
   const int output_offset = sequence_position * hidden_size;
 
@@ -139,7 +139,7 @@ __global__ void embLayerNormKernel(int hidden_size, const int* input_ids, const 
 
   for (int it = threadIdx.x; it < hidden_size; it += TPB) {
     const T w(word_embedding[word_offset + it]);
-    const T t(segment_embedding[token_offset + it]);
+    const T t(segment_embedding[segment_offset + it]);
     const T p(position_embedding[position_offset + it]);
     const T val = w + t + p;
 
@@ -154,15 +154,15 @@ __global__ void embLayerNormKernel(int hidden_size, const int* input_ids, const 
 
 template <typename T>
 int embSkipLayerNorm(cudaStream_t stream, int hidden_size, int batch_size, int sequence_length,
-                     const int* input_ids, const int* token_ids, const float* beta, const float* gamma,
-                     const float* word_embedding, const float* position_embedding, const float* segment_embedding,
+                     const int* input_ids, const int* segment_ids, const float* beta, const float* gamma,
+                     const T* word_embedding, const T* position_embedding, const T* segment_embedding,
                      T* output) {
   constexpr int tpb = 256;
   const dim3 grid(sequence_length, batch_size, 1);
   const dim3 block(tpb, 1, 1);
 
   embLayerNormKernel<T, tpb>
-      <<<grid, block, 0, stream>>>(hidden_size, input_ids, token_ids, beta, gamma, word_embedding, position_embedding, segment_embedding, output);
+      <<<grid, block, 0, stream>>>(hidden_size, input_ids, segment_ids, beta, gamma, word_embedding, position_embedding, segment_embedding, output);
   CUDA_CALL(cudaPeekAtLastError());
 
   return 0;
@@ -175,9 +175,9 @@ void launchEmbedLayerNormKernel(void* output,
                                 const int* input_mask,
                                 const float* gamma,
                                 const float* beta,
-                                const float* word_embedding,
-                                const float* position_embedding,
-                                const float* segment_embedding,
+                                const void* word_embedding,
+                                const void* position_embedding,
+                                const void* segment_embedding,
                                 const int hidden_size,
                                 int batch_size,
                                 int sequence_length,
@@ -186,12 +186,12 @@ void launchEmbedLayerNormKernel(void* output,
 
   if (element_size == 2) {
     embSkipLayerNorm<half>(stream, hidden_size, batch_size, sequence_length, input_ids, segment_ids,
-                           beta, gamma, word_embedding, position_embedding, segment_embedding,
-                           static_cast<half*>(output));
+                           beta, gamma, reinterpret_cast<const half*>(word_embedding), reinterpret_cast<const half*>(position_embedding), reinterpret_cast<const half*>(segment_embedding),
+                           reinterpret_cast<half*>(output));
   } else {
     embSkipLayerNorm<float>(stream, hidden_size, batch_size, sequence_length, input_ids, segment_ids,
-                           beta, gamma, word_embedding, position_embedding, segment_embedding,
-                           static_cast<float*>(output));
+                           beta, gamma, reinterpret_cast<const float*>(word_embedding), reinterpret_cast<const float*>(position_embedding), reinterpret_cast<const float*>(segment_embedding),
+                           reinterpret_cast<float*>(output));
   }
 
   computeMaskIdx(stream, sequence_length, hidden_size, input_mask, static_cast<int*>(mask_index));

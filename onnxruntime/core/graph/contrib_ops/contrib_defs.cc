@@ -300,18 +300,19 @@ is applied to the tensor elementwise.
       .SetDoc("Embedding Layer Normalization")
       .Attr("gamma", "weights", AttributeProto::TENSOR)
       .Attr("beta", "bias", AttributeProto::TENSOR)
-      .Attr("word_embedding", "2D with shape (,hidden_size)", AttributeProto::TENSOR)
-      .Attr("position_embedding", "2D with shape (, hidden_size)", AttributeProto::TENSOR)
-      .Attr("segment_embedding", "2D with shape (, hidden_size)", AttributeProto::TENSOR)
-      .Attr("float16", "boolean flag", AttributeProto::INT, static_cast<int64_t>(0))
       .Input(0, "input_ids", "2D words IDs with shape (batch_size, sequence_length)", "T1")
       .Input(1, "segment_ids", "2D segment IDs with shape (batch_size, sequence_length)", "T1")
       .Input(2, "mask", "2D attention mask with shape (batch_size, sequence_length)", "T1")
-      .Output(0, "output", "3D output tensor with shape (batch_size, sequence_length, hidden_size)", "T2")
+      .Input(3, "word_embedding", "2D with shape (,hidden_size)", "T")
+      .Input(4, "position_embedding", "2D with shape (, hidden_size)", "T")
+      .Input(5, "segment_embedding", "2D with shape (, hidden_size)", "T")
+      .Output(0, "output", "3D output tensor with shape (batch_size, sequence_length, hidden_size)", "T")
       .Output(1, "mask_index", "1D output tensor with shape (batch_size)", "T1")
       .TypeConstraint("T1", {"tensor(int32)"}, "Constrain input types to integer types")
-      .TypeConstraint("T2", {"tensor(float)", "tensor(float16)"}, "Constrain output types to float tensors.")
+      .TypeConstraint("T", {"tensor(float)", "tensor(float16)"}, "Constrain output types to float tensors.")
       .TypeAndShapeInferenceFunction([](ONNX_NAMESPACE::InferenceContext& ctx) {
+        propagateElemTypeFromInputToOutput(ctx, 3, 0);
+        propagateElemTypeFromInputToOutput(ctx, 0, 1);
         if (!hasInputShape(ctx, 0))
           return;
 
@@ -337,42 +338,33 @@ is applied to the tensor elementwise.
           fail_shape_inference("All inputs shall have value in dimension 1");
         }
 
-        // output tensor of mask_index is int32
-        auto mask_index_type = ctx.getOutputType(1);
-        mask_index_type->mutable_tensor_type()->set_elem_type(ONNX_NAMESPACE::TensorProto::INT32);
+        auto& word_embedding_shape = getInputShape(ctx, 3);
+        auto& word_embedding_dims = word_embedding_shape.dim();
 
-        // output tensor of embedding layer is float16 if the attribute is set, float32 otherwise.
-        int64_t float16 = 0;
-        auto float16_attribute = ctx.getAttribute("float16");
-        float16 = float16_attribute->i();
+        auto& position_embedding_shape = getInputShape(ctx, 4);
+        auto& position_embedding_dims = position_embedding_shape.dim();
 
-        auto output_type = ctx.getOutputType(0);
-        output_type->mutable_tensor_type()->set_elem_type(float16 != 0 ? ONNX_NAMESPACE::TensorProto::FLOAT16 : ONNX_NAMESPACE ::TensorProto::FLOAT);
+        auto& segment_embedding_shape = getInputShape(ctx, 5);
+        auto& segment_embedding_dims = segment_embedding_shape.dim();
 
         // get hidden_size from the last dimension of embedding
-        auto segment_embedding_attribute = ctx.getAttribute("segment_embedding");
-        auto segment_embedding_proto = segment_embedding_attribute->t();
-        if (segment_embedding_proto.dims_size() != 2) {
-          fail_shape_inference("The attribute segment_embedding should have 2 dimensions");
+        if (word_embedding_dims.size() != 2 || !word_embedding_dims[1].has_dim_value()) {
+          fail_shape_inference("word_embedding should have 2 dimensions and dimension size is known.");
         }
-        int64_t hidden_size = segment_embedding_proto.dims(1);
+        int64_t hidden_size = word_embedding_shape.dim(1).dim_value();
 
-        auto word_embedding_attribute = ctx.getAttribute("word_embedding");
-        auto word_embedding_proto = word_embedding_attribute->t();
-        if (word_embedding_proto.dims_size() != 2) {
-          fail_shape_inference("The attribute word_embedding should have 2 dimensions");
+        if (position_embedding_dims.size() != 2) {
+          fail_shape_inference("position_embedding should have 2 dimensions");
         }
-        if (word_embedding_proto.dims(1) != hidden_size) {
-          fail_shape_inference("The last dimension of word_embedding and segment_embedding attributes does not match.");
+        if (position_embedding_shape.dim(1).dim_value() != hidden_size) {
+          fail_shape_inference("The last dimension of word_embedding and position_embedding does not match.");
         }
 
-        auto position_embedding_attribute = ctx.getAttribute("position_embedding");
-        auto position_embedding_proto = position_embedding_attribute->t();
-        if (position_embedding_proto.dims_size() != 2) {
-          fail_shape_inference("The attribute position_embedding should have 2 dimensions");
+        if (segment_embedding_dims.size() != 2) {
+          fail_shape_inference("segment_embedding should have 2 dimensions");
         }
-        if (position_embedding_proto.dims(1) != hidden_size) {
-          fail_shape_inference("The last dimension of position_embedding and segment_embedding attributes does not match.");
+        if (segment_embedding_shape.dim(1).dim_value() != hidden_size) {
+          fail_shape_inference("The last dimension of word_embedding and segment_embedding does not match.");
         }
 
         // mask shape is (batch_size, sequence_length), output shape is (batch_size, sequence_length, hidden_size)

@@ -13,9 +13,9 @@ void launchEmbedLayerNormKernel(void* output,                     // output tens
                                 const int* input_mask,            // input mask
                                 const float* gamma,               // weight for layer normalization
                                 const float* beta,                // bias for layer normalization
-                                const float* word_embedding,      // weights for word embeddings
-                                const float* position_embedding,  // weights for position embeddings
-                                const float* segment_embedding,   // weights for segment (like sentence) embeddings
+                                const void* word_embedding,      // weights for word embeddings
+                                const void* position_embedding,  // weights for position embeddings
+                                const void* segment_embedding,   // weights for segment (like sentence) embeddings
                                 const int hidden_size,            // hidden size (that is head_size * num_heads)
                                 int batch_size,                   // batch size
                                 int sequence_length,              // sequence length
