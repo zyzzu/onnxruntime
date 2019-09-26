@@ -18,9 +18,9 @@ set(mlas_common_srcs
 
 if(MSVC)
   if(CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64")
-    set(asm_filename ${ONNXRUNTIME_ROOT}/core/mlas/lib/arm64/sgemma.asm)
-    set(pre_filename ${CMAKE_CURRENT_BINARY_DIR}/sgemma.i)
-    set(obj_filename ${CMAKE_CURRENT_BINARY_DIR}/sgemma.obj)
+    set(asm_filename ${ONNXRUNTIME_ROOT}/core/mlas/lib/arm64/SgemmKernelNeon.asm)
+    set(pre_filename ${CMAKE_CURRENT_BINARY_DIR}/SgemmKernelNeon.i)
+    set(obj_filename ${CMAKE_CURRENT_BINARY_DIR}/SgemmKernelNeon.obj)
 
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
       set(ARMASM_FLAGS "-g")
@@ -44,6 +44,9 @@ if(MSVC)
     enable_language(ASM_MASM)
 
     set(mlas_platform_srcs
+      ${ONNXRUNTIME_ROOT}/core/mlas/lib/amd64/QgemmU8S8KernelAvx2.asm
+      ${ONNXRUNTIME_ROOT}/core/mlas/lib/amd64/QgemmU8S8KernelAvx512BW.asm
+      ${ONNXRUNTIME_ROOT}/core/mlas/lib/amd64/QgemmU8S8KernelAvx512Vnni.asm
       ${ONNXRUNTIME_ROOT}/core/mlas/lib/amd64/QgemmU8U8KernelAvx2.asm
       ${ONNXRUNTIME_ROOT}/core/mlas/lib/amd64/QgemmU8U8KernelAvx512BW.asm
       ${ONNXRUNTIME_ROOT}/core/mlas/lib/amd64/QgemmU8U8KernelAvx512Vnni.asm
@@ -70,7 +73,8 @@ if(MSVC)
     set(CMAKE_ASM_MASM_FLAGS "${CMAKE_ASM_MASM_FLAGS} /safeseh")
 
     set(mlas_platform_srcs
-      ${ONNXRUNTIME_ROOT}/core/mlas/lib/i386/sgemma.asm
+      ${ONNXRUNTIME_ROOT}/core/mlas/lib/i386/SgemmKernelSse2.asm
+      ${ONNXRUNTIME_ROOT}/core/mlas/lib/i386/SgemmKernelAvx.asm
     )
   endif()
 else()
@@ -78,7 +82,7 @@ else()
     if (CMAKE_ANDROID_ARCH_ABI STREQUAL "armeabi-v7a")
       set(ARM TRUE)
     elseif (CMAKE_ANDROID_ARCH_ABI STREQUAL "arm64-v8a")
-      set(ARM TRUE) # Android NDK fails to compile sgemma.s
+      set(ARM64 TRUE)
     elseif (CMAKE_ANDROID_ARCH_ABI STREQUAL "x86_64")
       set(X86_64 TRUE)
     elseif (CMAKE_ANDROID_ARCH_ABI STREQUAL "x86")
@@ -111,7 +115,7 @@ else()
     enable_language(ASM)
 
     set(mlas_platform_srcs
-      ${ONNXRUNTIME_ROOT}/core/mlas/lib/aarch64/sgemma.s
+      ${ONNXRUNTIME_ROOT}/core/mlas/lib/aarch64/SgemmKernelNeon.S
     )
   elseif(X86)
     enable_language(ASM)
@@ -157,6 +161,7 @@ else()
     set_source_files_properties(${mlas_platform_srcs_avx} PROPERTIES COMPILE_FLAGS "-mavx")
 
     set(mlas_platform_srcs_avx2
+      ${ONNXRUNTIME_ROOT}/core/mlas/lib/x86_64/QgemmU8S8KernelAvx2.S
       ${ONNXRUNTIME_ROOT}/core/mlas/lib/x86_64/QgemmU8U8KernelAvx2.S
       ${ONNXRUNTIME_ROOT}/core/mlas/lib/x86_64/SgemmKernelFma3.S
       ${ONNXRUNTIME_ROOT}/core/mlas/lib/x86_64/SconvKernelFma3.S
@@ -174,6 +179,8 @@ else()
     set_source_files_properties(${mlas_platform_srcs_avx512f} PROPERTIES COMPILE_FLAGS "-mavx512f")
 
     set(mlas_platform_srcs_avx512bw
+      ${ONNXRUNTIME_ROOT}/core/mlas/lib/x86_64/QgemmU8S8KernelAvx512BW.S
+      ${ONNXRUNTIME_ROOT}/core/mlas/lib/x86_64/QgemmU8S8KernelAvx512Vnni.S
       ${ONNXRUNTIME_ROOT}/core/mlas/lib/x86_64/QgemmU8U8KernelAvx512BW.S
       ${ONNXRUNTIME_ROOT}/core/mlas/lib/x86_64/QgemmU8U8KernelAvx512Vnni.S
     )
@@ -190,5 +197,5 @@ else()
 endif()
 
 add_library(onnxruntime_mlas STATIC ${mlas_common_srcs} ${mlas_platform_srcs})
-target_include_directories(onnxruntime_mlas PRIVATE ${ONNXRUNTIME_ROOT}/core/mlas/inc ${ONNXRUNTIME_ROOT}/core/mlas/lib)
+target_include_directories(onnxruntime_mlas PRIVATE ${ONNXRUNTIME_ROOT}/core/mlas/inc ${ONNXRUNTIME_ROOT}/core/mlas/lib ${eigen_INCLUDE_DIRS})
 set_target_properties(onnxruntime_mlas PROPERTIES FOLDER "ONNXRuntime")
