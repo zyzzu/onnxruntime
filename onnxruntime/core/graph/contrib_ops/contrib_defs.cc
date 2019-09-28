@@ -413,36 +413,14 @@ is applied to the tensor elementwise.
       .SetSupportLevel(OpSchema::SupportType::EXPERIMENTAL)
       .SetDoc("Multi-Head Self Attention")
       .Attr("num_heads", "Number of attention heads", AttributeProto::INT)
-      .Input(0, "input", "3D input tensor with shape (B, S, 3 * N * H), B is batch size, S is max sequence length, N is number of heads, H is size per head", "T")
-      .Input(1, "mask", "attention mask with shape (B)", "M")
-      .Output(0, "output", "3D output tensor with shape (B, S, N * H)", "T")
-      .TypeConstraint("T", {"tensor(float)", "tensor(float16)"}, "Constrain input and output types to float or half tensors.")
-      .TypeConstraint("M", {"tensor(int32)"}, "Constrain mask types to integer tensors.")
-      .TypeAndShapeInferenceFunction([](ONNX_NAMESPACE::InferenceContext& ctx) {
-        propagateElemTypeFromInputToOutput(ctx, 0, 0);
-        if (!hasInputShape(ctx, 0))
-          return;
-
-        auto& input_shape = getInputShape(ctx, 0);
-        auto& dims = input_shape.dim();
-        if (dims.size() != 3) {
-          fail_shape_inference("Input 0 shall be 3 dimensions.");
-        }
-
-        if (dims[2].has_dim_value()) {
-          if (dims[2].dim_value() % 3 == 0) {
-            fail_shape_inference("Dimension 2 of input 0 shall be divisible by 3.");
-          }
-
-          ONNX_NAMESPACE::TensorShapeProto output_shape;
-          for (auto& dim : dims) {
-            *output_shape.add_dim() = dim;
-          }
-
-          output_shape.mutable_dim(2)->set_dim_value(input_shape.dim(2).dim_value() / 3);
-          updateOutputShape(ctx, 0, output_shape);
-       }
-      });
+      .Input(0, "input", "3D input tensor with shape (batch_size, sequence_length, hidden_size), hidden_size = num_heads * head_size", "T")
+      .Input(1, "weight", "2D input tensor with shape (hidden_size, 3 * hidden_size)", "T")
+      .Input(2, "bias", "1D input tensor with shape (3 * hidden_size)", "T")
+      .Input(3, "mask", "attention mask with shape (B)", "M")
+      .Output(0, "output", "3D output tensor with shape (batch_size, sequence_length, hidden_size)", "T")
+      .TypeConstraint("T", {"tensor(float)", "tensor(float16)"}, "Constrain input and output types to float tensors.")
+      .TypeConstraint("M", {"tensor(int32)"}, "Constrain mask to integer types")
+      .TypeAndShapeInferenceFunction(ONNX_NAMESPACE::propagateShapeAndTypeFromFirstInput);
 }
 
 void RegisterContribSchemas() {
