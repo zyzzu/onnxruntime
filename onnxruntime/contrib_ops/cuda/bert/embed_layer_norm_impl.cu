@@ -132,7 +132,7 @@ __global__ void embLayerNormKernel(int hidden_size, const int* input_ids, const 
   const int position_offset = blockIdx.x * hidden_size;
   const int word_offset = word_id * hidden_size;
   const int segment_offset = segment_id * hidden_size;
-  // the output offset is given by b * (sequence_length*hidden_size) + s * hidden_size
+  // the output offset is given by b * (sequence_length * hidden_size) + s * hidden_size
   const int output_offset = sequence_position * hidden_size;
 
   cub::KeyValuePair<T, T> threadData(0, 0);
@@ -153,7 +153,7 @@ __global__ void embLayerNormKernel(int hidden_size, const int* input_ids, const 
 }
 
 template <typename T>
-int embSkipLayerNorm(cudaStream_t stream, int hidden_size, int batch_size, int sequence_length,
+void embSkipLayerNorm(cudaStream_t stream, int hidden_size, int batch_size, int sequence_length,
                      const int* input_ids, const int* segment_ids, const float* beta, const float* gamma,
                      const T* word_embedding, const T* position_embedding, const T* segment_embedding,
                      T* output) {
@@ -163,9 +163,8 @@ int embSkipLayerNorm(cudaStream_t stream, int hidden_size, int batch_size, int s
 
   embLayerNormKernel<T, tpb>
       <<<grid, block, 0, stream>>>(hidden_size, input_ids, segment_ids, beta, gamma, word_embedding, position_embedding, segment_embedding, output);
-  CUDA_CALL(cudaPeekAtLastError());
 
-  return 0;
+  CUDA_CALL(cudaPeekAtLastError());
 }
 
 void launchEmbedLayerNormKernel(void* output,

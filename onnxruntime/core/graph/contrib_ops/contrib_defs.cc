@@ -330,8 +330,7 @@ is applied to the tensor elementwise.
         }
 
         if (input_ids_shape.dim(1).has_dim_value() && segment_ids_shape.dim(1).has_dim_value() && mask_shape.dim(1).has_dim_value()) {
-          if (input_ids_shape.dim(1).dim_value() != segment_ids_shape.dim(1).dim_value() 
-              || input_ids_shape.dim(1).dim_value() != mask_shape.dim(1).dim_value()) {
+          if (input_ids_shape.dim(1).dim_value() != segment_ids_shape.dim(1).dim_value() || input_ids_shape.dim(1).dim_value() != mask_shape.dim(1).dim_value()) {
             fail_shape_inference("All inputs shall have same value in dimension 1");
           }
         } else {
@@ -384,7 +383,6 @@ is applied to the tensor elementwise.
         updateOutputShape(ctx, 1, mask_index_shape);
       });
 
-
   ONNX_CONTRIB_OPERATOR_SCHEMA(SkipLayerNormalization)
       .SetDomain(kOnnxDomain)
       .SinceVersion(1)
@@ -415,15 +413,11 @@ is applied to the tensor elementwise.
       .SetSupportLevel(OpSchema::SupportType::EXPERIMENTAL)
       .SetDoc("Multi-Head Self Attention")
       .Attr("num_heads", "Number of attention heads", AttributeProto::INT)
-      .Attr("head_size", "Size per attention head", AttributeProto::INT)
-      .Attr("batch_size", "Batch size. It can be 0 for dynamic batch count.", AttributeProto::INT)
-      .Attr("sequence_length", "Sequence length", AttributeProto::INT)
       .Input(0, "input", "3D input tensor with shape (B, S, 3 * N * H), B is batch size, S is max sequence length, N is number of heads, H is size per head", "T")
       .Input(1, "mask", "attention mask with shape (B)", "M")
       .Output(0, "output", "3D output tensor with shape (B, S, N * H)", "T")
-      .TypeConstraint("T", {"tensor(float)", "tensor(float16)"}, "Constrain input and output types to float tensors.")
-      .TypeConstraint("M", {"tensor(int32)"},
-                      "Constrain mask to integer types")
+      .TypeConstraint("T", {"tensor(float)", "tensor(float16)"}, "Constrain input and output types to float or half tensors.")
+      .TypeConstraint("M", {"tensor(int32)"}, "Constrain mask types to integer tensors.")
       .TypeAndShapeInferenceFunction([](ONNX_NAMESPACE::InferenceContext& ctx) {
         propagateElemTypeFromInputToOutput(ctx, 0, 0);
         if (!hasInputShape(ctx, 0))
@@ -432,19 +426,23 @@ is applied to the tensor elementwise.
         auto& input_shape = getInputShape(ctx, 0);
         auto& dims = input_shape.dim();
         if (dims.size() != 3) {
-          fail_shape_inference("Input shall be 3 dimensions");
+          fail_shape_inference("Input 0 shall be 3 dimensions.");
         }
 
-        ONNX_NAMESPACE::TensorShapeProto output_shape;
-        for (auto& dim : dims) {
-          *output_shape.add_dim() = dim;
-        }
-        if (input_shape.dim(2).has_dim_value()) {
+        if (dims[2].has_dim_value()) {
+          if (dims[2].dim_value() % 3 == 0) {
+            fail_shape_inference("Dimension 2 of input 0 shall be divisible by 3.");
+          }
+
+          ONNX_NAMESPACE::TensorShapeProto output_shape;
+          for (auto& dim : dims) {
+            *output_shape.add_dim() = dim;
+          }
+
           output_shape.mutable_dim(2)->set_dim_value(input_shape.dim(2).dim_value() / 3);
-        }
-        updateOutputShape(ctx, 0, output_shape);
+          updateOutputShape(ctx, 0, output_shape);
+       }
       });
-
 }
 
 void RegisterContribSchemas() {
@@ -1281,34 +1279,34 @@ The quantization formula is y = (x / y_scale) + y_zero_point. For (x / y_scale),
       .SetDomain(kMSDomain)
       .SinceVersion(1)
       .Attr(
-          "axis", 
-          "The axis along which same quantization parameters are applied. It's optional." 
-          "If it's not specified, it means per-tensor quantization and input 'x_scale' and 'x_zero_point' must be scalars." 
+          "axis",
+          "The axis along which same quantization parameters are applied. It's optional."
+          "If it's not specified, it means per-tensor quantization and input 'x_scale' and 'x_zero_point' must be scalars."
           "If it's specified, it means per 'axis' quantization and input 'x_scale' and 'x_zero_point' must be 1-D tensors.",
           AttributeProto::INT,
           false)
       .Input(
-          0, 
-          "x", 
-          "N-D full precision Input tensor to be quantized.", 
+          0,
+          "x",
+          "N-D full precision Input tensor to be quantized.",
           "T1")
       .Input(
-          1, 
-          "y_scale", 
-          "Scale for doing quantization to get 'y'. It could be a scalar or a 1-D tensor," 
+          1,
+          "y_scale",
+          "Scale for doing quantization to get 'y'. It could be a scalar or a 1-D tensor,"
           "which means a per-tensor or per-axis quantization. If it's a 1-D tensor, "
           "its number of elements should be equal to the dimension value of 'axis' dimension of input 'x'.",
           "T1")
       .Input(
-          2, 
-          "y_zero_point", 
-          "Zero point for doing quantization to get 'y'. It could be a scalar or a 1-D tensor, which means a per-tensor" 
+          2,
+          "y_zero_point",
+          "Zero point for doing quantization to get 'y'. It could be a scalar or a 1-D tensor, which means a per-tensor"
           "or per-axis quantization. If it's a 1-D tensor, its number of elements should be equal to the dimension value of 'axis' dimension of input 'x'.",
           "T2")
       .Output(
-          0, 
-          "y", 
-          "N-D quantized output tensor. It has same shape as input 'x'.", 
+          0,
+          "y",
+          "N-D quantized output tensor. It has same shape as input 'x'.",
           "T2")
       .TypeConstraint(
           "T1",
@@ -1337,32 +1335,32 @@ Scale and zero point must have same shape. They must be either scalar (per tenso
   ONNX_CONTRIB_OPERATOR_SCHEMA(DequantizeLinear)
       .SetDomain(kMSDomain)
       .SinceVersion(1)
-      .Attr("axis", 
-          "The axis along which same quantization parameters are applied. It's optional." 
-          "If it's not specified, it means per-tensor quantization and input 'x_scale' and 'x_zero_point' must be scalars." 
-          "If it's specified, it means per 'axis' quantization and input 'x_scale' and 'x_zero_point' must be 1-D tensors.", 
-          AttributeProto::INT, 
-          false)
+      .Attr("axis",
+            "The axis along which same quantization parameters are applied. It's optional."
+            "If it's not specified, it means per-tensor quantization and input 'x_scale' and 'x_zero_point' must be scalars."
+            "If it's specified, it means per 'axis' quantization and input 'x_scale' and 'x_zero_point' must be 1-D tensors.",
+            AttributeProto::INT,
+            false)
       .Input(0,
-          "x", 
-          "N-D quantized Input tensor to be de-quantized.", 
-          "T2")
+             "x",
+             "N-D quantized Input tensor to be de-quantized.",
+             "T2")
       .Input(
-          1, 
-          "x_scale", 
-          "Scale for input 'x'. It could be a scalar or a 1-D tensor, which means a per-tensor or per-axis quantization." 
+          1,
+          "x_scale",
+          "Scale for input 'x'. It could be a scalar or a 1-D tensor, which means a per-tensor or per-axis quantization."
           "If it's a 1-D tensor, its number of elements should be equal to the dimension value of 'axis' dimension of input 'x'.",
           "T1")
       .Input(
           2,
-          "x_zero_point", 
-          "Zero point for input 'x'. It could be a scalar or a 1-D tensor, which means a per-tensor or per-axis quantization." 
+          "x_zero_point",
+          "Zero point for input 'x'. It could be a scalar or a 1-D tensor, which means a per-tensor or per-axis quantization."
           "If it's a 1-D tensor, its number of elements should be equal to the dimension value of 'axis' dimension of input 'x'.",
           "T2")
       .Output(
-          0, 
+          0,
           "y",
-          "N-D full precision output tensor. It has same shape as input 'x'.", 
+          "N-D full precision output tensor. It has same shape as input 'x'.",
           "T1")
       .TypeConstraint(
           "T1",
@@ -1875,9 +1873,9 @@ Example 4:
             "\"chebyshev\", \"cityblock\", \"correlation\", \"cosine\", \"dice\", \"euclidean\", \"hamming\", \"jaccard\", "
             "\"jensenshannon\", \"kulsinski\", \"mahalanobis\", \"matching\", \"minkowski\", \"rogerstanimoto\", \"russellrao\", "
             "\"seuclidean\", \"sokalmichener\", \"sokalsneath\", \"sqeuclidean\", \"wminkowski\", \"yule\".",
-            AttributeProto::STRING, std::string("sqeuclidean"))     
+            AttributeProto::STRING, std::string("sqeuclidean"))
       .Input(0, "A", "2D matrix with shape (M,N)", "T")
-	  .Input(1, "B", "2D matrix with shape (K,N)", "T")
+      .Input(1, "B", "2D matrix with shape (K,N)", "T")
       .Output(0, "C",
               "A 2D Matrix that represents the distance between each pair of the two collections of inputs.",
               "T")

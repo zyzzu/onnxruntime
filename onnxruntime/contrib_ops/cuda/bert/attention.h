@@ -20,12 +20,7 @@ class Attention final : public CudaKernel {
   Status ComputeInternal(OpKernelContext* context) const override;
 
  private:
-  int num_heads_;        // number of heads (N)
-  int head_size_;        // size per head (H)
-  int batch_size_;       // batch size (B)
-  int sequence_length_;  // sequence length (S)
-
-  IAllocatorUniquePtr<void> work_buffer_;  // gpu scratch buffer
+  int num_heads_;     // number of attention heads
 };
 
 }  // namespace cuda
