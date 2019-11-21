@@ -348,9 +348,9 @@ Status Attention<T>::Compute(OpKernelContext* context) const {
     int N = batch_size * num_heads_ * sequence_length;
     int D = sequence_length;
 
-    int numThreads = tp->NumThreads() + 1;
-    int size_per_batch = (N + numThreads - 1) / numThreads;
     if (tp != nullptr) {
+      int numThreads = tp->NumThreads() + 1;
+      int size_per_batch = (N + numThreads - 1) / numThreads;
       tp->ParallelFor(numThreads, [numThreads, N, D, size_per_batch, scratch_data](int k) {
         int start = k * size_per_batch;
         int end = k == numThreads - 1 ? N : (k + 1) * size_per_batch;
