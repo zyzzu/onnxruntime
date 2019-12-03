@@ -206,6 +206,8 @@ add_dependencies(winml_lib_core winml_api_native_internal)
 target_link_libraries(winml_lib_core PRIVATE wil)
 if (onnxruntime_USE_DML)
   target_link_libraries(winml_lib_core PRIVATE onnxruntime_providers_dml)
+  target_link_libraries(winml_lib_api PRIVATE onnxruntime_providers_dml)
+  target_link_libraries(winml_lib_image PRIVATE onnxruntime_providers_dml)
 endif(onnxruntime_USE_DML)
 
 # add it to the onnxruntime shared library
