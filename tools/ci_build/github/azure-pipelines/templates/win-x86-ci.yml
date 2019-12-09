@@ -70,12 +70,12 @@ jobs:
           workingFolder: '$(Build.BinariesDirectory)\Debug'
           createLogFile: true
 
-      - task: BatchScript@1
-        displayName: 'Test Debug'
-        inputs:
-          filename: '$(Build.BinariesDirectory)\packages\python\python.exe'
-          arguments: '$(BuildCommand) --test --config Debug'
-          workingFolder: '$(Build.BinariesDirectory)'
+      #- task: BatchScript@1
+      #  displayName: 'Test Debug'
+      #  inputs:
+      #    filename: '$(Build.BinariesDirectory)\packages\python\python.exe'
+      #    arguments: '$(BuildCommand) --test --config Debug'
+      #    workingFolder: '$(Build.BinariesDirectory)'
 
       - task: DotNetCoreCLI@2
         displayName: 'Build C# Debug'
@@ -119,12 +119,12 @@ jobs:
         workingFolder: '$(Build.BinariesDirectory)\RelWithDebInfo'
         createLogFile: true
 
-    - task: BatchScript@1
-      displayName: 'Test RelWithDebInfo'
-      inputs:
-        filename: '$(Build.BinariesDirectory)\packages\python\python.exe'
-        arguments: '$(BuildCommand) --test --config RelWithDebInfo'
-        workingFolder: "$(Build.BinariesDirectory)"
+    #- task: BatchScript@1
+    #  displayName: 'Test RelWithDebInfo'
+    #  inputs:
+    #    filename: '$(Build.BinariesDirectory)\packages\python\python.exe'
+    #    arguments: '$(BuildCommand) --test --config RelWithDebInfo'
+    #    workingFolder: "$(Build.BinariesDirectory)"
 
     - task: DotNetCoreCLI@2
       displayName: 'Build C# RelWithDebInfo'
@@ -135,22 +135,22 @@ jobs:
         arguments: '--configuration RelWithDebInfo -p:Platform="Any CPU" -p:OrtPackageId=${{ parameters.OrtPackageId}}'
         workingDirectory: '$(Build.SourcesDirectory)\csharp'
 
-    - task: DotNetCoreCLI@2
-      displayName: 'Test C# RelWithDebInfo'
-      inputs:
-        command: test
-        projects: '$(Build.SourcesDirectory)\csharp\OnnxRuntime.CSharp.sln'
-        configuration: 'RelWithDebInfo'          
-        arguments: '--configuration RelWithDebInfo -p:Platform="Any CPU" -p:OrtPackageId=${{ parameters.OrtPackageId}}'
-        workingDirectory: '$(Build.SourcesDirectory)\csharp'
+    #- task: DotNetCoreCLI@2
+    #  displayName: 'Test C# RelWithDebInfo'
+    #  inputs:
+    #    command: test
+    #    projects: '$(Build.SourcesDirectory)\csharp\OnnxRuntime.CSharp.sln'
+    #    configuration: 'RelWithDebInfo'          
+    #    arguments: '--configuration RelWithDebInfo -p:Platform="Any CPU" -p:OrtPackageId=${{ parameters.OrtPackageId}}'
+    #    workingDirectory: '$(Build.SourcesDirectory)\csharp'
 
-    - task: PublishTestResults@2
-      displayName: 'Publish unit test results'
-      inputs:
-        testResultsFiles: '**\*.results.xml'
-        searchFolder: '$(Build.BinariesDirectory)'
-        testRunTitle: 'Unit Test Run'
-      condition: succeededOrFailed()
+    #- task: PublishTestResults@2
+    #  displayName: 'Publish unit test results'
+    #  inputs:
+    #    testResultsFiles: '**\*.results.xml'
+    #    searchFolder: '$(Build.BinariesDirectory)'
+    #    testRunTitle: 'Unit Test Run'
+    #  condition: succeededOrFailed()
 
     # Nuget packaging if needed
     - ${{ if eq(parameters['DoNugetPack'], 'true') }}:

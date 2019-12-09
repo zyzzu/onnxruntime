@@ -107,8 +107,6 @@ jobs:
   dependsOn:
   - Windows_CI_Dev
   - Windows_CI_Dev_x86
-  - Linux_CI_Dev
-  - MacOS_CI_Dev
   condition: succeeded()
   steps:  
 
