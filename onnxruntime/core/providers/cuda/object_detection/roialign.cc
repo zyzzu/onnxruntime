@@ -28,18 +28,14 @@ Status RoiAlign<T>::ComputeInternal(OpKernelContext* context) const {
   // batch indices
   const auto* batch_indices_ptr = context->Input<Tensor>(2);
 
-  const auto& x_dims = X_ptr->Shape();
-  const auto& rois_dims = rois_ptr->Shape();
-  const auto& batch_indices_dims = batch_indices_ptr->Shape();
-
-  auto num_rois = batch_indices_dims[0];
-  auto num_roi_cols = rois_dims[1];
-
   auto status = CheckROIAlignValidInput(X_ptr, rois_ptr, batch_indices_ptr);
   if (status != Status::OK()) {
     return status;
   }
 
+  const auto& x_dims = X_ptr->Shape();
+  const auto& batch_indices_dims = batch_indices_ptr->Shape();
+  auto num_rois = batch_indices_dims[0];
   auto& Y = *context->Output(0, {num_rois, x_dims[1], this->output_height_, this->output_width_});
   int64_t output_size = Y.Shape().Size();
 
@@ -55,7 +51,6 @@ Status RoiAlign<T>::ComputeInternal(OpKernelContext* context) const {
         this->output_width_,
         this->sampling_ratio_,
         reinterpret_cast<const typename ToCudaType<T>::MappedType*>(rois_ptr->template Data<T>()),
-        num_roi_cols,
         reinterpret_cast<typename ToCudaType<T>::MappedType*>(Y.template MutableData<T>()),
         this->mode_ == RoiAlignMode::avg,
         batch_indices_ptr->template Data<int64_t>()

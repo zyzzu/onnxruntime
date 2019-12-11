@@ -22,7 +22,6 @@ void RoiAlignImpl(
     const int64_t pooled_width,
     const int64_t sampling_ratio,
     const T* bottom_rois,
-    int64_t roi_cols,
     T* top_data,
     const bool is_mode_avg,
     const int64_t* batch_indices_ptr);
