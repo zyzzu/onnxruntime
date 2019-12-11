@@ -92,7 +92,7 @@ __global__ void RoIAlignForward(
     const T* bottom_rois,
     int64_t roi_cols,
     T* top_data,
-    const int64_t* batch_indices_ptr
+    const int64_t* batch_indices_ptr,
     const T min_T_value) {
   CALCULATE_ELEMENTWISE_INDEX_OR_EXIT(index, nthreads);
   {
@@ -163,7 +163,7 @@ __global__ void RoIAlignForward(
   }
 }
 
-template<T>
+template <typename T>
 T MinValueOf() {
   return -std::numeric_limits<T>::infinity();
 }
@@ -201,7 +201,7 @@ void RoiAlignImpl(
         roi_cols,
         top_data,
         batch_indices_ptr,
-        min_T_value);    
+        min_T_value);
     }
     else {
       RoIAlignForward<T, false><<<blocksPerGrid, GridDim::maxThreadsPerBlock, 0>>>(
@@ -218,7 +218,7 @@ void RoiAlignImpl(
         roi_cols,
         top_data,
         batch_indices_ptr,
-        min_T_value);    
+        min_T_value);
     }
 }
 
