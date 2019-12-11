@@ -94,7 +94,8 @@ __global__ void RoIAlignForward(
     T* top_data,
     const int64_t* batch_indices_ptr
     const T min_T_value) {
-  for (size_t index = blockIdx.x * blockDim.x + threadIdx.x; index < nthreads; index += blockDim.x * gridDim.x) {
+  CALCULATE_ELEMENTWISE_INDEX_OR_EXIT(index, nthreads);
+  {
     // (n, c, ph, pw) is an element in the pooled output
     int pw = index % pooled_width;
     int ph = (index / pooled_width) % pooled_height;
@@ -116,7 +117,7 @@ __global__ void RoIAlignForward(
     // Force malformed ROIs to be 1x1
     roi_width = max(roi_width, (T)1.);
     roi_height = max(roi_height, (T)1.);
-    
+
     T bin_size_h = static_cast<T>(roi_height) / static_cast<T>(pooled_height);
     T bin_size_w = static_cast<T>(roi_width) / static_cast<T>(pooled_width);
 
