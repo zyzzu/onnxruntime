@@ -21,14 +21,13 @@
 namespace onnxruntime {
 namespace cuda {
   
-template <typename T>
+template <typename T, bool is_mode_avg>
 __device__ T bilinear_interpolate(
     const T* bottom_data,
     const int height,
     const int width,
     T y,
     T x,
-    const bool is_mode_avg,
     const int index /* index for debug only*/) {
   // deal with cases that inverse elements are out of feature map boundary
   if (y < -1.0 || y > height || x < -1.0 || x > width) {
@@ -79,7 +78,7 @@ __device__ T bilinear_interpolate(
   return val;
 }
 
-template <typename T>
+template <typename T, bool is_mode_avg>
 __global__ void RoIAlignForward(
     const int64_t nthreads,
     const T* bottom_data,
@@ -93,8 +92,8 @@ __global__ void RoIAlignForward(
     const T* bottom_rois,
     int64_t roi_cols,
     T* top_data,
-    const bool is_mode_avg,
-    const int64_t* batch_indices_ptr) {
+    const int64_t* batch_indices_ptr
+    const T min_T_value) {
   for (size_t index = blockIdx.x * blockDim.x + threadIdx.x; index < nthreads; index += blockDim.x * gridDim.x) {
     // (n, c, ph, pw) is an element in the pooled output
     int pw = index % pooled_width;
@@ -106,21 +105,18 @@ __global__ void RoIAlignForward(
     const T* offset_bottom_rois = bottom_rois + n * roi_cols;
     const auto roi_batch_ind = batch_indices_ptr[n];
 
-    bool continuous_coordinate = false;
     // Do not using rounding; this implementation detail is critical
-    T roi_offset = continuous_coordinate ? T(0.5) : T(0);
-    T roi_start_w = offset_bottom_rois[0] * spatial_scale - roi_offset;
-    T roi_start_h = offset_bottom_rois[1] * spatial_scale - roi_offset;
-    T roi_end_w = offset_bottom_rois[2] * spatial_scale - roi_offset;
-    T roi_end_h = offset_bottom_rois[3] * spatial_scale - roi_offset;
+    T roi_start_w = offset_bottom_rois[0] * spatial_scale;
+    T roi_start_h = offset_bottom_rois[1] * spatial_scale;
+    T roi_end_w = offset_bottom_rois[2] * spatial_scale;
+    T roi_end_h = offset_bottom_rois[3] * spatial_scale;
 
     T roi_width = roi_end_w - roi_start_w;
     T roi_height = roi_end_h - roi_start_h;
-    if (!continuous_coordinate) { // backward compatiblity
-      // Force malformed ROIs to be 1x1
-      roi_width = max(roi_width, (T)1.);
-      roi_height = max(roi_height, (T)1.);
-    }
+    // Force malformed ROIs to be 1x1
+    roi_width = max(roi_width, (T)1.);
+    roi_height = max(roi_height, (T)1.);
+    
     T bin_size_h = static_cast<T>(roi_height) / static_cast<T>(pooled_height);
     T bin_size_w = static_cast<T>(roi_width) / static_cast<T>(pooled_width);
 
@@ -137,8 +133,7 @@ __global__ void RoIAlignForward(
     // We do average (integral) pooling inside a bin
     const T count = roi_bin_grid_h * roi_bin_grid_w; // e.g. = 4
 
-    T output_val = 0.;
-    bool max_flag = false;
+    T output_val = is_mode_avg ? T(0.) : min_T_value;
     for (int iy = 0; iy < roi_bin_grid_h; iy++) // e.g., iy = 0, 1
     {
       const T y = roi_start_h + ph * bin_size_h +
@@ -149,18 +144,13 @@ __global__ void RoIAlignForward(
             static_cast<T>(ix + .5f) * bin_size_w /
                 static_cast<T>(roi_bin_grid_w);
 
-        T val = bilinear_interpolate(
-            offset_bottom_data, height, width, y, x, is_mode_avg, index);
+        T val = bilinear_interpolate<T, is_mode_avg>(
+            offset_bottom_data, height, width, y, x, index);
         
         if (is_mode_avg) {
           output_val += val;
         } else {
-          if (!max_flag) {
-            output_val = val;
-            max_flag = true;
-          } else {
-            output_val = max(output_val, val);
-          }
+          output_val = max(output_val, val);
         }
       }
     }
@@ -170,6 +160,11 @@ __global__ void RoIAlignForward(
 
     top_data[index] = output_val;
   }
+}
+
+template<T>
+T MinValueOf() {
+  return -std::numeric_limits<T>::infinity();
 }
 
 template <typename T>
@@ -189,21 +184,41 @@ void RoiAlignImpl(
   const bool is_mode_avg,
   const int64_t* batch_indices_ptr) {
     int blocksPerGrid = (int)(ceil(static_cast<float>(nthreads) / GridDim::maxThreadsPerBlock)); 
-    RoIAlignForward<T><<<blocksPerGrid, GridDim::maxThreadsPerBlock, 0>>>(
-      nthreads,
-      bottom_data,
-      spatial_scale,
-      channels,
-      height,
-      width,
-      pooled_height,
-      pooled_width,
-      sampling_ratio,
-      bottom_rois,
-      roi_cols,
-      top_data,
-      is_mode_avg,
-      batch_indices_ptr);    
+    T min_T_value = MinValueOf<T>();
+    if (is_mode_avg) {
+      RoIAlignForward<T, true><<<blocksPerGrid, GridDim::maxThreadsPerBlock, 0>>>(
+        nthreads,
+        bottom_data,
+        spatial_scale,
+        channels,
+        height,
+        width,
+        pooled_height,
+        pooled_width,
+        sampling_ratio,
+        bottom_rois,
+        roi_cols,
+        top_data,
+        batch_indices_ptr,
+        min_T_value);    
+    }
+    else {
+      RoIAlignForward<T, false><<<blocksPerGrid, GridDim::maxThreadsPerBlock, 0>>>(
+        nthreads,
+        bottom_data,
+        spatial_scale,
+        channels,
+        height,
+        width,
+        pooled_height,
+        pooled_width,
+        sampling_ratio,
+        bottom_rois,
+        roi_cols,
+        top_data,
+        batch_indices_ptr,
+        min_T_value);    
+    }
 }
 
 #define SPECIALIZED_IMPL(T)                     \
