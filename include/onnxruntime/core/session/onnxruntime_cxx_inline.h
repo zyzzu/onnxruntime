@@ -456,7 +456,7 @@ inline std::vector<std::string> Value::GetStrings() {
   std::vector<size_t> offsets(shape[0]);
   this->GetStringTensorContent(buf.data(), buf.size(), offsets.data(), offsets.size());
   // now go build all the strings
-  for (size_t i = 0; i < shape[0]; ++i) {
+  for (uint32_t i = 0; i < shape[0]; ++i) {
     std::string str;
     size_t strlen = 0;
     // are we on the last one?
