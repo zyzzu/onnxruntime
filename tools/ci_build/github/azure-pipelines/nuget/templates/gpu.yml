@@ -60,7 +60,7 @@ jobs:
     BuildArch: 'x86'
     msbuildArchitecture: 'x86'
     EnvSetupScript: 'setup_env.bat'
-    sln_platform: 'Win32'
+    sln_platform: 'x86'
     DoDebugBuild: 'false'
     DoNugetPack : 'true'
     DoCompliance: 'false'
