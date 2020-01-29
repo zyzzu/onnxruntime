@@ -129,7 +129,7 @@ jobs:
       targetPath: '$(Build.BinariesDirectory)/nuget-artifact'
     continueOnError: true
 
-    - task: DownloadPipelineArtifact@0
+  - task: DownloadPipelineArtifact@0
     displayName: 'Download Pipeline Artifact - NuGet-DML-x86'
     inputs:
       artifactName: 'drop-nuget-dml-x86'
