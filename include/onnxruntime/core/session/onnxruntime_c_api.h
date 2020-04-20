@@ -68,11 +68,10 @@ extern "C" {
 #endif
 
 // Any pointer marked with _In_ or _Out_, cannot be NULL.
-
-#ifdef __cplusplus
 // Windows users should use unicode paths when possible to bypass the MAX_PATH limitation
 // Every pointer marked with _In_ or _Out_, cannot be NULL. Caller should ensure that.
 // for ReleaseXXX(...) functions, they can accept NULL pointer.
+#ifdef __cplusplus
 #define NO_EXCEPTION noexcept
 #else
 #define NO_EXCEPTION

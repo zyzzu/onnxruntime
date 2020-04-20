@@ -57,10 +57,7 @@ static std::atomic<void*>& DefaultLoggerManagerInstance() noexcept {
 #pragma warning(disable : 26426)
 #endif
 
-static OrtMutex& DefaultLoggerMutex() noexcept {
-  static OrtMutex mutex;
-  return mutex;
-}
+OrtMutex default_logger_mutex;
 
 Logger* LoggingManager::s_default_logger_ = nullptr;
 
@@ -81,7 +78,7 @@ const LoggingManager::Epochs& LoggingManager::GetEpochs() noexcept {
 }
 
 LoggingManager::LoggingManager(std::unique_ptr<ISink> sink, Severity default_min_severity, bool filter_user_data,
-                               const InstanceType instance_type, const std::string* default_logger_id,
+                               const std::string& default_logger_id,
                                int default_max_vlog_level)
     : sink_{std::move(sink)},
       default_min_severity_{default_min_severity},
@@ -92,34 +89,28 @@ LoggingManager::LoggingManager(std::unique_ptr<ISink> sink, Severity default_min
     throw std::logic_error("ISink must be provided.");
   }
 
-  if (instance_type == InstanceType::Default) {
-    if (default_logger_id == nullptr) {
-      throw std::logic_error("default_logger_id must be provided if instance_type is InstanceType::Default");
-    }
+  // lock mutex to create instance, and enable logging
+  // this matches the mutex usage in Shutdown
+  std::lock_guard<OrtMutex> guard(default_logger_mutex);
 
-    // lock mutex to create instance, and enable logging
-    // this matches the mutex usage in Shutdown
-    std::lock_guard<OrtMutex> guard(DefaultLoggerMutex());
-
-    if (DefaultLoggerManagerInstance().load() != nullptr) {
-      throw std::logic_error("Only one instance of LoggingManager created with InstanceType::Default can exist at any point in time.");
-    }
-
-    // This assertion passes, so using the atomic to validate calls to Log should
-    // be reasonably economical.
-    // assert(DefaultLoggerManagerInstance().is_lock_free());
-    DefaultLoggerManagerInstance().store(this);
-
-    CreateDefaultLogger(*default_logger_id);
-
-    owns_default_logger_ = true;
+  if (DefaultLoggerManagerInstance().load() != nullptr) {
+    return;
   }
+
+  // This assertion passes, so using the atomic to validate calls to Log should
+  // be reasonably economical.
+  // assert(DefaultLoggerManagerInstance().is_lock_free());
+  DefaultLoggerManagerInstance().store(this);
+
+  CreateDefaultLogger(default_logger_id.empty() ? "Default" : default_logger_id);
+
+  owns_default_logger_ = true;
 }
 
 LoggingManager::~LoggingManager() {
   if (owns_default_logger_) {
     // lock mutex to reset DefaultLoggerManagerInstance() and free default logger from this instance.
-    std::lock_guard<OrtMutex> guard(DefaultLoggerMutex());
+    std::lock_guard<OrtMutex> guard(default_logger_mutex);
 
     DefaultLoggerManagerInstance().store(nullptr, std::memory_order::memory_order_release);
 

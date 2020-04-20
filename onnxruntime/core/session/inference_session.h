@@ -30,7 +30,6 @@
 
 namespace onnxruntime {  // forward declarations
 class GraphTransformer;
-class Environment;
 }  // namespace onnxruntime
 
 namespace ONNX_NAMESPACE {
@@ -108,7 +107,7 @@ class InferenceSession {
     @param session_env This represents the context for the session and contains the logger and the global threadpools.
     */
   explicit InferenceSession(const SessionOptions& session_options,
-                            const Environment& session_env);
+                            const OrtEnv& session_env);
 
   /**
     Create a new InferenceSession
@@ -118,11 +117,11 @@ class InferenceSession {
     This ctor will throw on encountering model parsing issues.
     */
   InferenceSession(const SessionOptions& session_options,
-                   const Environment& session_env,
+                   const OrtEnv& session_env,
                    const std::string& model_uri);
 #ifdef _WIN32
   InferenceSession(const SessionOptions& session_options,
-                   const Environment& session_env,
+                   const OrtEnv& session_env,
                    const std::wstring& model_uri);
 #endif
 
@@ -134,7 +133,7 @@ class InferenceSession {
     This ctor will throw on encountering model parsing issues.
     */
   InferenceSession(const SessionOptions& session_options,
-                   const Environment& session_env,
+                   const OrtEnv& session_env,
                    std::istream& model_istream);
 
   /**
@@ -146,7 +145,7 @@ class InferenceSession {
     This ctor will throw on encountering model parsing issues.
     */
   InferenceSession(const SessionOptions& session_options,
-                   const Environment& session_env,
+                   const OrtEnv& session_env,
                    const void* model_data,
                    int model_data_len);
 
@@ -377,7 +376,7 @@ class InferenceSession {
   ORT_DISALLOW_COPY_ASSIGNMENT_AND_MOVE(InferenceSession);
 
   void ConstructorCommon(const SessionOptions& session_options,
-                         const Environment& session_env);
+                         const OrtEnv& session_env);
 
   bool HasLocalSchema() const {
     return !custom_schema_registries_.empty();

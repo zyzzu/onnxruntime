@@ -48,6 +48,7 @@
 #include "core/optimizer/graph_transformer_utils.h"
 #include "core/util/thread_utils.h"
 #include "core/session/inference_session_utils.h"
+#include "core/session/environment.h"
 #include "core/platform/ort_mutex.h"
 #include "core/platform/Barrier.h"
 
@@ -157,7 +158,7 @@ static Status FinalizeSessionOptions(const SessionOptions& user_provided_session
 }
 
 void InferenceSession::ConstructorCommon(const SessionOptions& session_options,
-                                         const Environment& session_env) {
+                                         const OrtEnv& session_env) {
   auto status = FinalizeSessionOptions(session_options, model_proto_, model_loaded_, session_options_);
   ORT_ENFORCE(status.IsOK(), "Could not finalize session options while constructing the inference session. Error Message: ",
               status.ErrorMessage());
@@ -227,7 +228,7 @@ void InferenceSession::ConstructorCommon(const SessionOptions& session_options,
   session_id_ = global_session_id_.fetch_add(1);
 }
 
-InferenceSession::InferenceSession(const SessionOptions& session_options, const Environment& session_env)
+InferenceSession::InferenceSession(const SessionOptions& session_options, const OrtEnv& session_env)
     : graph_transformation_mgr_(session_options.max_num_graph_transformation_steps),
       logging_manager_(session_env.GetLoggingManager()),
       insert_cast_transformer_("CastFloat16Transformer") {
@@ -235,7 +236,7 @@ InferenceSession::InferenceSession(const SessionOptions& session_options, const 
   ConstructorCommon(session_options, session_env);
 }
 
-InferenceSession::InferenceSession(const SessionOptions& session_options, const Environment& session_env,
+InferenceSession::InferenceSession(const SessionOptions& session_options, const OrtEnv& session_env,
                                    const std::string& model_uri)
     : model_location_(ToWideString(model_uri)),
       graph_transformation_mgr_(session_options.max_num_graph_transformation_steps),
@@ -251,7 +252,7 @@ InferenceSession::InferenceSession(const SessionOptions& session_options, const 
 
 #ifdef _WIN32
 InferenceSession::InferenceSession(const SessionOptions& session_options,
-                                   const Environment& session_env,
+                                   const OrtEnv& session_env,
                                    const std::wstring& model_uri)
     : graph_transformation_mgr_(session_options.max_num_graph_transformation_steps),
       logging_manager_(session_env.GetLoggingManager()),
@@ -266,7 +267,7 @@ InferenceSession::InferenceSession(const SessionOptions& session_options,
 }
 #endif
 
-InferenceSession::InferenceSession(const SessionOptions& session_options, const Environment& session_env,
+InferenceSession::InferenceSession(const SessionOptions& session_options, const OrtEnv& session_env,
                                    std::istream& model_istream)
     : graph_transformation_mgr_(session_options.max_num_graph_transformation_steps),
       logging_manager_(session_env.GetLoggingManager()),
@@ -279,7 +280,7 @@ InferenceSession::InferenceSession(const SessionOptions& session_options, const 
   ConstructorCommon(session_options, session_env);
 }
 
-InferenceSession::InferenceSession(const SessionOptions& session_options, const Environment& session_env,
+InferenceSession::InferenceSession(const SessionOptions& session_options, const OrtEnv& session_env,
                                    const void* model_data, int model_data_len)
     : graph_transformation_mgr_(session_options.max_num_graph_transformation_steps),
       logging_manager_(session_env.GetLoggingManager()),
@@ -1387,8 +1388,8 @@ const logging::Logger& InferenceSession::CreateLoggerForRun(const RunOptions& ru
                                                             std::unique_ptr<logging::Logger>& new_run_logger) {
   const logging::Logger* run_logger;
 
-  // create a per-run logger if we can
-  if (logging_manager_ != nullptr) {
+  // create a per-run logger if instructed.
+  if (logging_manager_ != nullptr && run_options.per_run_logging) {
     std::string run_log_id{session_options_.session_logid};
 
     if (!session_options_.session_logid.empty() && !run_options.run_tag.empty()) {

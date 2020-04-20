@@ -8,7 +8,8 @@
 #include "core/session/ort_apis.h"
 #include "winml_adapter_apis.h"
 #include "core/framework/error_code_helper.h"
-#include "core/session/ort_env.h"
+#include "core/session/environment.h"
+#include "core/session/logging_wrapper.h"
 
 #ifdef USE_DML
 #include "abi_custom_registry_impl.h"
@@ -58,8 +59,7 @@ ORT_API_STATUS_IMPL(winmla::EnvConfigureCustomLoggerAndProfiler, _In_ OrtEnv* en
   auto winml_logging_manager = std::make_unique<onnxruntime::logging::LoggingManager>(std::move(logger),
                                                                                       static_cast<onnxruntime::logging::Severity>(default_warning_level),
                                                                                       false,
-                                                                                      onnxruntime::logging::LoggingManager::InstanceType::Default,
-                                                                                      &name);
+                                                                                      name);
 
   // Set a new default logging manager
   env->SetLoggingManager(std::move(winml_logging_manager));

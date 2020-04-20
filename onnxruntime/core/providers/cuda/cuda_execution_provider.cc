@@ -1417,11 +1417,9 @@ CUDAExecutionProvider::GetCapability(const onnxruntime::GraphViewer& graph,
     }
 
     for (auto registry : kernel_registries) {
-      cuda_kernel_def = registry->TryFindKernel(node, Type());
-
+      auto st = registry->TryFindKernel(node, Type(), &cuda_kernel_def);
       // at least one registry has a CUDA kernel for this node
-      if (cuda_kernel_def)
-        break;
+      if (st.IsOK()) break;
     }
 
     // none of the provided registries has a CUDA kernel for this node

@@ -38,7 +38,7 @@ typedef std::vector<onnxruntime::NodeArg*> ArgMap;
 
 class FenceCudaTestInferenceSession : public InferenceSession {
  public:
-  FenceCudaTestInferenceSession(const SessionOptions& so, const Environment& env) : InferenceSession(so, env) {}
+  FenceCudaTestInferenceSession(const SessionOptions& so, const OrtEnv& env) : InferenceSession(so, env) {}
   Status LoadModel(onnxruntime::Model& model) {
     auto model_proto = model.ToProto();
     auto st = Load(model_proto);

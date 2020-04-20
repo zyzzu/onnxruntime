@@ -6,7 +6,7 @@ namespace OrtApis {
 ORT_API(const OrtApi*, GetApi, uint32_t version);
 ORT_API(const char*, GetVersionString);
 
-ORT_API(void, ReleaseEnv, OrtEnv*);
+ORT_API(void, ReleaseEnv, _Frees_ptr_opt_ OrtEnv*);
 ORT_API(void, ReleaseStatus, _Frees_ptr_opt_ OrtStatus*);
 ORT_API(void, ReleaseMemoryInfo, _Frees_ptr_opt_ OrtMemoryInfo*);
 ORT_API(void, ReleaseSession, _Frees_ptr_opt_ OrtSession*);

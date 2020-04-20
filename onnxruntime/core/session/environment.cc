@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 #include "core/session/environment.h"
+#include "core/platform/ort_mutex.h"
 #include "core/framework/allocatormgr.h"
 #include "core/graph/constants.h"
 #include "core/graph/op.h"
@@ -25,24 +26,90 @@
 #include "core/platform/tracing.h"
 #endif
 
-namespace onnxruntime {
 using namespace ::onnxruntime::common;
+using namespace ::onnxruntime;
 using namespace ONNX_NAMESPACE;
 
 std::once_flag schemaRegistrationOnceFlag;
 
-Status Environment::Create(std::unique_ptr<logging::LoggingManager> logging_manager,
-                           std::unique_ptr<Environment>& environment,
-                           const OrtThreadingOptions* tp_options,
-                           bool create_global_thread_pools) {
-  environment = std::unique_ptr<Environment>(new Environment());
-  auto status = environment->Initialize(std::move(logging_manager), tp_options, create_global_thread_pools);
+namespace {
+struct ThreadPoolPair {
+  onnxruntime::concurrency::ThreadPool* intra_op_thread_pool_ = nullptr;
+  onnxruntime::concurrency::ThreadPool* inter_op_thread_pool_ = nullptr;
+};
+//Singleton
+class GlobalThreadPool {
+ private:
+  //If user forgot to delete the thread pools, let it happen.
+  //Because we don't know if it is safe to call the destructor now.
+  ThreadPoolPair tp_;
+  OrtMutex m_;
+  int ref_count_ = 0;
+  constexpr GlobalThreadPool() = default;
+
+  //static initialized
+  static GlobalThreadPool instance_;
+
+ public:
+  static void Release() {
+    ThreadPoolPair ToDelete;
+    {
+      std::lock_guard<OrtMutex> l(instance_.m_);
+      if (--instance_.ref_count_ == 0) {
+        ToDelete = instance_.tp_;
+      }
+    }
+    delete ToDelete.intra_op_thread_pool_;
+    delete ToDelete.inter_op_thread_pool_;
+  }
+
+  //Always return a copy of instance_.tp_
+  static ThreadPoolPair Get(const OrtThreadingOptions* tp_options) {
+    ThreadPoolPair ret;
+    {
+      std::lock_guard<OrtMutex> l(instance_.m_);
+      if (instance_.ref_count_ == 0) {
+        OrtThreadPoolParams to = tp_options->intra_op_thread_pool_params;
+        if (to.name == nullptr) {
+          to.name = ORT_TSTR("intra-op");
+        }
+        instance_.tp_.intra_op_thread_pool_ = concurrency::CreateThreadPool(&Env::Default(), to, nullptr).release();
+        to = tp_options->inter_op_thread_pool_params;
+        if (to.name == nullptr) {
+          to.name = ORT_TSTR("inter-op");
+        }
+        instance_.tp_.inter_op_thread_pool_ = concurrency::CreateThreadPool(&Env::Default(), to, nullptr).release();
+        instance_.ref_count_ = 1;
+      } else
+        ++instance_.ref_count_;
+      ret = instance_.tp_;
+    }
+    return ret;
+  }
+};
+GlobalThreadPool GlobalThreadPool::instance_;
+}  // namespace
+
+OrtEnv::~OrtEnv() {
+  if (create_global_thread_pools_)
+    GlobalThreadPool::Release();
+}
+Status OrtEnv::Create(std::unique_ptr<logging::LoggingManager> logging_manager,
+                      std::unique_ptr<OrtEnv>& ret,
+                      const OrtThreadingOptions* tp_options,
+                      bool create_global_thread_pools) NO_EXCEPTION {
+  try {
+    ret.reset(new OrtEnv());
+  } catch (std::exception& ex) {
+    return Status(ONNXRUNTIME, FAIL, ex.what());
+  }
+  auto status = ret->Initialize(std::move(logging_manager), tp_options, create_global_thread_pools);
   return status;
 }
 
-Status Environment::Initialize(std::unique_ptr<logging::LoggingManager> logging_manager,
-                               const OrtThreadingOptions* tp_options,
-                               bool create_global_thread_pools) {
+Status OrtEnv::Initialize(std::unique_ptr<logging::LoggingManager> logging_manager,
+                          const OrtThreadingOptions* tp_options,
+                          bool create_global_thread_pools) {
   auto status = Status::OK();
 
   logging_manager_ = std::move(logging_manager);
@@ -50,16 +117,9 @@ Status Environment::Initialize(std::unique_ptr<logging::LoggingManager> logging_
   // create thread pools
   if (create_global_thread_pools) {
     create_global_thread_pools_ = true;
-    OrtThreadPoolParams to = tp_options->intra_op_thread_pool_params;
-    if (to.name == nullptr) {
-      to.name = ORT_TSTR("intra-op");
-    }
-    intra_op_thread_pool_ = concurrency::CreateThreadPool(&Env::Default(), to, nullptr);
-    to = tp_options->inter_op_thread_pool_params;
-    if (to.name == nullptr) {
-      to.name = ORT_TSTR("inter-op");
-    }
-    inter_op_thread_pool_ = concurrency::CreateThreadPool(&Env::Default(), to, nullptr);
+    ThreadPoolPair g = GlobalThreadPool::Get(tp_options);
+    intra_op_thread_pool_ = g.intra_op_thread_pool_;
+    inter_op_thread_pool_ = g.inter_op_thread_pool_;
   }
 
   try {
@@ -125,5 +185,3 @@ Internal copy node
 
   return status;
 }
-
-}  // namespace onnxruntime

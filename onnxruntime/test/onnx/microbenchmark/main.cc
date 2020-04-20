@@ -14,7 +14,7 @@
 #include <core/framework/kernel_def_builder.h>
 #include <core/session/onnxruntime_c_api.h>
 #include <core/session/onnxruntime_cxx_api.h>
-#include <core/session/ort_env.h>
+#include <core/session/environment.h>
 
 #include <unordered_map>
 

@@ -11,7 +11,7 @@
 
 #include "core/session/inference_session.h"
 #include "core/session/abi_session_options_impl.h"
-#include "core/session/ort_env.h"
+#include "core/session/environment.h"
 
 #include "winml_adapter_model.h"
 #include "core/framework/utils.h"
@@ -42,7 +42,7 @@ ORT_API_STATUS_IMPL(winmla::CreateSessionWithoutModel, _In_ OrtEnv* env, _In_ co
   std::unique_ptr<onnxruntime::InferenceSession> inference_session;
   try {
     // Create the inference session
-    inference_session = std::make_unique<onnxruntime::InferenceSession>(options->value, env->GetEnvironment());
+    inference_session = std::make_unique<onnxruntime::InferenceSession>(options->value, *env);
   } catch (const std::exception& e) {
     return OrtApis::CreateStatus(ORT_FAIL, e.what());
   }

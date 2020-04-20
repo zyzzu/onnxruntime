@@ -216,7 +216,6 @@ using KernelCreatePtrFn = std::add_pointer<OpKernel*(const OpKernelInfo& info)>:
 struct KernelCreateInfo {
   std::unique_ptr<KernelDef> kernel_def;  // Owned and stored in the global kernel registry.
   KernelCreateFn kernel_create_func;
-  Status status;
 
   KernelCreateInfo(std::unique_ptr<KernelDef> definition,
                    KernelCreateFn create_func)

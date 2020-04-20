@@ -18,7 +18,7 @@ namespace test {
 class NchwcInferenceSession : public InferenceSession {
  public:
   explicit NchwcInferenceSession(const SessionOptions& session_options,
-                                 const Environment& env) : InferenceSession(session_options, env) {
+                                 const OrtEnv& env) : InferenceSession(session_options, env) {
   }
 
   std::unordered_map<std::string, int> CountOpsInGraph() {

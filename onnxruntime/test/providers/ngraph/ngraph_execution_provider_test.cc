@@ -70,7 +70,7 @@ void add_feeds(NameMLValMap& feeds, std::string name, std::vector<int64_t> dims,
 }
 
 //TODO:(nivas) Refractor to use existing code
-void RunTest(const std::string& model_path, const NameMLValMap& feeds, const std::vector<std::string>& output_names, const std::vector<std::vector<int64_t>>& expected_shapes, const std::vector<std::vector<float>>& expected_values, const Environment& env) {
+void RunTest(const std::string& model_path, const NameMLValMap& feeds, const std::vector<std::string>& output_names, const std::vector<std::vector<int64_t>>& expected_shapes, const std::vector<std::vector<float>>& expected_values, const OrtEnv& env) {
   SessionOptions so;
   InferenceSession session_object(so, env);
 

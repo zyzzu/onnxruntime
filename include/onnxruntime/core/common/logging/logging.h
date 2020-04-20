@@ -126,27 +126,18 @@ class Capture;
 /// </summary>
 class LoggingManager final {
  public:
-  enum InstanceType {
-    Default,  ///< Default instance of LoggingManager that should exist for the lifetime of the program
-    Temporal  ///< Temporal instance. CreateLogger(...) should be used, however DefaultLogger() will NOT be provided via this instance.
-  };
-
   /**
      Initializes a new instance of the LoggingManager class.
      @param sink The sink to write to. Use CompositeSink if you need to write to multiple places.
      @param default_min_severity The default minimum severity. Messages with lower severity will be ignored unless
      overridden in CreateLogger.
      @param default_filter_user_data If set to true ignore messages with DataType::USER unless overridden in CreateLogger.
-     @param instance_type If InstanceType::Default, this is the default instance of the LoggingManager
-     and is expected to exist for the lifetime of the program.
-     It creates and owns the default logger that calls to the static DefaultLogger method return.
-     @param default_logger_id Logger Id to use for the default logger. nullptr/ignored if instance_type == Temporal.
+     @param default_logger_id Logger Id to use for the default logger
      @param default_max_vlog_level Default maximum level for VLOG messages to be created unless overridden in CreateLogger.
      Requires a severity of kVERBOSE for VLOG messages to be logged.
   */
   LoggingManager(std::unique_ptr<ISink> sink, Severity default_min_severity, bool default_filter_user_data,
-                 InstanceType instance_type,
-                 const std::string* default_logger_id = nullptr,
+                 const std::string& default_logger_id,
                  int default_max_vlog_level = -1);
 
   /**

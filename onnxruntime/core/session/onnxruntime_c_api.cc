@@ -24,16 +24,16 @@
 #include "core/framework/onnxruntime_typeinfo.h"
 #include "core/session/inference_session.h"
 #include "core/session/ort_apis.h"
-#include "core/session/ort_env.h"
+#include "core/session/logging_wrapper.h"
 #include "core/framework/data_types.h"
 #include "abi_session_options_impl.h"
 #include "core/framework/TensorSeq.h"
 #include "core/platform/ort_mutex.h"
+#include "core/common/logging/sinks/clog_sink.h"
 
 using namespace onnxruntime::logging;
 using onnxruntime::BFloat16;
 using onnxruntime::DataTypeImpl;
-using onnxruntime::Environment;
 using onnxruntime::IAllocator;
 using onnxruntime::InputDefList;
 using onnxruntime::MLFloat16;
@@ -68,13 +68,27 @@ using namespace onnxruntime;
   auto v = (value);                \
   auto tensor = v->GetMutable<onnxruntime::Tensor>();
 
+//Global refcounted objects are a very, very bad idea. The reason is that order of destruction is not easily controlled. We need it only because we are asked to provide a process level global thread pool that can be shared across all the sessions.
+//Because of that, please do never call OrtReleaseEnv after the "main" function is returned. The process may either hangs or have undefined behavior.
+//static std::shared_ptr<Environment> global_env_instance;
+//Why this mutex is needed?
+// std::shared_ptr follows the thread safety rules for C++ objects:
+//1. Const operations (like reading or copying) may occur concurrently with other const operations
+//2. Mutation operations (like assignment) may not occur concurrently with a const operation or another mutation operation
+//static OrtMutex global_env_instance_mutex;
+
 ORT_API_STATUS_IMPL(OrtApis::CreateEnvWithCustomLogger, OrtLoggingFunction logging_function,
                     _In_opt_ void* logger_param, OrtLoggingLevel default_warning_level, _In_ const char* logid,
                     _Outptr_ OrtEnv** out) {
   API_IMPL_BEGIN
-  OrtEnv::LoggingManagerConstructionInfo lm_info{logging_function, logger_param, default_warning_level, logid};
-  Status status;
-  *out = OrtEnv::GetInstance(lm_info, status);
+  std::string name_str(logid);
+  std::unique_ptr<LoggingManager> lmgr = std::make_unique<LoggingManager>(onnxruntime::make_unique<LoggingWrapper>(logging_function, logger_param),
+                                                                          static_cast<Severity>(default_warning_level),
+                                                                          false,
+                                                                          logid);
+  std::unique_ptr<OrtEnv> env;
+  Status status = OrtEnv::Create(std::move(lmgr), env, nullptr, false);
+  *out = env.release();
   return ToOrtStatus(status);
   API_IMPL_END
 }
@@ -82,9 +96,14 @@ ORT_API_STATUS_IMPL(OrtApis::CreateEnvWithCustomLogger, OrtLoggingFunction loggi
 ORT_API_STATUS_IMPL(OrtApis::CreateEnv, OrtLoggingLevel default_warning_level,
                     _In_ const char* logid, _Outptr_ OrtEnv** out) {
   API_IMPL_BEGIN
-  OrtEnv::LoggingManagerConstructionInfo lm_info{nullptr, nullptr, default_warning_level, logid};
-  Status status;
-  *out = OrtEnv::GetInstance(lm_info, status);
+  std::string name_str(logid);
+  std::unique_ptr<LoggingManager> lmgr = std::make_unique<LoggingManager>(std::unique_ptr<ISink>{new CLogSink{}},
+                                                                          static_cast<Severity>(default_warning_level),
+                                                                          false,
+                                                                          logid);
+  std::unique_ptr<OrtEnv> env;
+  Status status = OrtEnv::Create(std::move(lmgr), env, nullptr, false);
+  *out = env.release();
   return ToOrtStatus(status);
   API_IMPL_END
 }
@@ -92,9 +111,13 @@ ORT_API_STATUS_IMPL(OrtApis::CreateEnv, OrtLoggingLevel default_warning_level,
 ORT_API_STATUS_IMPL(OrtApis::CreateEnvWithGlobalThreadPools, OrtLoggingLevel default_warning_level,
                     _In_ const char* logid, _In_ const struct OrtThreadingOptions* tp_options, _Outptr_ OrtEnv** out) {
   API_IMPL_BEGIN
-  OrtEnv::LoggingManagerConstructionInfo lm_info{nullptr, nullptr, default_warning_level, logid};
-  Status status;
-  *out = OrtEnv::GetInstance(lm_info, status, tp_options);
+  std::unique_ptr<LoggingManager> lmgr = std::make_unique<LoggingManager>(std::unique_ptr<ISink>{new CLogSink{}},
+                                                                          static_cast<Severity>(default_warning_level),
+                                                                          false,
+                                                                          logid);
+  std::unique_ptr<OrtEnv> env;
+  Status status = OrtEnv::Create(std::move(lmgr), env, tp_options, true);
+  *out = env.release();
   return ToOrtStatus(status);
   API_IMPL_END
 }
@@ -433,7 +456,7 @@ ORT_API_STATUS_IMPL(OrtApis::CreateSession, _In_ const OrtEnv* env, _In_ const O
   try {
     sess = onnxruntime::make_unique<onnxruntime::InferenceSession>(
         options == nullptr ? onnxruntime::SessionOptions() : options->value,
-        env->GetEnvironment(), model_path);
+        *env, model_path);
   } catch (const std::exception& e) {
     return OrtApis::CreateStatus(ORT_FAIL, e.what());
   }
@@ -448,7 +471,7 @@ ORT_API_STATUS_IMPL(OrtApis::CreateSessionFromArray, _In_ const OrtEnv* env, _In
   try {
     sess = onnxruntime::make_unique<onnxruntime::InferenceSession>(
         options == nullptr ? onnxruntime::SessionOptions() : options->value,
-        env->GetEnvironment(), model_data, static_cast<int>(model_data_length));
+        *env, model_data, static_cast<int>(model_data_length));
   } catch (const std::exception& e) {
     return OrtApis::CreateStatus(ORT_FAIL, e.what());
   }
@@ -1586,10 +1609,7 @@ const OrtApiBase* ORT_API_CALL OrtGetApiBase(void) NO_EXCEPTION {
   return &ort_api_base;
 }
 
-ORT_API(void, OrtApis::ReleaseEnv, OrtEnv* value) {
-  OrtEnv::Release(value);
-}
-
+DEFINE_RELEASE_ORT_OBJECT_FUNCTION(Env, OrtEnv)
 DEFINE_RELEASE_ORT_OBJECT_FUNCTION(Value, OrtValue)
 DEFINE_RELEASE_ORT_OBJECT_FUNCTION(RunOptions, OrtRunOptions)
 DEFINE_RELEASE_ORT_OBJECT_FUNCTION(Session, ::onnxruntime::InferenceSession)

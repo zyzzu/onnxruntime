@@ -785,12 +785,10 @@ void OpTester::Run(
               provider_type == onnxruntime::kNupharExecutionProvider)
             continue;
           auto reg = execution_provider->GetKernelRegistry();
-          const KernelCreateInfo* kci =
-              reg->TryFindKernel(node, execution_provider->Type());
-          if (!kci) {
+          if (!reg->HasImplementationOf(node, execution_provider->Type())) {
             valid = false;
             for (auto& custom_session_registry : custom_session_registries_) {
-              if (custom_session_registry->GetKernelRegistry()->TryFindKernel(
+              if (custom_session_registry->GetKernelRegistry()->HasImplementationOf(
                       node, execution_provider->Type())) {
                 valid = true;
                 break;

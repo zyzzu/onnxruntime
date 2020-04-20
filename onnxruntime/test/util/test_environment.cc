@@ -11,7 +11,6 @@
 
 #include "core/common/logging/logging.h"
 #include "core/common/logging/sinks/clog_sink.h"
-#include "core/session/ort_env.h"
 #include "core/session/environment.h"
 
 using namespace ::onnxruntime::logging;
@@ -22,12 +21,13 @@ namespace test {
 
 static std::unique_ptr<::onnxruntime::logging::LoggingManager> s_default_logging_manager;
 
-const ::onnxruntime::Environment& GetEnvironment() {
-  return ((OrtEnv*)*ort_env.get())->GetEnvironment();
+const OrtEnv& GetEnvironment() {
+  return **ort_env;
 }
 
 ::onnxruntime::logging::LoggingManager& DefaultLoggingManager() {
-  return *((OrtEnv*)*ort_env.get())->GetEnvironment().GetLoggingManager();
+  OrtEnv& e = **ort_env;
+  return *e.GetLoggingManager();
 }
 
 }  // namespace test

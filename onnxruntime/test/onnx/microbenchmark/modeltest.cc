@@ -6,7 +6,7 @@
 #include <core/platform/path_lib.h>
 #include <core/session/onnxruntime_c_api.h>
 #include <core/session/onnxruntime_cxx_api.h>
-#include <core/session/ort_env.h>
+#include <core/session/environment.h>
 
 #include "providers.h"
 

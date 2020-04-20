@@ -135,7 +135,7 @@ class FuseExecutionProvider : public IExecutionProvider {
 class InferenceSessionGetGraphWrapper : public InferenceSession {
  public:
   explicit InferenceSessionGetGraphWrapper(const SessionOptions& session_options,
-                                           const Environment& env) : InferenceSession(session_options, env) {
+                                           const OrtEnv& env) : InferenceSession(session_options, env) {
   }
 
   const Graph& GetGraph() {
@@ -530,17 +530,16 @@ TEST(InferenceSessionTests, CheckRunLogger) {
   SessionOptions so;
 
   so.session_logid = "CheckRunLogger";
-
+  so.session_log_severity_level = static_cast<int>(logging::Severity::kINFO);
   // create CapturingSink. LoggingManager will own it, but as long as the logging_manager
   // is around our pointer stays valid.
   auto capturing_sink = new CapturingSink();
 
   auto logging_manager = onnxruntime::make_unique<logging::LoggingManager>(
-      std::unique_ptr<ISink>(capturing_sink), logging::Severity::kVERBOSE, false,
-      LoggingManager::InstanceType::Temporal);
+      std::unique_ptr<ISink>(capturing_sink), logging::Severity::kVERBOSE, false, "");
 
-  std::unique_ptr<Environment> env;
-  auto st = Environment::Create(std::move(logging_manager), env);
+  std::unique_ptr<OrtEnv> env;
+  ASSERT_STATUS_OK(OrtEnv::Create(std::move(logging_manager), env));
   InferenceSession session_object{so, *env.get()};
   ASSERT_STATUS_OK(session_object.Load(MODEL_URI));
   ASSERT_STATUS_OK(session_object.Initialize());
@@ -697,11 +696,10 @@ TEST(InferenceSessionTests, ConfigureVerbosityLevel) {
   auto logging_manager = onnxruntime::make_unique<logging::LoggingManager>(
       std::unique_ptr<ISink>(capturing_sink),
       logging::Severity::kVERBOSE,
-      false,
-      LoggingManager::InstanceType::Temporal);
+      false, "");
 
-  std::unique_ptr<Environment> env;
-  auto st = Environment::Create(std::move(logging_manager), env);
+  std::unique_ptr<OrtEnv> env;
+  ASSERT_STATUS_OK(OrtEnv::Create(std::move(logging_manager), env));
   InferenceSession session_object{so, *env.get()};
   ASSERT_STATUS_OK(session_object.Load(MODEL_URI));
   ASSERT_STATUS_OK(session_object.Initialize());
@@ -942,7 +940,7 @@ static common::Status RunOptionalInputTest(bool add_required_input,
                                            bool add_optional_input,
                                            bool add_invalid_input,
                                            int model_ir_version,
-                                           const Environment& sess_env) {
+                                           const OrtEnv& sess_env) {
   SessionOptions so;
   so.session_logid = "RunOptionalInputTest";
   InferenceSession session_object{so, sess_env};
@@ -2184,7 +2182,7 @@ TEST(InferenceSessionTests, LoadModelWithEnvVarSetToUnsupportedVal) {
 class InferenceSessionTestGlobalThreadPools : public InferenceSession {
  public:
   InferenceSessionTestGlobalThreadPools(const SessionOptions& session_options,
-                                        const Environment& env) : InferenceSession(session_options, env) {
+                                        const OrtEnv& env) : InferenceSession(session_options, env) {
   }
 
   onnxruntime::concurrency::ThreadPool* GetIntraOpThreadPoolToUse() const {
@@ -2207,12 +2205,10 @@ TEST(InferenceSessionTests, CheckIfPerSessionThreadPoolsAreBeingUsed) {
 
   so.session_logid = "CheckIfPerSessionThreadPoolsAreBeingUsed";
   auto logging_manager = onnxruntime::make_unique<logging::LoggingManager>(
-      std::unique_ptr<ISink>(new CLogSink()), logging::Severity::kVERBOSE, false,
-      LoggingManager::InstanceType::Temporal);
+      std::unique_ptr<ISink>(new CLogSink()), logging::Severity::kVERBOSE, false, "");
 
-  std::unique_ptr<Environment> env;
-  auto st = Environment::Create(std::move(logging_manager), env);
-  ASSERT_TRUE(st.IsOK());
+  std::unique_ptr<OrtEnv> env;
+  ASSERT_STATUS_OK(OrtEnv::Create(std::move(logging_manager), env));
 
   InferenceSessionTestGlobalThreadPools session_object{so, *env.get()};
   ASSERT_STATUS_OK(session_object.Load(MODEL_URI));
@@ -2246,13 +2242,11 @@ TEST(InferenceSessionTests, CheckIfGlobalThreadPoolsAreBeingUsed) {
 
   so.session_logid = "CheckIfGlobalThreadPoolsAreBeingUsed";
   auto logging_manager = onnxruntime::make_unique<logging::LoggingManager>(
-      std::unique_ptr<ISink>(new CLogSink()), logging::Severity::kVERBOSE, false,
-      LoggingManager::InstanceType::Temporal);
+      std::unique_ptr<ISink>(new CLogSink()), logging::Severity::kVERBOSE, false, "");
 
-  std::unique_ptr<Environment> env;
+  std::unique_ptr<OrtEnv> env;
   OrtThreadingOptions tp_options;
-  auto st = Environment::Create(std::move(logging_manager), env, &tp_options, true /*create_global_thread_pools*/);
-  ASSERT_TRUE(st.IsOK());
+  ASSERT_STATUS_OK(OrtEnv::Create(std::move(logging_manager), env, &tp_options, true /*create_global_thread_pools*/));
 
   InferenceSessionTestGlobalThreadPools session_object{so, *env.get()};
   ASSERT_STATUS_OK(session_object.Load(MODEL_URI));
@@ -2284,13 +2278,11 @@ TEST(InferenceSessionTests, CheckIfPerSessionThreadPoolsAreBeingUsed2) {
 
   so.session_logid = "CheckIfPerSessionThreadPoolsAreBeingUsed2";
   auto logging_manager = onnxruntime::make_unique<logging::LoggingManager>(
-      std::unique_ptr<ISink>(new CLogSink()), logging::Severity::kVERBOSE, false,
-      LoggingManager::InstanceType::Temporal);
+      std::unique_ptr<ISink>(new CLogSink()), logging::Severity::kVERBOSE, false, "");
 
-  std::unique_ptr<Environment> env;
+  std::unique_ptr<OrtEnv> env;
   OrtThreadingOptions tp_options;
-  auto st = Environment::Create(std::move(logging_manager), env, &tp_options, true /*create_global_thread_pools*/);
-  ASSERT_TRUE(st.IsOK());
+  ASSERT_STATUS_OK(OrtEnv::Create(std::move(logging_manager), env, &tp_options, true /*create_global_thread_pools*/));
 
   InferenceSessionTestGlobalThreadPools session_object{so, *env.get()};
   ASSERT_STATUS_OK(session_object.Load(MODEL_URI));
@@ -2331,12 +2323,10 @@ TEST(InferenceSessionTests, InvalidSessionEnvCombination) {
 
   so.session_logid = "InvalidSessionEnvCombination";
   auto logging_manager = onnxruntime::make_unique<logging::LoggingManager>(
-      std::unique_ptr<ISink>(new CLogSink()), logging::Severity::kVERBOSE, false,
-      LoggingManager::InstanceType::Temporal);
+      std::unique_ptr<ISink>(new CLogSink()), logging::Severity::kVERBOSE, false, "");
 
-  std::unique_ptr<Environment> env;
-  auto st = Environment::Create(std::move(logging_manager), env);
-  ASSERT_TRUE(st.IsOK());
+  std::unique_ptr<OrtEnv> env;
+  ASSERT_STATUS_OK(OrtEnv::Create(std::move(logging_manager), env));
 
   try {
     InferenceSessionTestGlobalThreadPools session_object{so, *env.get()};

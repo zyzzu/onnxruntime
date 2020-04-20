@@ -108,6 +108,8 @@ std::string nuphar_settings;
 #include "core/providers/brainslice/brainslice_provider_factory.h"
 #endif
 
+#define ONNXRUNTIME_EMPTY_MACRO
+
 namespace onnxruntime {
 std::shared_ptr<IExecutionProviderFactory> CreateExecutionProviderFactory_CPU(int use_arena);
 std::shared_ptr<IExecutionProviderFactory> CreateExecutionProviderFactory_CUDA(OrtDevice::DeviceId device_id);
@@ -119,15 +121,8 @@ std::shared_ptr<IExecutionProviderFactory> CreateExecutionProviderFactory_Nuphar
 std::shared_ptr<IExecutionProviderFactory> CreateExecutionProviderFactory_BrainSlice(uint32_t ip, int, int, bool, const char*, const char*, const char*);
 }  // namespace onnxruntime
 
-#if defined(_MSC_VER)
-#pragma warning(disable : 4267 4996 4503 4003)
-#endif  // _MSC_VER
-
 #include <iterator>
 
-#if defined(_MSC_VER)
-#pragma warning(disable : 4267 4996 4503 4003)
-#endif  // _MSC_VER
 
 namespace onnxruntime {
 namespace python {
@@ -162,7 +157,7 @@ void GetPyObjFromTensor(const Tensor& rtensor, py::object& obj) {
   MLDataType dtype = rtensor.DataType();
   const int numpy_type = OnnxRuntimeTensorToNumpyType(dtype);
   obj = py::reinterpret_steal<py::object>(PyArray_SimpleNew(
-      shape.NumDimensions(), npy_dims.data(), numpy_type));
+      static_cast<int>(shape.NumDimensions()), npy_dims.data(), numpy_type));
 
   void* outPtr = static_cast<void*>(
       PyArray_DATA(reinterpret_cast<PyArrayObject*>(obj.ptr())));
@@ -351,7 +346,7 @@ void InitializeSession(InferenceSession* sess, const std::vector<std::string>& p
   OrtPybindThrowIfError(sess->Initialize());
 }
 
-void addGlobalMethods(py::module& m, const Environment& env) {
+void addGlobalMethods(py::module& m, const OrtEnv& env) {
   m.def("get_default_session_options", &GetDefaultCPUSessionOptions, "Return a default session_options instance.");
   m.def("get_session_initializer", &SessionObjectInitializer::Get, "Return a default session object initializer.");
   m.def(
@@ -536,7 +531,7 @@ void addOpSchemaSubmodule(py::module& m) {
 
 #endif  //onnxruntime_PYBIND_EXPORT_OPSCHEMA
 
-void addObjectMethods(py::module& m, Environment& env) {
+void addObjectMethods(py::module& m, OrtEnv& env) {
   py::enum_<GraphOptimizationLevel>(m, "GraphOptimizationLevel")
       .value("ORT_DISABLE_ALL", GraphOptimizationLevel::ORT_DISABLE_ALL)
       .value("ORT_ENABLE_BASIC", GraphOptimizationLevel::ORT_ENABLE_BASIC)
@@ -865,25 +860,17 @@ PYBIND11_MODULE(onnxruntime_pybind11_state, m) {
 
 #endif
 
-  static std::unique_ptr<Environment> env;
+  static std::unique_ptr<OrtEnv> env;
   auto initialize = [&]() {
-    // Initialization of the module
-    ([]() -> void {
-      // import_array1() forces a void return value.
-      import_array1();
-    })();
-
-    OrtPybindThrowIfError(Environment::Create(onnxruntime::make_unique<LoggingManager>(
-                                                  std::unique_ptr<ISink>{new CLogSink{}},
-                                                  Severity::kWARNING, false, LoggingManager::InstanceType::Default,
-                                                  &SessionObjectInitializer::default_logger_id),
-                                              env));
-
-    static bool initialized = false;
-    if (initialized) {
+    import_array1(ONNXRUNTIME_EMPTY_MACRO);
+    if (env) {
       return;
     }
-    initialized = true;
+    OrtPybindThrowIfError(OrtEnv::Create(onnxruntime::make_unique<LoggingManager>(
+                                             std::unique_ptr<ISink>{new CLogSink{}},
+                                             Severity::kWARNING, false,
+                                             SessionObjectInitializer::default_logger_id),
+                                         env));
   };
   initialize();
 
