@@ -196,9 +196,35 @@ See more information on the TensorRT Execution Provider [here](./docs/execution_
 
 Dockerfile instructions are available [here](./dockerfiles#tensorrt)
 
-#### Jetson (ARM64 Builds)
+#### Jetson TX1/TX2/Nano(ARM64 Builds)
 
-See [instructions](https://github.com/microsoft/onnxruntime/issues/2684#issuecomment-568548387) for additional information and tips related to building Onnxruntime with TensorRT Execution Provider on Jetson platforms (TX1/TX2, Nano)
+
+1. ONNX Runtime v1.2.0 or higher requires TensorRT 7 support, at this moment, the compatible TensorRT and CUDA libraries in [JetPack](https://docs.nvidia.com/jetson/jetpack/release-notes/) 4.4 is still under developer preview stage. Therefore, we suggest using ONNX Runtime v1.1.2 with JetPack 4.3 which has been validated. 
+```
+git clone --single-branch --recursive --branch v1.1.2 https://github.com/Microsoft/onnxruntime
+```
+2. Indicate CUDA compiler. It's optional, cmake can automatically find the correct cuda. 
+```
+export CUDACXX="/usr/local/cuda/bin/nvcc"
+```
+3. Modify  tools/ci_build/build.py
+```
+- "-Donnxruntime_DEV_MODE=" + ("OFF" if args.android else "ON"),
++ "-Donnxruntime_DEV_MODE=" + ("OFF" if args.android else "OFF"),
+```
+4. Modify cmake/CMakeLists.txt
+```
+-  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_50,code=sm_50") # M series
++  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_53,code=sm_53") # Jetson TX1/Nano 
++  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_62,code=sm_62") # Jetson TX2
+```
+5. Build onnxruntime with --use_tensorrt flag 
+```
+./build.sh --config Release --update --build --build_wheel --use_tensorrt --cuda_home /usr/local/cuda --cudnn_home /usr/lib/aarch64-linux-gnu --tensorrt_home /usr/lib/aarch64-linux-gnu
+
+```
+
+See [instructions](https://github.com/microsoft/onnxruntime/issues/2684#issuecomment-568548387) for additional information and tips.
 
 ---
 
@@ -291,7 +317,7 @@ See more information on the NNAPI Execution Provider [here](./docs/execution_pro
 
 #### Pre-Requisites
 
-To build ONNX Runtime with the NN API EP, first install Android NDK (see [Android Build instructions](#android))
+To build ONNX Runtime with the NN API EP, first install Android Studio and NDK (see [Android Build instructions](#android))
 
 #### Build Instructions
 
@@ -653,14 +679,75 @@ ls -l /code/onnxruntime/build/Linux/MinSizeRel/dist/*.whl
 
 #### Pre-Requisites
 
-Install Android NDK in Android Studio or https://developer.android.com/ndk/downloads
+The SDK and NDK packages can either be installed via Android Studio or via the sdkmanager command line tool. 
+Android Studio is more convenient but a much larger installation. 
+The command line tools are much smaller but are more complicated to setup and require a Java runtime environment to be available.
+
+##### Android Studio
+
+Install Android Studio from https://developer.android.com/studio 
+
+Install the SDK Platform if necessary
+  - File->Settings->Appearance & Behavior->System Settings->Android SDK to see what is currently installed
+    - Note that the SDK path you need to use as --android_sdk_path when building ORT is also on this configuration page 
+  - Install any SDK platforms you require.
+
+Install the NDK version required 
+  - File->Settings->Appearance & Behavior->System Settings->Android SDK
+    - 'SDK Tools' tab
+      - Select 'Show package details' checkbox at the bottom to see specific versions. 
+        By default the latest will be installed which should be fine.
+  - The NDK path will be the 'ndk/{version}' subdirectory of the SDK path shown
+    - e.g. if you install 20.1.5948944 it will be {SDK path}/ndk/20.1.5948944
+    - the path should contain a 'platforms' directory
+
+##### sdkmanager from command line tools 
+  - If necessary install the Java Runtime Environment and set the JAVA_HOME environment variable to point to it
+    - https://www.java.com/en/download/
+  - For sdkmanager to work it needs a certain directory structure. 
+    First create the top level directory for the Android infrastructure.
+    - in our example we'll call that `.../Android/`
+  - Download the command line tools from the 'Command line tools only' section towards the bottom 
+    of https://developer.android.com/studio
+  - Create a directory called 'cmdline-tools' under your top level directory
+    - giving `.../Android/cmdline-tools`
+  - extract the 'tools' directory from the command line tools zip file into this directory
+    - giving `.../Android/cmdline-tools/tools`
+    - Windows note: preferably extract using 7-zip. 
+      If using the built in Windows zip extract tool you will need to fix the directory structure 
+      by moving the jar files from `tools\lib\_` up to `tools\lib` 
+      - See https://stackoverflow.com/questions/27364963/could-not-find-or-load-main-class-com-android-sdkmanager-main
+  - you should now be able to run Android/cmdline-tools/bin/sdkmanager[.bat] successfully
+    - if you see an error about it being unable to save settings and the sdkmanager help text, 
+      your directory structure is incorrect.
+      - see the final steps in this answer to double check: https://stackoverflow.com/a/61176718 
+
+  - Run `.../Android/cmdline-tools/bin/sdkmanager --list` to see the packages available
+
+  - Install the SDK Platform
+    - Current ORT default is API level 27: Android 8.1 (Oreo).
+      - e.g. `sdkmanager --install "platforms;android-27"`
+    - This will install into the 'platforms' directory of our top level directory
+      - so the 'Android' directory in our example
+    - The SDK path to use as --android_sdk_path when building is this top level directory 
+
+  - Install NDK    
+    - Find the latest side-by-side NDK version by running `sdkmanager --list`
+    - Install
+      - e.g. `sdkmanager --install "ndk;20.1.5948944"`
+      - NDK path in our example with this install would be `.../Android/ndk/20.1.5948944`
+
+Other Info:  
+  - Android ABIs: https://developer.android.com/ndk/guides/abis
 
 #### Build Instructions
 
 ##### Cross compiling on Windows
 
-```bash
-./build.bat --android --android_sdk_path <android sdk path> --android_ndk_path <android ndk path> --android_abi <android abi, e.g., arm64-v8a (default) or armeabi-v7a> --android_api <android api level, e.g., 27 (default)>
+The [Ninja](https://ninja-build.org/) generator needs to be used to build on Windows as the Visual Studio generator doesn't support Android. 
+
+```
+./build.bat --android --android_sdk_path <android sdk path> --android_ndk_path <android ndk path> --android_abi <android abi, e.g., arm64-v8a (default) or armeabi-v7a> --android_api <android api level, e.g., 27 (default)> --cmake_generator Ninja
 ```
 
 ##### Cross compiling on Linux
@@ -672,3 +759,6 @@ Install Android NDK in Android Studio or https://developer.android.com/ndk/downl
 Android Archive (AAR) files, which can be imported directly in Android Studio, will be generated in your_build_dir/java/build/outputs/aar.
 
 If you want to use NNAPI Execution Provider on Android, see [docs/execution_providers/NNAPI-ExecutionProvider.md](/docs/execution_providers/NNAPI-ExecutionProvider.md).
+
+
+./build.sh --android --android_sdk_path ~/Android/ --android_ndk_path ~/Android/ndk-bundle --android_abi arm64-v8a --android_api 27
