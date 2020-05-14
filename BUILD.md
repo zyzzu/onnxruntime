@@ -196,35 +196,9 @@ See more information on the TensorRT Execution Provider [here](./docs/execution_
 
 Dockerfile instructions are available [here](./dockerfiles#tensorrt)
 
-#### Jetson TX1/TX2/Nano(ARM64 Builds)
+#### Jetson (ARM64 Builds)
 
-
-1. ONNX Runtime v1.2.0 or higher requires TensorRT 7 support, at this moment, the compatible TensorRT and CUDA libraries in [JetPack](https://docs.nvidia.com/jetson/jetpack/release-notes/) 4.4 is still under developer preview stage. Therefore, we suggest using ONNX Runtime v1.1.2 with JetPack 4.3 which has been validated. 
-```
-git clone --single-branch --recursive --branch v1.1.2 https://github.com/Microsoft/onnxruntime
-```
-2. Indicate CUDA compiler. It's optional, cmake can automatically find the correct cuda. 
-```
-export CUDACXX="/usr/local/cuda/bin/nvcc"
-```
-3. Modify  tools/ci_build/build.py
-```
-- "-Donnxruntime_DEV_MODE=" + ("OFF" if args.android else "ON"),
-+ "-Donnxruntime_DEV_MODE=" + ("OFF" if args.android else "OFF"),
-```
-4. Modify cmake/CMakeLists.txt
-```
--  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_50,code=sm_50") # M series
-+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_53,code=sm_53") # Jetson TX1/Nano 
-+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_62,code=sm_62") # Jetson TX2
-```
-5. Build onnxruntime with --use_tensorrt flag 
-```
-./build.sh --config Release --update --build --build_wheel --use_tensorrt --cuda_home /usr/local/cuda --cudnn_home /usr/lib/aarch64-linux-gnu --tensorrt_home /usr/lib/aarch64-linux-gnu
-
-```
-
-See [instructions](https://github.com/microsoft/onnxruntime/issues/2684#issuecomment-568548387) for additional information and tips.
+See [instructions](https://github.com/microsoft/onnxruntime/issues/2684#issuecomment-568548387) for additional information and tips related to building Onnxruntime with TensorRT Execution Provider on Jetson platforms (TX1/TX2, Nano)
 
 ---
 
@@ -317,7 +291,7 @@ See more information on the NNAPI Execution Provider [here](./docs/execution_pro
 
 #### Pre-Requisites
 
-To build ONNX Runtime with the NN API EP, first install Android Studio and NDK (see [Android Build instructions](#android))
+To build ONNX Runtime with the NN API EP, first install Android NDK (see [Android Build instructions](#android))
 
 #### Build Instructions
 
@@ -759,6 +733,3 @@ The [Ninja](https://ninja-build.org/) generator needs to be used to build on Win
 Android Archive (AAR) files, which can be imported directly in Android Studio, will be generated in your_build_dir/java/build/outputs/aar.
 
 If you want to use NNAPI Execution Provider on Android, see [docs/execution_providers/NNAPI-ExecutionProvider.md](/docs/execution_providers/NNAPI-ExecutionProvider.md).
-
-
-./build.sh --android --android_sdk_path ~/Android/ --android_ndk_path ~/Android/ndk-bundle --android_abi arm64-v8a --android_api 27
