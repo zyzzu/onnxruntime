@@ -1,11 +1,21 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 
+# file(GLOB onnxruntime_optimizer_srcs CONFIGURE_DEPENDS
+#     "${ONNXRUNTIME_INCLUDE_DIR}/core/optimizer/*.h"
+#     "${ONNXRUNTIME_ROOT}/core/optimizer/*.h"
+#     "${ONNXRUNTIME_ROOT}/core/optimizer/*.cc"
+#     )
+
 file(GLOB onnxruntime_optimizer_srcs CONFIGURE_DEPENDS
     "${ONNXRUNTIME_INCLUDE_DIR}/core/optimizer/*.h"
-    "${ONNXRUNTIME_ROOT}/core/optimizer/*.h"
-    "${ONNXRUNTIME_ROOT}/core/optimizer/*.cc"
-    )
+    "${ONNXRUNTIME_ROOT}/core/optimizer/graph*.h"
+    "${ONNXRUNTIME_ROOT}/core/optimizer/graph*.cc"
+    "${ONNXRUNTIME_ROOT}/core/optimizer/insert_cast_transformer.h"
+    "${ONNXRUNTIME_ROOT}/core/optimizer/insert_cast_transformer.cc"
+    "${ONNXRUNTIME_ROOT}/core/optimizer/transformer_memcpy.h"
+    "${ONNXRUNTIME_ROOT}/core/optimizer/transformer_memcpy.cc"
+)
 
 if (onnxruntime_ENABLE_TRAINING)
     file(GLOB orttraining_optimizer_srcs CONFIGURE_DEPENDS

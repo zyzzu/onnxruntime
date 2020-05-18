@@ -110,10 +110,10 @@ file(GLOB onnxruntime_test_ir_src CONFIGURE_DEPENDS
   "${TEST_SRC_DIR}/ir/*.h"
   )
 
-file(GLOB onnxruntime_test_optimizer_src CONFIGURE_DEPENDS
-  "${TEST_SRC_DIR}/optimizer/*.cc"
-  "${TEST_SRC_DIR}/optimizer/*.h"
-  )
+# file(GLOB onnxruntime_test_optimizer_src CONFIGURE_DEPENDS
+#   "${TEST_SRC_DIR}/optimizer/*.cc"
+#   "${TEST_SRC_DIR}/optimizer/*.h"
+#   )
 
 set(onnxruntime_test_framework_src_patterns
   "${TEST_SRC_DIR}/framework/*.cc"
