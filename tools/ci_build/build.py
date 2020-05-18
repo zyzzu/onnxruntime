@@ -1063,6 +1063,7 @@ def run_onnxruntime_tests(args, source_dir, ctest_path, build_dir, configs,
             dll_path = os.path.join(args.tensorrt_home, 'lib')
         else:
             dll_path = None
+
         if ctest_path is None:
             # Get the "Google Test Adapter" for vstest.
             if not os.path.exists(os.path.join(cwd,
@@ -1413,8 +1414,11 @@ def build_protoc_for_host(cmake_path, source_dir, build_dir, args):
         '-Dprotobuf_WITH_ZLIB_DEFAULT=OFF',
         '-Dprotobuf_BUILD_SHARED_LIBS=OFF'
     ]
+
+    is_ninja = args.cmake_generator == 'Ninja'
+
     if is_windows():
-        if args.cmake_generator != 'Ninja':
+        if not is_ninja:
             cmd_args += ['-T', 'host=x64']
         cmd_args += ['-G', args.cmake_generator]
     elif is_macOS() and args.use_xcode:
@@ -1429,14 +1433,20 @@ def build_protoc_for_host(cmake_path, source_dir, build_dir, args):
     run_subprocess(cmd_args)
 
     # Absolute protoc path is needed for cmake
-    expected_protoc_path = (
-        os.path.join(
-            protoc_build_dir, 'Release', 'protoc.exe') if is_windows()
-        else (os.path.join(protoc_build_dir, 'Release', 'protoc')
-                if is_macOS() and args.use_xcode
-                else os.path.join(protoc_build_dir, 'protoc')))
+    expected_protoc_path = protoc_build_dir
+    config_dir = ''
+    suffix = ''
+
+    if (is_windows() and not is_ninja) or (is_macOS() and args.use_xcode):
+        config_dir = 'Release'
+
+    if is_windows():
+        suffix = '.exe'
+
+    expected_protoc_path = os.path.join(protoc_build_dir, config_dir, 'protoc' + suffix)
+
     if not os.path.exists(expected_protoc_path):
-        raise BuildError("Couldn't build protoc for host. Failing build.")
+        raise BuildError("Couldn't find {}. Host build of protoc failed.".format(expected_protoc_path))
 
     return expected_protoc_path
 

@@ -83,7 +83,7 @@ For other system requirements and other dependencies, please see [this section](
 |Description|Command|Additional description|
 |-----------|-----------|-----------|
 |**Basic build**|build.bat (Windows)<br>./build.sh (Linux)||
-|**Debug build**|--config RelWithDebInfo|Debug build|
+|**Release build**|--config Release|Release build. Other valid config values are RelWithDebInfo and Debug.|
 |**Use OpenMP**|--use_openmp|OpenMP will parallelize some of the code for potential performance improvements. This is not recommended for running on single threads.|
 |**Build using parallel processing**|--parallel|This is strongly recommended to speed up the build.|
 |**Build Shared Library**|--build_shared_lib||
@@ -653,31 +653,37 @@ ls -l /code/onnxruntime/build/Linux/MinSizeRel/dist/*.whl
 
 #### Pre-Requisites
 
-The SDK and NDK packages can either be installed via Android Studio or via the sdkmanager command line tool. 
-Android Studio is more convenient but a much larger installation. 
-The command line tools are much smaller but are more complicated to setup and require a Java runtime environment to be available.
+The SDK and NDK packages can be installed via Android Studio or the sdkmanager command line tool. 
+Android Studio is more convenient but a larger installation. 
+The command line tools are smaller and usage can be scripted, but are more complicated to setup. They also require a Java runtime environment to be available.
+
+General Info:  
+  - API levels: https://developer.android.com/guide/topics/manifest/uses-sdk-element.html
+  - Android ABIs: https://developer.android.com/ndk/guides/abis
+  - System Images: https://developer.android.com/topic/generic-system-image
 
 ##### Android Studio
 
 Install Android Studio from https://developer.android.com/studio 
 
-Install the SDK Platform if necessary
+Install any additional SDK Platforms if necessary
   - File->Settings->Appearance & Behavior->System Settings->Android SDK to see what is currently installed
     - Note that the SDK path you need to use as --android_sdk_path when building ORT is also on this configuration page 
-  - Install any SDK platforms you require.
+    - Most likely you don't require additional SDK Platform packages as the latest platform can target earlier API levels.
 
-Install the NDK version required 
+Install an NDK version
   - File->Settings->Appearance & Behavior->System Settings->Android SDK
     - 'SDK Tools' tab
       - Select 'Show package details' checkbox at the bottom to see specific versions. 
         By default the latest will be installed which should be fine.
   - The NDK path will be the 'ndk/{version}' subdirectory of the SDK path shown
-    - e.g. if you install 20.1.5948944 it will be {SDK path}/ndk/20.1.5948944
-    - the path should contain a 'platforms' directory
+    - e.g. if 21.1.6352462 is installed it will be {SDK path}/ndk/21.1.6352462
 
 ##### sdkmanager from command line tools 
   - If necessary install the Java Runtime Environment and set the JAVA_HOME environment variable to point to it
     - https://www.java.com/en/download/
+    - Windows note: You MUST install the 64-bit version (most likely from https://www.java.com/en/download/manual.jsp) otherwise sdkmanager will only list x86 packages
+      and the latest NDK is x64 only. 
   - For sdkmanager to work it needs a certain directory structure. 
     First create the top level directory for the Android infrastructure.
     - in our example we'll call that `.../Android/`
@@ -699,20 +705,19 @@ Install the NDK version required
   - Run `.../Android/cmdline-tools/bin/sdkmanager --list` to see the packages available
 
   - Install the SDK Platform
-    - Current ORT default is API level 27: Android 8.1 (Oreo).
-      - e.g. `sdkmanager --install "platforms;android-27"`
+    - Generally installing the latest is fine. You pick an API level when compiling the code and the latest platform will support many recent API levels
+      - e.g. `sdkmanager --install "platforms;android-29"`
     - This will install into the 'platforms' directory of our top level directory
       - so the 'Android' directory in our example
     - The SDK path to use as --android_sdk_path when building is this top level directory 
 
-  - Install NDK    
-    - Find the latest side-by-side NDK version by running `sdkmanager --list`
+  - Install the NDK
+    - Find the available NDK versions by running `sdkmanager --list`
     - Install
-      - e.g. `sdkmanager --install "ndk;20.1.5948944"`
-      - NDK path in our example with this install would be `.../Android/ndk/20.1.5948944`
-
-Other Info:  
-  - Android ABIs: https://developer.android.com/ndk/guides/abis
+      - you can install a specific version or the latest (called 'ndk-bundle')
+      - e.g. `sdkmanager --install "ndk;21.1.6352462"`
+        - NDK path in our example with this install would be `.../Android/ndk/21.1.6352462`
+      - NOTE: If you install the ndk-bundle package the path will end in 'ndk-bundle' not 'ndk/{version}'
 
 #### Build Instructions
 
@@ -724,9 +729,14 @@ The [Ninja](https://ninja-build.org/) generator needs to be used to build on Win
 ./build.bat --android --android_sdk_path <android sdk path> --android_ndk_path <android ndk path> --android_abi <android abi, e.g., arm64-v8a (default) or armeabi-v7a> --android_api <android api level, e.g., 27 (default)> --cmake_generator Ninja
 ```
 
+e.g. using the paths from our example
+```
+./build.bat --android --android_sdk_path .../Android --android_ndk_path .../Android/ndk/21.1.6352462 --android_abi arm64-v8a --android_api 27 --cmake_generator Ninja
+```
+
 ##### Cross compiling on Linux
 
-```bash
+```
 ./build.sh --android --android_sdk_path <android sdk path> --android_ndk_path <android ndk path> --android_abi <android abi, e.g., arm64-v8a (default) or armeabi-v7a> --android_api <android api level, e.g., 27 (default)>
 ```
 
