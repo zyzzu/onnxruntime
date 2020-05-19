@@ -1,9 +1,29 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 
-file(GLOB_RECURSE onnxruntime_providers_srcs CONFIGURE_DEPENDS
-  "${ONNXRUNTIME_ROOT}/core/providers/cpu/*.h"
-  "${ONNXRUNTIME_ROOT}/core/providers/cpu/*.cc"
+# file(GLOB_RECURSE onnxruntime_providers_srcs CONFIGURE_DEPENDS
+#   "${ONNXRUNTIME_ROOT}/core/providers/cpu/*.h"
+#   "${ONNXRUNTIME_ROOT}/core/providers/cpu/*.cc"
+# )
+
+file(GLOB onnxruntime_providers_srcs CONFIGURE_DEPENDS
+  "${ONNXRUNTIME_ROOT}/core/providers/cpu/cpu_*"  # cpu_execution_provider and cpu_provider_factory
+  # "${ONNXRUNTIME_ROOT}/core/providers/cpu/tensor/cast_op.cc"
+  # "${ONNXRUNTIME_ROOT}/core/providers/cpu/tensor/gather.*"
+  # "${ONNXRUNTIME_ROOT}/core/providers/cpu/tensor/identity_op.*"
+  # "${ONNXRUNTIME_ROOT}/core/providers/cpu/tensor/reshape.*"
+  # "${ONNXRUNTIME_ROOT}/core/providers/cpu/tensor/reshape.*"
+  # "${ONNXRUNTIME_ROOT}/core/providers/cpu/tensor/transpose.*"
+  # "${ONNXRUNTIME_ROOT}/core/providers/cpu/tensor/reshape*"  # includes reshape_helper
+  # "${ONNXRUNTIME_ROOT}/core/providers/cpu/rnn/deep_cpu_lstm.*"
+  # "${ONNXRUNTIME_ROOT}/core/providers/cpu/rnn/rnn_helpers.*"
+  # "${ONNXRUNTIME_ROOT}/core/providers/cpu/math/matmul.*"
+  # "${ONNXRUNTIME_ROOT}/core/providers/cpu/math/matmul_helper.h"
+  # "${ONNXRUNTIME_ROOT}/core/providers/cpu/element_wise_ops.*" # need to strip out everything but Add
+  # "${ONNXRUNTIME_ROOT}/core/providers/cpu/activation/activations.*" # need to strip out everything but Relu
+  # "${ONNXRUNTIME_ROOT}/core/providers/cpu/activation/element_wise_ranged_transform.h"
+  # "${ONNXRUNTIME_ROOT}/core/providers/cpu/math/softmax.*"
+  # "${ONNXRUNTIME_ROOT}/core/providers/cpu/math/softmax_shared.*"
 )
 
 file(GLOB_RECURSE onnxruntime_cpu_contrib_ops_srcs CONFIGURE_DEPENDS
