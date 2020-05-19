@@ -647,14 +647,12 @@ def generate_build_tree(cmake_path, source_dir, build_dir, cuda_home,
                        "-Deigen_SOURCE_PATH=" + args.eigen_path]
 
     if args.android:
-        if args.android:
-            cmake_args += [
-                "-DCMAKE_TOOLCHAIN_FILE=" + args.android_ndk_path + "/build/cmake/android.toolchain.cmake",
-                # "-DCMAKE_ANDROID_ARCH_ABI=" + str(args.android_abi),
-                # "-DCMAKE_ANDROID_NDK=" + args.android_ndk_path,
-                "-DANDROID_PLATFORM=android-" + str(args.android_api),
-                "-DANDROID_ABI=" + str(args.android_abi)
-            ]
+        cmake_args += [
+            "-DCMAKE_TOOLCHAIN_FILE=" + args.android_ndk_path
+            + "/build/cmake/android.toolchain.cmake",
+            "-DANDROID_PLATFORM=android-" + str(args.android_api),
+            "-DANDROID_ABI=" + str(args.android_abi)
+        ]
 
     if is_macOS() and args.use_xcode:
         cmake_args += ["-GXcode"]
@@ -1067,7 +1065,6 @@ def run_onnxruntime_tests(args, source_dir, ctest_path, build_dir, configs,
             dll_path = os.path.join(args.tensorrt_home, 'lib')
         else:
             dll_path = None
-
         if ctest_path is None:
             # Get the "Google Test Adapter" for vstest.
             if not os.path.exists(os.path.join(cwd,
@@ -1439,7 +1436,6 @@ def build_protoc_for_host(cmake_path, source_dir, build_dir, args):
     run_subprocess(cmd_args)
 
     # Absolute protoc path is needed for cmake
-    expected_protoc_path = protoc_build_dir
     config_dir = ''
     suffix = ''
 

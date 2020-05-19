@@ -831,7 +831,7 @@ ls -l /code/onnxruntime/build/Linux/MinSizeRel/dist/*.whl
 
 The SDK and NDK packages can be installed via Android Studio or the sdkmanager command line tool. 
 Android Studio is more convenient but a larger installation. 
-The command line tools are smaller and usage can be scripted, but are more complicated to setup. They also require a Java runtime environment to be available.
+The command line tools are smaller and usage can be scripted, but are  a little more complicated to setup. They also require a Java runtime environment to be available.
 
 General Info:  
   - API levels: https://developer.android.com/guide/topics/manifest/uses-sdk-element.html
@@ -858,7 +858,7 @@ Install an NDK version
 ##### sdkmanager from command line tools 
   - If necessary install the Java Runtime Environment and set the JAVA_HOME environment variable to point to it
     - https://www.java.com/en/download/
-    - Windows note: You MUST install the 64-bit version (most likely from https://www.java.com/en/download/manual.jsp) otherwise sdkmanager will only list x86 packages
+    - Windows note: You MUST install the 64-bit version (https://www.java.com/en/download/manual.jsp) otherwise sdkmanager will only list x86 packages
       and the latest NDK is x64 only. 
   - For sdkmanager to work it needs a certain directory structure. 
     First create the top level directory for the Android infrastructure.
@@ -893,7 +893,7 @@ Install an NDK version
       - you can install a specific version or the latest (called 'ndk-bundle')
       - e.g. `sdkmanager --install "ndk;21.1.6352462"`
         - NDK path in our example with this install would be `.../Android/ndk/21.1.6352462`
-      - NOTE: If you install the ndk-bundle package the path will end in 'ndk-bundle' not 'ndk/{version}'
+      - NOTE: If you install the ndk-bundle package the path will be `.../Android/ndk-bundle` as there's no version number
 
 #### Build Instructions
 
