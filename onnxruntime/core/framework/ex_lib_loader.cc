@@ -6,17 +6,17 @@ namespace onnxruntime {
 ExLibLoader::~ExLibLoader() {
   try {
     for (auto& elem : dso_name_data_map_) {
-      LOGS_DEFAULT(INFO) << "Unloading DSO " << elem.first;
+      // LOGS_DEFAULT(INFO) << "Unloading DSO " << elem.first;
 
       PreUnloadLibrary(elem.second);
 
       // unload the DSO
       if (!Env::Default().UnloadDynamicLibrary(elem.second).IsOK()) {
-        LOGS_DEFAULT(WARNING) << "Failed to unload DSO: " << elem.first;
+        // LOGS_DEFAULT(WARNING) << "Failed to unload DSO: " << elem.first;
       }
     }
   } catch (std::exception& ex) {  // make sure exceptions don't leave the destructor
-    LOGS_DEFAULT(WARNING) << "Caught exception while destructing CustomOpsLoader with message: " << ex.what();
+    // LOGS_DEFAULT(WARNING) << "Caught exception while destructing CustomOpsLoader with message: " << ex.what();
   }
 }
 

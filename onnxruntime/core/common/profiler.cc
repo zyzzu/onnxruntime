@@ -77,8 +77,7 @@ void Profiler::EndTimeAndRecordEvent(EventCategory category,
       events_.emplace_back(event);
     } else {
       if (session_logger_ && !max_events_reached) {
-        LOGS(*session_logger_, ERROR)
-            << "Maximum number of events reached, could not record profile event.";
+        // LOGS(*session_logger_, ERROR) << "Maximum number of events reached, could not record profile event.";
         max_events_reached = true;
       }
     }
@@ -95,7 +94,7 @@ std::string Profiler::EndProfiling() {
   }
 
   if (session_logger_) {
-    LOGS(*session_logger_, INFO) << "Writing profiler data to file " << profile_stream_file_;
+    // LOGS(*session_logger_, INFO) << "Writing profiler data to file " << profile_stream_file_;
   }
 
   std::lock_guard<OrtMutex> lock(mutex_);

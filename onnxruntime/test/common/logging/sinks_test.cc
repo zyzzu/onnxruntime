@@ -50,7 +50,7 @@ TEST(LoggingTests, TestCLogSink) {
 
     auto logger = manager.CreateLogger(logid);
 
-    LOGS(*logger, WARNING) << message;
+    // LOGS(*logger, WARNING) << message;
   }
 
   // check message was flushed to file before we close ofs.
@@ -86,7 +86,7 @@ TEST(LoggingTests, TestCErrSink) {
 
     auto logger = manager.CreateLogger(logid);
 
-    LOGS(*logger, WARNING) << message;
+    // LOGS(*logger, WARNING) << message;
   }
 
   // check message was flushed to file before we close ofs.
@@ -115,7 +115,7 @@ TEST(LoggingTests, TestFileSink) {
 
     auto logger = manager.CreateLogger(logid);
 
-    LOGS(*logger, WARNING) << message;
+    // LOGS(*logger, WARNING) << message;
   }
 
   CheckStringInFile(filename, message);
@@ -142,5 +142,5 @@ TEST(LoggingTests, TestCompositeSink) {
 
   auto logger = manager.CreateLogger(logid);
 
-  LOGS_CATEGORY(*logger, WARNING, "ArbitraryCategory") << "Warning";
+  // LOGS_CATEGORY(*logger, WARNING, "ArbitraryCategory") << "Warning";
 }

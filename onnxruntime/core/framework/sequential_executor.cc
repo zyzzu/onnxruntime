@@ -69,7 +69,6 @@ static void CalculateTotalOutputSizes(OpKernelContextInternal* op_kernel_context
       total_output_sizes += tensor_size;
     }
   }
-
 }
 
 static void CalculateTotalInputSizes(const OpKernelContextInternal* op_kernel_context,
@@ -139,17 +138,18 @@ Status SequentialExecutor::Execute(const SessionState& session_state, const std:
   const bool only_execute_path_to_fetches = only_execute_path_to_fetches_ && (to_be_executed_nodes != nullptr);
 
   if (only_execute_path_to_fetches) {
-    VLOGS(logger, 1) << to_be_executed_nodes->size() << " nodes to be executed\n";
+    // V_LOGS(logger, 1) << to_be_executed_nodes->size() << " nodes to be executed\n";
   }
 
-  LOGS(logger, INFO) << "Begin execution";
+  // LOGS(logger, INFO) << "Begin execution";
   const SequentialExecutionPlan& seq_exec_plan = *session_state.GetExecutionPlan();
   const auto& exec_plan_vec = seq_exec_plan.execution_plan;
-  VLOGS(logger, 1) << "Size of execution plan vector: " << exec_plan_vec.size();
+  // V_LOGS(logger, 1) << "Size of execution plan vector: " << exec_plan_vec.size();
 
 // Enable TRACE_EXECUTION compile flag to dump execution plan
 #if defined(TRACE_EXECUTION)
-  std::cout << std::make_pair(&seq_exec_plan, &session_state) << std::endl;
+  std::cout
+      << std::make_pair(&seq_exec_plan, &session_state) << std::endl;
 #endif
 
   const auto* graph_viewer = session_state.GetGraphViewer();
@@ -167,7 +167,7 @@ Status SequentialExecutor::Execute(const SessionState& session_state, const std:
 
   for (const auto& node_exec_plan : exec_plan_vec) {
     if (terminate_flag_) {
-      LOGS(logger, WARNING) << "Exiting due to terminate flag being set to true.";
+      // LOGS(logger, WARNING) << "Exiting due to terminate flag being set to true.";
       return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Exiting due to terminate flag being set to true.");
     }
 
@@ -241,7 +241,7 @@ Status SequentialExecutor::Execute(const SessionState& session_state, const std:
 
     const std::string node_name_for_profiling = [&]() -> std::string {
       if (!is_profiler_enabled) return {};
-      // Derive something meaningful for profile traces and logs if node name field is blank in execution graph 
+      // Derive something meaningful for profile traces and logs if node name field is blank in execution graph
       return node.Name().empty() ? MakeString(node.OpType(), "_", node_index) : node.Name();
     }();
 
@@ -252,13 +252,13 @@ Status SequentialExecutor::Execute(const SessionState& session_state, const std:
                                                      {{"op_name", p_op_kernel->KernelDef().OpName()}});
 
       // call compute on the kernel
-      VLOGS(logger, 1) << "Computing kernel: " << node_name_for_profiling;
+      // V_LOGS(logger, 1) << "Computing kernel: " << node_name_for_profiling;
 
       kernel_begin_time = session_state.Profiler().StartTime();
 
       // Calculate total input sizes for this operation.
       CalculateTotalInputSizes(&op_kernel_context, p_op_kernel,
-                               input_activation_sizes,input_parameter_sizes, node_name_for_profiling);
+                               input_activation_sizes, input_parameter_sizes, node_name_for_profiling);
     }
 
 #ifdef CONCURRENCY_VISUALIZER
@@ -278,7 +278,7 @@ Status SequentialExecutor::Execute(const SessionState& session_state, const std:
         ss << "Non-zero status code returned while running " << node.OpType() << " node. Name:'" << node.Name()
            << "' Status Message: " << compute_status.ErrorMessage();
         const auto msg_string = ss.str();
-        LOGS(logger, ERROR) << msg_string;
+        // LOGS(logger, ERROR) << msg_string;
         return Status(compute_status.Category(), compute_status.Code(), msg_string);
       }
 
@@ -368,14 +368,14 @@ Status SequentialExecutor::Execute(const SessionState& session_state, const std:
 #endif
 
     // free ml-values corresponding to this node
-    VLOGS(logger, 1) << "Releasing node ML values.";
+    // V_LOGS(logger, 1) << "Releasing node ML values.";
     ORT_RETURN_IF_ERROR(ReleaseNodeMLValues(frame, seq_exec_plan, node_exec_plan, logger));
   }
 
-  VLOGS(logger, 1) << "Fetching output.";
+  // V_LOGS(logger, 1) << "Fetching output.";
   // ExecutionFrame::Finalize will update 'fetches' with the final output
   ORT_RETURN_IF_ERROR(frame.GetOutputs(fetches));
-  VLOGS(logger, 1) << "Done with execution.";
+  // V_LOGS(logger, 1) << "Done with execution.";
 
   if (frame.HasMemoryPatternPlanner()) {
     std::vector<std::reference_wrapper<const TensorShape>> input_shapes;
@@ -409,7 +409,7 @@ static Status ReleaseNodeMLValues(ExecutionFrame& frame,
                                   const logging::Logger& logger) {
   for (auto i = node_exec_plan.free_from_index; i <= node_exec_plan.free_to_index; ++i) {
     auto ort_value_idx = seq_exec_plan.to_be_freed[i];
-    VLOGS(logger, 1) << "Releasing ort_value with index: " << ort_value_idx;
+    // V_LOGS(logger, 1) << "Releasing ort_value with index: " << ort_value_idx;
     ORT_RETURN_IF_ERROR(frame.ReleaseMLValue(ort_value_idx));
   }
 

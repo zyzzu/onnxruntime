@@ -22,14 +22,13 @@ Status SessionState::SetGraph(const Graph& graph) {
   graph_viewer_ = onnxruntime::make_unique<onnxruntime::GraphViewer>(graph);
   auto& logger = Logger();
   // use graph_viewer_ to initialize ort_value_name_idx_map_
-  LOGS(logger, INFO) << "SaveMLValueNameIndexMapping";
+  // LOGS(logger, INFO) << "SaveMLValueNameIndexMapping";
   int idx = 0;
 
   // we keep all graph inputs (including initializers), even if they are unused, so make sure they all have an entry
   for (const auto* input_def : graph_viewer_->GetInputsIncludingInitializers()) {
     idx = ort_value_name_idx_map_.Add(input_def->Name());
-    VLOGS(logger, 1) << "Added graph_viewer_ input with name: " << input_def->Name()
-                     << " to OrtValueIndex with index: " << idx;
+    // V_LOGS(logger, 1) << "Added graph_viewer_ input with name: " << input_def->Name()        << " to OrtValueIndex with index: " << idx;
   }
 
   for (auto& node : graph_viewer_->Nodes()) {
@@ -37,24 +36,21 @@ Status SessionState::SetGraph(const Graph& graph) {
     for (const auto* input_def : node.InputDefs()) {
       if (input_def->Exists()) {
         idx = ort_value_name_idx_map_.Add(input_def->Name());
-        VLOGS(logger, 1) << "Added input argument with name: " << input_def->Name()
-                         << " to OrtValueIndex with index: " << idx;
+        // V_LOGS(logger, 1) << "Added input argument with name: " << input_def->Name()            << " to OrtValueIndex with index: " << idx;
       }
     }
 
     for (const auto* input_def : node.ImplicitInputDefs()) {
       if (input_def->Exists()) {
         idx = ort_value_name_idx_map_.Add(input_def->Name());
-        VLOGS(logger, 1) << "Added implicit input argument with name: " << input_def->Name()
-                         << " to OrtValueIndex with index: " << idx;
+        // V_LOGS(logger, 1) << "Added implicit input argument with name: " << input_def->Name()        << " to OrtValueIndex with index: " << idx;
       }
     }
 
     for (const auto* output_def : node.OutputDefs()) {
       if (output_def->Exists()) {
         ort_value_name_idx_map_.Add(output_def->Name());
-        VLOGS(logger, 1) << "Added output argument with name: " << output_def->Name()
-                         << " to OrtValueIndex with index: " << idx;
+        // V_LOGS(logger, 1) << "Added output argument with name: " << output_def->Name()        << " to OrtValueIndex with index: " << idx;
       }
     }
   }
@@ -63,11 +59,11 @@ Status SessionState::SetGraph(const Graph& graph) {
   for (const auto& output : graph_viewer_->GetOutputs()) {
     if (output->Exists()) {
       idx = ort_value_name_idx_map_.Add(output->Name());
-      VLOGS(logger, 1) << "Added graph output with name: " << output->Name() << " to OrtValueIndex with index: " << idx;
+      // V_LOGS(logger, 1) << "Added graph output with name: " << output->Name() << " to OrtValueIndex with index: " << idx;
     }
   }
 
-  LOGS(logger, INFO) << "Done saving OrtValue mappings.";
+  // LOGS(logger, INFO) << "Done saving OrtValue mappings.";
   return Status::OK();
 }
 

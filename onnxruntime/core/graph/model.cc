@@ -118,13 +118,13 @@ Model::Model(ModelProto&& model_proto, const PathString& model_path, const IOnnx
     if ((domain.empty() || domain == kOnnxDomainAlias) && version < 7) {
       // TODO: Check if we can upgrade all the current opset 6 models that are being tested
       // in CI to opset 7 or above
-      LOGS(logger, WARNING) << "ONNX Runtime only *guarantees* support for models stamped "
-                               "with opset version 7 or above for opset domain 'ai.onnx'. "
-                               "Please upgrade your model to opset 7 or higher. "
-                               "For now, this opset "
-                            << version
-                            << " model may run depending upon legacy support "
-                               "of some older opset version operators.";
+      // LOGS(logger, WARNING) << "ONNX Runtime only *guarantees* support for models stamped "
+      //"with opset version 7 or above for opset domain 'ai.onnx'. "
+      //"Please upgrade your model to opset 7 or higher. "
+      //"For now, this opset "
+      //    << version
+      //    << " model may run depending upon legacy support "
+      //       "of some older opset version operators.";
     }
     // We need to overwrite the domain here with ("") or else the loop below will try to find ("")
     // in the map and if not found (when domain == kOnnxDomainAlias), adds an entry for ("", 11).

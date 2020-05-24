@@ -506,14 +506,14 @@ std::vector<MLValue> OpTester::ExecuteModel(
   std::string s1;
   const bool rc = model.ToProto().SerializeToString(&s1);
   if (!rc) {
-    LOGS_DEFAULT(ERROR) << "Failed to serialize proto to string";
+    // LOGS_DEFAULT(ERROR) << "Failed to serialize proto to string";
     return {};
   }
   std::stringstream sstr(s1);
   auto status = session_object.Load(sstr);
   EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
   if (!status.IsOK()) {
-    LOGS_DEFAULT(ERROR) << "Load failed with status: " << status.ErrorMessage();
+    // LOGS_DEFAULT(ERROR) << "Load failed with status: " << status.ErrorMessage();
     return {};
   }
 
@@ -524,11 +524,10 @@ std::vector<MLValue> OpTester::ExecuteModel(
       // Disable expected_failure_string checks for OpenVINO EP
       if (provider_type != kOpenVINOExecutionProvider) {
         EXPECT_THAT(status.ErrorMessage(),
-                  testing::HasSubstr(expected_failure_string));
+                    testing::HasSubstr(expected_failure_string));
       }
     } else {
-      LOGS_DEFAULT(ERROR) << "Initialize failed with status: "
-                          << status.ErrorMessage();
+      // LOGS_DEFAULT(ERROR) << "Initialize failed with status: "      << status.ErrorMessage();
       EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
     }
   }
@@ -564,8 +563,7 @@ std::vector<MLValue> OpTester::ExecuteModel(
                       testing::HasSubstr(expected_failure_string));
         }
       } else {
-        LOGS_DEFAULT(ERROR) << "Run failed with status: "
-                            << status.ErrorMessage();
+        // LOGS_DEFAULT(ERROR) << "Run failed with status: "        << status.ErrorMessage();
         EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
       }
       return {};
@@ -686,8 +684,7 @@ void OpTester::Run(
           EXPECT_THAT(status.ErrorMessage(),
                       testing::HasSubstr(expected_failure_string));
         } else {
-          LOGS_DEFAULT(ERROR) << "Resolve failed with status: "
-                              << status.ErrorMessage();
+          // LOGS_DEFAULT(ERROR) << "Resolve failed with status: "          << status.ErrorMessage();
           EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
         }
       }
@@ -801,7 +798,7 @@ void OpTester::Run(
             valid = false;
             for (auto& custom_session_registry : custom_session_registries_) {
               if (KernelRegistry::HasImplementationOf(*custom_session_registry->GetKernelRegistry(),
-                      node, execution_provider->Type())) {
+                                                      node, execution_provider->Type())) {
                 valid = true;
                 break;
               }

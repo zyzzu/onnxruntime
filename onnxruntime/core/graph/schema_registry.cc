@@ -70,7 +70,7 @@ common::Status OnnxRuntimeOpSchemaRegistry::RegisterOpSchemaInternal(ONNX_NAMESP
             << op_schema.line()
             << ", but it is already registered from file "
             << schema.file() << " line " << schema.line() << std::endl;
-    LOGS_DEFAULT(WARNING) << ostream.str();
+    // LOGS_DEFAULT(WARNING) << ostream.str();
     return common::Status::OK();  // an op with the same name can be registered for multiple execution providers
   }
 

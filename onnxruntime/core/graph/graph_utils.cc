@@ -189,8 +189,7 @@ static bool CanUpdateImplicitInputNameInSubgraphs(const Graph& graph,
     if (OutputEdgeProvidesImplicitInput(graph, output_edge)) {
       const Node& output_edge_node = *graph.GetNode(output_edge.dst_node);
       if (!CanUpdateImplicitInputNameInSubgraph(output_edge_node, output_edge.arg_name, new_arg_name)) {
-        LOGS(logger, WARNING) << " Implicit input name " << output_edge.arg_name
-                              << " cannot be safely updated to " << new_arg_name << " in one of the subgraphs.";
+        // LOGS(logger, WARNING) << " Implicit input name " << output_edge.arg_name        << " cannot be safely updated to " << new_arg_name << " in one of the subgraphs.";
         return false;
       }
     }
@@ -703,15 +702,13 @@ bool FindPath(const Node& node, bool is_input_edge, const std::vector<EdgeEndToM
   for (const auto& edge : edges_to_match) {
     const Node::EdgeEnd* edge_found = nullptr;
 #ifndef NDEBUG
-    LOGS(logger, VERBOSE) << (is_input_edge ? "I:" : "O:") << edge.src_arg_index << "," << edge.dst_arg_index
-                           << "," << edge.op_type << "," << edge.domain << "," << ToString(edge.versions);
+    // LOGS(logger, VERBOSE) << (is_input_edge ? "I:" : "O:") << edge.src_arg_index << "," << edge.dst_arg_index    << "," << edge.op_type << "," << edge.domain << "," << ToString(edge.versions);
 #endif
     auto edges_begin = is_input_edge ? current_node->InputEdgesBegin() : current_node->OutputEdgesBegin();
     auto edges_end = is_input_edge ? current_node->InputEdgesEnd() : current_node->OutputEdgesEnd();
     for (auto it = edges_begin; it != edges_end; ++it) {
 #ifndef NDEBUG
-      LOGS(logger, VERBOSE) << "E:" << it->GetSrcArgIndex() << "," << it->GetDstArgIndex()
-                            << "," << it->GetNode().OpType() << "," << it->GetNode().Domain() << "," << it->GetNode().Op()->SinceVersion();
+      // LOGS(logger, VERBOSE) << "E:" << it->GetSrcArgIndex() << "," << it->GetDstArgIndex()      << "," << it->GetNode().OpType() << "," << it->GetNode().Domain() << "," << it->GetNode().Op()->SinceVersion();
 #endif
       if (edge.dst_arg_index == it->GetDstArgIndex() &&
           edge.src_arg_index == it->GetSrcArgIndex() &&
@@ -721,7 +718,7 @@ bool FindPath(const Node& node, bool is_input_edge, const std::vector<EdgeEndToM
         // For output edge, there could be multiple edges matched.
         // This function will return failure in such case by design.
         if (nullptr != edge_found) {
-          LOGS(logger, WARNING) << "Failed since multiple edges matched:" << current_node->OpType() << "->" << edge.op_type;
+          // LOGS(logger, WARNING) << "Failed since multiple edges matched:" << current_node->OpType() << "->" << edge.op_type;
           return false;
         }
         edge_found = &(*it);

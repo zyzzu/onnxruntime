@@ -26,14 +26,14 @@ class ExecutionProviders {
     // make sure there are no issues before we change any internal data structures
     if (provider_idx_map_.find(provider_id) != provider_idx_map_.end()) {
       auto status = ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Provider ", provider_id, " has already been registered.");
-      LOGS_DEFAULT(ERROR) << status.ErrorMessage();
+      // LOGS_DEFAULT(ERROR) << status.ErrorMessage();
       return status;
     }
 
     for (const auto& allocator : p_exec_provider->GetAllocators()) {
       if (allocator_idx_map_.find(allocator->Info()) != allocator_idx_map_.end()) {
         auto status = ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, allocator->Info(), " allocator already registered.");
-        LOGS_DEFAULT(ERROR) << status.ErrorMessage();
+        // LOGS_DEFAULT(ERROR) << status.ErrorMessage();
         return status;
       }
     }

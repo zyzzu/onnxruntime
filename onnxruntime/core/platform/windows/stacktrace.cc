@@ -56,8 +56,8 @@ class SymbolHelper {
       cleanup_ = true;
     } else {
       // Log it so we know it happened. Can't do anything else about it.
-      LOGS_DEFAULT(WARNING) << "Failed to initialize symbols for providing stack trace. Error: 0x"
-                            << std::hex << GetLastError();
+      // LOGS_DEFAULT(WARNING) << "Failed to initialize symbols for providing stack trace. Error: 0x"
+      //<< std::hex << GetLastError();
     }
   }
 

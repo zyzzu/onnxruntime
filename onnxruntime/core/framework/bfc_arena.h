@@ -309,7 +309,7 @@ class BFCArena : public IArenaAllocator {
         return &(*entry);
       }
 
-      LOGS_DEFAULT(FATAL) << "Could not find Region for " << p;
+      // LOGS_DEFAULT(FATAL) << "Could not find Region for " << p;
       return nullptr;
     }
 

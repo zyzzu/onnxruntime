@@ -59,7 +59,7 @@ static bool UsingLatestOnnxOpset(const DomainToVersionMap& opset_versions) {
 
 static Status MergeShapeInfo(const std::string& output_name,
                              const TypeProto_Tensor& source, TypeProto_Tensor& target,
-                             bool strict, const logging::Logger& logger) {
+                             bool strict, const logging::Logger& /*logger*/) {
   try {
     ONNX_NAMESPACE::mergeInShapeInfo(source, target);
   } catch (const ONNX_NAMESPACE::InferenceError& ex) {
@@ -70,9 +70,9 @@ static Status MergeShapeInfo(const std::string& output_name,
       // mergeInShapeInfo does nothing unless source.shape() is not null, and there would be no conflict if
       // target.shape() was empty. 'assert' just in case that ever changes.
       assert(utils::HasShape(source) && utils::HasShape(target));
-      LOGS(logger, WARNING) << "Error merging shape info for output. '" << output_name
-                            << "' source:" << source.shape() << " target:" << target.shape()
-                            << ". Falling back to lenient merge.";
+      // LOGS(logger, WARNING) << "Error merging shape info for output. '" << output_name
+      //<< "' source:" << source.shape() << " target:" << target.shape()
+      //<< ". Falling back to lenient merge.";
 
       ONNX_NAMESPACE::UnionShapeInfo(source.shape(), target);
     } else {
@@ -811,12 +811,12 @@ Graph::Graph(const Model& owning_model,
         name_to_type_map[tensor.name()] = t;
         ORT_IGNORE_RETURN_VALUE(GetOrCreateNodeArg(tensor.name(), &t));
       } else {
-        LOGS(logger_, WARNING) << "Initializer " << tensor.name()
-                               << " appears in graph inputs and will not be treated as constant value/weight. "
-                               << "This may fail some of the graph optimizations, like const folding. "
-                               << "Move it out of graph inputs if there is no need to override it, "
-                               << "by either re-generating the model with latest exporter/converter "
-                               << "or with the tool onnxruntime/tools/python/remove_initializer_from_input.py.";
+        // LOGS(logger_, WARNING) << "Initializer " << tensor.name()
+        //<< " appears in graph inputs and will not be treated as constant value/weight. "
+        //<< "This may fail some of the graph optimizations, like const folding. "
+        //<< "Move it out of graph inputs if there is no need to override it, "
+        //<< "by either re-generating the model with latest exporter/converter "
+        //<< "or with the tool onnxruntime/tools/python/remove_initializer_from_input.py.";
       }
     }
   }
@@ -2616,10 +2616,9 @@ void Graph::CleanUnusedInitializers(const std::unordered_set<std::string>* initi
       // from the model.
       // on later calls we are removing initializers that optimizations have made redundant.
       if (num_resolves_ == 0) {
-        LOGS(logger_, WARNING) << "Removing initializer '"
-                               << name << "'. It is not used by any node and should be removed from the model.";
+        // LOGS(logger_, WARNING) << "Removing initializer '"        << name << "'. It is not used by any node and should be removed from the model.";
       } else {
-        LOGS(logger_, INFO) << "Removing initializer '" << name << "'. It is no longer used by any node.";
+        // LOGS(logger_, INFO) << "Removing initializer '" << name << "'. It is no longer used by any node.";
       }
 
       erase_list.push_back(name);

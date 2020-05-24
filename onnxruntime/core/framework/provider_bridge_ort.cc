@@ -504,7 +504,6 @@ struct ProviderHostImpl : ProviderHost {
 
 struct ProviderLibrary {
   ProviderLibrary(const char* filename) {
-
     std::string full_path = Env::Default().GetRuntimePath() + std::string(filename);
     Env::Default().LoadDynamicLibrary(full_path, &handle_);
     if (!handle_)
@@ -546,7 +545,7 @@ std::shared_ptr<IExecutionProviderFactory> CreateExecutionProviderFactory_Dnnl(i
   static ProviderLibrary library("libonnxruntime_providers_dnnl.so");
 #endif
   if (!library.provider_) {
-    LOGS_DEFAULT(ERROR) << "Failed to load provider shared library";
+    // LOGS_DEFAULT(ERROR) << "Failed to load provider shared library";
     return nullptr;
   }
 

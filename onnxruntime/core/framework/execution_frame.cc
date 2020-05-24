@@ -251,7 +251,7 @@ ExecutionFrame::ExecutionFrame(const std::vector<int>& feed_mlvalue_idxs, const 
           buffers_[mem_patterns_->locations[i]] = BufferUniquePtr(buffer, alloc);
 
           // log size of activation. Keep it commented out for now to avoid log flooding.
-          // VLOGS(session_state_.Logger(), 1) << "Allocated memory for activations, size: " << mem_patterns_->patterns[i].PeakSize();
+          // V// LOGS(session_state_.Logger(), 1) << "Allocated memory for activations, size: " << mem_patterns_->patterns[i].PeakSize();
         }
       }
     }
@@ -325,13 +325,13 @@ Status ExecutionFrame::AllocateMLValueTensorSelfOwnBufferHelper(OrtValue& ort_va
           // fed in, so use VERBOSE as the log level as it's expected.
           // TODO: Should we re-use the block if the size is large enough? Would probably need to allow it
           // to be freed if the size difference was too large so our memory usage doesn't stick at a high water mark
-          LOGS(session_state_.Logger(), VERBOSE) << "For ort_value with index: " << ort_value_index
-                                                 << ", block in memory pattern size is: " << block->size_
-                                                 << " but the actually size is: " << size
-                                                 << ", fall back to default allocation behavior";
+          // LOGS(session_state_.Logger(), VERBOSE) << "For ort_value with index: " << ort_value_index
+          //<< ", block in memory pattern size is: " << block->size_
+          //<< " but the actually size is: " << size
+          //<< ", fall back to default allocation behavior";
         } else if (it == buffers_.end()) {
-          LOGS(session_state_.Logger(), WARNING) << "For ort_value with index: " << ort_value_index
-                                                 << ", block not found in target location. fall back to default allocation behavior";
+          // LOGS(session_state_.Logger(), WARNING) << "For ort_value with index: " << ort_value_index
+          //<< ", block not found in target location. fall back to default allocation behavior";
         }
       }
     }
@@ -378,7 +378,7 @@ Status ExecutionFrame::AllocateMLValueTensorPreAllocateBuffer(OrtValue& ort_valu
       // View Operator is reusing the buffer bigger than the required size.
       // Disabling warning message for now. The op is in the process of being deprecated.
 #ifndef ENABLE_TRAINING
-      LOGS(session_state_.Logger(), WARNING) << message;
+      // LOGS(session_state_.Logger(), WARNING) << message;
 #endif
     } else {
       return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, message);
@@ -553,9 +553,9 @@ void ExecutionFrame::TraceAllocate(int ort_value_idx, size_t size) {
     auto& allocation_plan = GetAllocationPlan(ort_value_idx);
     if (allocation_plan.alloc_kind == AllocKind::kAllocateOutput) return;
     auto status = planner_->TraceAllocation(ort_value_idx, size);
-    if (!status.IsOK())
-      LOGS(session_state_.Logger(), WARNING) << "TraceAllocation for ort_value_idx=" << ort_value_idx
-                                             << " size=" << size << " failed: " << status.ErrorMessage();
+    // if (!status.IsOK())
+    // LOGS(session_state_.Logger(), WARNING) << "TraceAllocation for ort_value_idx=" << ort_value_idx
+    //<< " size=" << size << " failed: " << status.ErrorMessage();
   }
 }
 
@@ -576,8 +576,8 @@ void ExecutionFrame::TraceFree(int ort_value_idx) {
       if (!utils::IsDataTypeString(ml_data_type)) {
         auto status = planner_->TraceFree(ort_value_idx);
         if (!status.IsOK()) {
-          LOGS(session_state_.Logger(), WARNING)
-              << "TraceFree for ort_value_idx=" << ort_value_idx << " failed: " << status.ErrorMessage();
+          // LOGS(session_state_.Logger(), WARNING)
+          //<< "TraceFree for ort_value_idx=" << ort_value_idx << " failed: " << status.ErrorMessage();
         }
       }
     }

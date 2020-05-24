@@ -7,7 +7,7 @@ namespace onnxruntime {
 namespace logging {
 // mild violation of naming convention. the 'k' lets us use token concatenation in the macro
 // ::onnxruntime::Logging::Severity::k##severity. It's not legal to have ::onnxruntime::Logging::Severity::##severity
-// the uppercase makes the LOG macro usage look as expected for passing an enum value as it will be LOGS(logger, ERROR)
+// the uppercase makes the LOG macro usage look as expected for passing an enum value as it will be // LOGS(logger, ERROR)
 enum class Severity {
   kVERBOSE = 0,
   kINFO = 1,

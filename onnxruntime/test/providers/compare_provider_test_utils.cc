@@ -78,14 +78,14 @@ void CompareOpTester::CompareWithCPU(const std::string& target_provider_type,
   status = cpu_session_object.Load(model_proto_str);
   EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
   if (!status.IsOK()) {
-    LOGS_DEFAULT(ERROR) << "Load failed with status: " << status.ErrorMessage();
+    // LOGS_DEFAULT(ERROR) << "Load failed with status: " << status.ErrorMessage();
     return;
   }
 
   status = cpu_session_object.Initialize();
   EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
   if (!status.IsOK()) {
-    LOGS_DEFAULT(ERROR) << "Initialize failed with status: " << status.ErrorMessage();
+    // LOGS_DEFAULT(ERROR) << "Initialize failed with status: " << status.ErrorMessage();
     return;
   }
 
@@ -97,7 +97,7 @@ void CompareOpTester::CompareWithCPU(const std::string& target_provider_type,
   status = cpu_session_object.Run(run_options, feeds, output_names, &cpu_fetches);
   EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
   if (!status.IsOK()) {
-    LOGS_DEFAULT(ERROR) << "Run failed with status: " << status.ErrorMessage();
+    // LOGS_DEFAULT(ERROR) << "Run failed with status: " << status.ErrorMessage();
     return;
   }
 
@@ -110,14 +110,14 @@ void CompareOpTester::CompareWithCPU(const std::string& target_provider_type,
   status = target_session_object.Load(model_proto_str1);
   EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
   if (!status.IsOK()) {
-    LOGS_DEFAULT(ERROR) << "Load failed with status: " << status.ErrorMessage();
+    // LOGS_DEFAULT(ERROR) << "Load failed with status: " << status.ErrorMessage();
     return;
   }
 
   status = target_session_object.Initialize();
   EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
   if (!status.IsOK()) {
-    LOGS_DEFAULT(ERROR) << "Initialize failed with status: " << status.ErrorMessage();
+    // LOGS_DEFAULT(ERROR) << "Initialize failed with status: " << status.ErrorMessage();
     return;
   }
 

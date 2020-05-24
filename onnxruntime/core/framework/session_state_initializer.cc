@@ -175,7 +175,9 @@ common::Status SaveInitializedTensors(const Env& env, const std::basic_string<PA
                                       const OrtValueNameIdxMap& ort_value_name_idx_map, ITensorAllocator* planner,
                                       const T& save_tensor_func, const logging::Logger& logger,
                                       const DataTransferManager& data_transfer_mgr) {
-  LOGS(logger, INFO) << "Saving initialized tensors.";
+  // LOGS(logger, INFO) << "Saving initialized tensors.";
+  ORT_UNUSED_PARAMETER(logger);
+
   ORT_ENFORCE(ort_value_name_idx_map.MaxIdx() > -1, "OrtValue indexes should have been populated.");
 
   //1. first plan the memory
@@ -217,10 +219,10 @@ common::Status SaveInitializedTensors(const Env& env, const std::basic_string<PA
     bool constant = graph_utils::IsConstantInitializer(graph, name, /* check_outer_scope */ false);
     ORT_RETURN_IF_ERROR(save_tensor_func(ort_value_index, ort_value, deleter, constant));
 
-    VLOGS(logger, 1) << "Added weight with name : " << name << " with index: " << ort_value_index;
+    // V_LOGS(logger, 1) << "Added weight with name : " << name << " with index: " << ort_value_index;
   }
 
-  LOGS(logger, INFO) << "Done saving initialized tensors";
+  // LOGS(logger, INFO) << "Done saving initialized tensors";
   return common::Status::OK();
 }
 
@@ -343,8 +345,7 @@ common::Status SaveInputOutputNamesToNodeMapping(const onnxruntime::Graph& graph
     if (input_map.find(name) == end_map) {
       // dummy entry for an input that we didn't find a use of in the graph. log it in case that's a bug.
       // utils::CopyOneInputAcrossDevices will use the input OrtValue as is given we don't believe it's used anywhere.
-      LOGS(session_state.Logger(), INFO) << (graph.IsSubgraph() ? "Subgraph" : "Graph") << " input with name "
-                                         << name << " is not used by any node.";
+      // LOGS(session_state.Logger(), INFO) << (graph.IsSubgraph() ? "Subgraph" : "Graph") << " input with name "      << name << " is not used by any node.";
       int arg_index;
       ORT_RETURN_IF_ERROR(name_to_id.GetIdx(name, arg_index));
       auto& device = exec_plan->GetLocation(arg_index).device;

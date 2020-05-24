@@ -39,7 +39,7 @@ Status ParallelExecutor::Execute(const SessionState& session_state, const std::v
   }
 
   root_frame_ = onnxruntime::make_unique<ExecutionFrame>(feed_mlvalue_idxs, feeds, fetch_mlvalue_idxs, fetches,
-                                                 fetch_allocators, session_state);
+                                                         fetch_allocators, session_state);
   //std::cout << "start nodes:" << std::endl;
   for (auto node_index : session_state.GetGraphViewer()->GetRootNodes()) {
     auto p_op_kernel = session_state.GetKernel(node_index);
@@ -72,14 +72,14 @@ Status ParallelExecutor::Execute(const SessionState& session_state, const std::v
       status = ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, ss.str());
     }
 
-    LOGS(logger, ERROR) << status;
+    // LOGS(logger, ERROR) << status;
     return status;
   }
 
-  VLOGS(logger, 1) << "Fetching output.";
+  // V_LOGS(logger, 1) << "Fetching output.";
   // ExecutionFrame::Finalize will update 'fetches' with the final output
   ORT_RETURN_IF_ERROR(root_frame_->GetOutputs(fetches));
-  VLOGS(logger, 1) << "Done execution.";
+  // V_LOGS(logger, 1) << "Done execution.";
 
   if (root_frame_->HasMemoryPatternPlanner()) {
     std::vector<std::reference_wrapper<const TensorShape>> input_shapes;
@@ -110,7 +110,7 @@ Status ParallelExecutor::Execute(const SessionState& session_state, const std::v
 Status ParallelExecutor::RunNodeAsync(size_t p_node_index,
                                       const SessionState& session_state,
                                       const logging::Logger& logger) {
-  LOGS(logger, INFO) << "Begin execution";
+  // LOGS(logger, INFO) << "Begin execution";
 
   Status status = Status::OK();
 
@@ -127,7 +127,7 @@ Status ParallelExecutor::RunNodeAsync(size_t p_node_index,
     // TODO: Convert RunNodeAsync return Status.
     // to also handle exception propagation
     if (terminate_flag_) {
-      LOGS(logger, WARNING) << "Exiting due to terminate flag being set to true.";
+      // LOGS(logger, WARNING) << "Exiting due to terminate flag being set to true.";
       ORT_THROW("Exiting due to terminate flag being set to true.");
     }
 
@@ -187,7 +187,7 @@ Status ParallelExecutor::RunNodeAsync(size_t p_node_index,
     }
 
     // call compute on the kernel
-    VLOGS(logger, 1) << "Computing kernel: " << node.Name();
+    // V_LOGS(logger, 1) << "Computing kernel: " << node.Name();
 
     // Execute the kernel.
     try {
@@ -201,7 +201,7 @@ Status ParallelExecutor::RunNodeAsync(size_t p_node_index,
       ss << "Non-zero status code returned while running " << node.OpType() << " node. Name:'" << node.Name()
          << "' Status Message: " << status.ErrorMessage();
       const auto msg_string = ss.str();
-      LOGS(logger, ERROR) << msg_string;
+      // LOGS(logger, ERROR) << msg_string;
       status = Status(status.Category(), status.Code(), msg_string);
       break;
     }

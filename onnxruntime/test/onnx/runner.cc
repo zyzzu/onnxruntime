@@ -302,7 +302,7 @@ void DataRunner::RunTask(size_t task_id, ORT_CALLBACK_INSTANCE pci, bool store_r
     res = RunTaskImpl(task_id);
   } catch (std::exception& ex) {
     res = EXECUTE_RESULT::WITH_EXCEPTION;
-    LOGS_DEFAULT(ERROR) << c_->GetTestCaseName() << ":" << ex.what();
+    // LOGS_DEFAULT(ERROR) << c_->GetTestCaseName() << ":" << ex.what();
   }
   if (store_result) {
     result->SetResult(task_id, res);
@@ -359,15 +359,15 @@ EXECUTE_RESULT DataRunner::RunTaskImpl(size_t task_id) {
   bool post_procesing;
   Status status;
   if (!(status = c_->GetPerSampleTolerance(&per_sample_tolerance)).IsOK()) {
-    LOGS_DEFAULT(ERROR) << status.ErrorMessage() << "\n";
+    // LOGS_DEFAULT(ERROR) << status.ErrorMessage() << "\n";
     return StatusCodeToExecuteResult(status.Code());
   }
   if (!(status = c_->GetRelativePerSampleTolerance(&relative_per_sample_tolerance)).IsOK()) {
-    LOGS_DEFAULT(ERROR) << status.ErrorMessage() << "\n";
+    // LOGS_DEFAULT(ERROR) << status.ErrorMessage() << "\n";
     return StatusCodeToExecuteResult(status.Code());
   }
   if (!(status = c_->GetPostProcessing(&post_procesing)).IsOK()) {
-    LOGS_DEFAULT(ERROR) << status.ErrorMessage() << "\n";
+    // LOGS_DEFAULT(ERROR) << status.ErrorMessage() << "\n";
     return StatusCodeToExecuteResult(status.Code());
   }
 
@@ -441,7 +441,7 @@ EXECUTE_RESULT DataRunner::RunTaskImpl(size_t task_id) {
     }
 
     if (compare_result != COMPARE_RESULT::SUCCESS && !ret.second.empty()) {
-      LOGS_DEFAULT(ERROR) << test_case_name_ << ":output=" << output_name << ":" << ret.second;
+      // LOGS_DEFAULT(ERROR) << test_case_name_ << ":output=" << output_name << ":" << ret.second;
     }
     if (compare_result != COMPARE_RESULT::SUCCESS) {
       break;
@@ -463,7 +463,6 @@ void SeqTestRunner::Start(ORT_CALLBACK_INSTANCE pci, size_t) {
 }
 
 void RunSingleTestCase(ITestCase* info, Ort::Env& env, const Ort::SessionOptions& sf, size_t concurrent_runs, size_t repeat_count, PThreadPool tpool, ORT_CALLBACK_INSTANCE pci, TestCaseCallBack on_finished) {
-
   std::shared_ptr<TestCaseResult> ret;
   size_t data_count = info->GetDataCount();
   try {

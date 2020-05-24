@@ -53,8 +53,8 @@ static void UnmapFile(void* param) noexcept {
   UnmapFileParam* p = reinterpret_cast<UnmapFileParam*>(param);
   int ret = munmap(p->addr, p->len);
   if (ret != 0) {
-    int err = errno;
-    LOGS_DEFAULT(ERROR) << "munmap failed. error code: " << err;
+    // int err = errno;
+    // LOGS_DEFAULT(ERROR) << "munmap failed. error code: " << err;
   }
   delete p;
 }
@@ -64,8 +64,8 @@ struct FileDescriptorTraits {
   static Handle GetInvalidHandleValue() { return -1; }
   static void CleanUp(Handle h) {
     if (close(h) == -1) {
-      const int err = errno;
-      LOGS_DEFAULT(ERROR) << "Failed to close file descriptor " << h << " - error code: " << err;
+      // const int err = errno;
+      // LOGS_DEFAULT(ERROR) << "Failed to close file descriptor " << h << " - error code: " << err;
     }
   }
 };
@@ -91,9 +91,9 @@ int nftw_remove(
     int /*typeflag*/, struct FTW* /*ftwbuf*/) {
   const auto result = remove(fpath);
   if (result != 0) {
-    const int err = errno;
-    LOGS_DEFAULT(WARNING) << "remove() failed. Error code: " << err
-                          << ", path: " << fpath;
+    // const int err = errno;
+    // LOGS_DEFAULT(WARNING) << "remove() failed. Error code: " << err
+    //                      << ", path: " << fpath;
   }
   return result;
 }

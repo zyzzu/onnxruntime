@@ -668,7 +668,7 @@ Applies to session load, initialization, etc. Default is 0.)pbdoc")
                 break;
               default:
                 retval = ORT_ENABLE_ALL;
-                LOGS_DEFAULT(WARNING) << "Got invalid graph optimization level; defaulting to ORT_ENABLE_ALL";
+                // LOGS_DEFAULT(WARNING) << "Got invalid graph optimization level; defaulting to ORT_ENABLE_ALL";
                 break;
             }
             return retval;
