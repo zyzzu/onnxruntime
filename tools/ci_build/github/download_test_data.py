@@ -88,7 +88,7 @@ def download_and_unzip(build_dir, url, dest_folder, use_token=True):
         url_with_token = urljoin(url, token)
     else:
         url_with_token = url
-    
+
     try:
         subprocess.run(['azcopy', 'cp', '--log-level', 'ERROR', '--recursive', url_with_token, build_dir], check=True)
     except Exception as e:
