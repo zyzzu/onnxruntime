@@ -124,7 +124,7 @@ MlasQLinearAddKernelAvx2Helper(
     }
 
     int64_t N = static_cast<int64_t>(p_N);
-    __m256i vy;
+    __m256i vy = _mm256_setzero_si256();
     while (N > 0) {
         __m256i a8x32, b8x32, vy02, vy13;
 

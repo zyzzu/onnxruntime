@@ -715,7 +715,7 @@ MlasQLinearAddKernelHelper(
     }
 
     int64_t N = static_cast<int64_t>(p_N);
-    __m128i vy;
+    __m128i vy = _mm_setzero_si128();
     while (N > 0) {
         __m128i ap_lo, ap_hi;
         __m128i bp_lo, bp_hi;
@@ -759,9 +759,6 @@ MlasQLinearAddKernelHelper(
         const __m128i vacc = _mm_adds_epi16(_mm_packs_epi32(vacc_lo, vacc_hi), vy_zero_point);
         vy = Pack16Bits<DataType>(vacc, vacc);
         
-        // testing
-        // vy = _mm_xor_si128(vy, vy);
-
         N -= 8;
         if (N < 0) break;
 
