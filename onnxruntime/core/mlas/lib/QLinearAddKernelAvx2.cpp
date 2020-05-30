@@ -45,7 +45,8 @@ static uint32_t BitsOfFp32(float f) {
     union {
         uint32_t u32;
         float    fp32;
-    } uf = {.fp32 = f};
+    } uf;
+    uf.fp32 = f;
     return uf.u32;
 }
 
