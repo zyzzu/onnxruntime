@@ -226,16 +226,16 @@ MlasQLinearAddKernelAvx2Helper(
 
     if (N < 0) {
         N += 32;
-        int k = N / 4;
+        int64_t k = N / 4;
         if (k > 0) {
-            const __m256i mask = _mm256_cmpgt_epi32(_mm256_set1_epi32(k), _mm256_set_epi32(7, 6, 5, 4, 3, 2, 1, 0));
+            const __m256i mask = _mm256_cmpgt_epi32(_mm256_set1_epi32((int)k), _mm256_set_epi32(7, 6, 5, 4, 3, 2, 1, 0));
             _mm256_maskstore_epi32((int*)OutputC, mask, vy);
             OutputC += k * 4;
         }
 
-        int r = N - k * 4;
+        int64_t r = N - k * 4;
         if (r > 0) {
-            auto permed = _mm256_permutevar8x32_epi32(vy, _mm256_set1_epi32(k));
+            auto permed = _mm256_permutevar8x32_epi32(vy, _mm256_set1_epi32((int)k));
             uint32_t PackedValueC = (uint32_t)_mm256_extract_epi32(permed, 0);
             for (int64_t n = 0; n < r; ++n) {
                 *((uint8_t*)OutputC + n) = (uint8_t)PackedValueC;
