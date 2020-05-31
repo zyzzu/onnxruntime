@@ -762,9 +762,12 @@ common::Status InferenceSession::Load(const std::basic_string<T>& model_uri) {
                   // setup all the info for handling the feeds and fetches used in subgraph execution
                   auto* p_op_kernel = session_state.GetMutableKernel(node.Index());
                   ORT_ENFORCE(p_op_kernel);
-                  auto& control_flow_kernel = dynamic_cast<controlflow::IControlFlowKernel&>(*p_op_kernel);
-                  ORT_RETURN_IF_ERROR_SESSIONID_(
-                      control_flow_kernel.SetupSubgraphExecutionInfo(session_state, name, *subgraph_session_state));
+#ifdef ORT_NO_RTTI
+#else
+      auto& control_flow_kernel = dynamic_cast<controlflow::IControlFlowKernel&>(*p_op_kernel);
+      ORT_RETURN_IF_ERROR_SESSIONID_(
+          control_flow_kernel.SetupSubgraphExecutionInfo(session_state, name, *subgraph_session_state));
+#endif
 
                   // recurse
                   ORT_RETURN_IF_ERROR_SESSIONID_(InitializeSubgraphSessions(subgraph, *subgraph_session_state));
@@ -994,8 +997,13 @@ common::Status InferenceSession::Load(const std::basic_string<T>& model_uri) {
               if (actual == expected) {
                 return Status::OK();
               }
-              auto actual_name = std::string(typeid(*actual).name());
-              auto expected_name = std::string(typeid(*expected).name());
+#ifdef ORT_NO_RTTI
+              std::string actual_name = "std::string(typeid(*actual).name())";
+              std::string expected_name = "std::string(typeid(*expected).name())";
+#else
+  auto actual_name = std::string(typeid(*actual).name());
+  auto expected_name = std::string(typeid(*expected).name());
+#endif
               return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT,
                             "Unexpected input data type. Actual: (" + actual_name + ") , expected: (" + expected_name + ")");
             }

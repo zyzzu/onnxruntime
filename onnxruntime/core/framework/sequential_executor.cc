@@ -406,7 +406,7 @@ Status SequentialExecutor::Execute(const SessionState& session_state, const std:
 static Status ReleaseNodeMLValues(ExecutionFrame& frame,
                                   const SequentialExecutionPlan& seq_exec_plan,
                                   const SequentialExecutionPlan::NodeExecutionPlan& node_exec_plan,
-                                  const logging::Logger& logger) {
+                                  const logging::Logger& /*logger*/) {
   for (auto i = node_exec_plan.free_from_index; i <= node_exec_plan.free_to_index; ++i) {
     auto ort_value_idx = seq_exec_plan.to_be_freed[i];
     // V_LOGS(logger, 1) << "Releasing ort_value with index: " << ort_value_idx;

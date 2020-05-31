@@ -697,7 +697,11 @@ const char* DataTypeImpl::ToString(MLDataType type) {
   if (type_proto != nullptr) {
     return ONNX_NAMESPACE::Utils::DataTypeUtils::ToType(*type_proto)->c_str();
   }
+#ifdef ORT_NO_RTTI
+  return "typeid(*type).name()";
+#else
   return typeid(*type).name();
+#endif
 }
 
 const TensorTypeBase* DataTypeImpl::TensorTypeFromONNXEnum(int type) {
@@ -951,7 +955,11 @@ std::ostream& operator<<(std::ostream& out, const DataTypeImpl* data_type) {
   if (data_type == nullptr)
     return out << "(null)";
 
+#ifdef ORT_NO_RTTI
+  return out << "typeid(*data_type).name()";
+#else
   return out << typeid(*data_type).name();
+#endif
 }
 
 namespace utils {
@@ -974,18 +982,16 @@ ContainerChecker::ContainerChecker(MLDataType ml_type) {
           types_.emplace_back(ContainerType::kTensor, type_proto->tensor_type().elem_type());
           type_proto = nullptr;
           break;
-        case TypeProto::ValueCase::kMapType:
-          {
+        case TypeProto::ValueCase::kMapType: {
           const auto& map_type = type_proto->map_type();
           types_.emplace_back(ContainerType::kMap, map_type.key_type());
           // Move on handling the value
           type_proto = &map_type.value_type();
-          }
-          break;
+        } break;
         case TypeProto::ValueCase::kSequenceType:
-            types_.emplace_back(ContainerType::kSequence, TensorProto_DataType_UNDEFINED);
-            type_proto = &type_proto->sequence_type().elem_type();
-            break;
+          types_.emplace_back(ContainerType::kSequence, TensorProto_DataType_UNDEFINED);
+          type_proto = &type_proto->sequence_type().elem_type();
+          break;
         case TypeProto::ValueCase::kOpaqueType:
           // We do not handle this and terminate here
           types_.emplace_back(ContainerType::kOpaque,

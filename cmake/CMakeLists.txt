@@ -109,6 +109,12 @@ if(NOT onnxruntime_ENABLE_PYTHON)
   set(onnxruntime_ENABLE_LANGUAGE_INTEROP_OPS OFF)
 endif()
 
+if (NO_RTTI)
+  add_compile_definitions("ORT_NO_RTTI=1")
+  add_compile_definitions("ONNX_NO_RTTI=1")
+  add_compile_definitions("GOOGLE_PROTOBUF_NO_RTTI=1")
+endif()
+
 # General C# properties
 if (onnxruntime_BUILD_CSHARP)
   check_language(CSharp)

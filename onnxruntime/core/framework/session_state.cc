@@ -20,7 +20,7 @@ namespace onnxruntime {
 const GraphViewer* SessionState::GetGraphViewer() const { return graph_viewer_.get(); }
 Status SessionState::SetGraph(const Graph& graph) {
   graph_viewer_ = onnxruntime::make_unique<onnxruntime::GraphViewer>(graph);
-  auto& logger = Logger();
+  // auto& logger = Logger();
   // use graph_viewer_ to initialize ort_value_name_idx_map_
   // LOGS(logger, INFO) << "SaveMLValueNameIndexMapping";
   int idx = 0;
