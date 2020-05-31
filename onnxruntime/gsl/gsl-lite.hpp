@@ -835,7 +835,8 @@ gsl_DISABLE_MSVC_WARNINGS(26410 26415 26418 26472 26439 26440 26473 26481 26482 
     assert(cond);
 #else   // __CUDA_ARCH__
     if (!cond)
-      throw fail_fast(message);
+      // throw fail_fast(message);
+      abort();
 #endif  // __CUDA_ARCH__
   }
 
@@ -1141,7 +1142,8 @@ gsl_DISABLE_MSVC_WARNINGS(26410 26415 26418 26472 26439 26440 26473 26481 26482 
 
     if (static_cast<U>(t) != u) {
 #if gsl_CONFIG(CONTRACT_VIOLATION_THROWS_V)
-      throw narrowing_error();
+      //throw narrowing_error();
+      abort();
 #else
       std::terminate();
 #endif
@@ -1155,7 +1157,8 @@ gsl_DISABLE_MSVC_WARNINGS(26410 26415 26418 26472 26439 26440 26473 26481 26482 
 #endif
     {
 #if gsl_CONFIG(CONTRACT_VIOLATION_THROWS_V)
-      throw narrowing_error();
+      //throw narrowing_error();
+      abort();
 #else
       std::terminate();
 #endif
@@ -1510,7 +1513,7 @@ gsl_DISABLE_MSVC_WARNINGS(26410 26415 26418 26472 26439 26440 26473 26481 26482 
 #endif
   }
 
-  gsl_api inline gsl_constexpr byte operator&(byte l, byte r)gsl_noexcept {
+  gsl_api inline gsl_constexpr byte operator&(byte l, byte r) gsl_noexcept {
     return to_byte(to_uchar(l) & to_uchar(r));
   }
 
@@ -1924,19 +1927,19 @@ gsl_DISABLE_MSVC_WARNINGS(26410 26415 26418 26472 26439 26440 26473 26481 26482 
 #if gsl_HAVE(DEDUCTION_GUIDES)  // gsl_CPP17_OR_GREATER
 
   template <class T, size_t N>
-  span(T(&)[N])->span<T /*, N*/>;
+  span(T(&)[N]) -> span<T /*, N*/>;
 
   template <class T, size_t N>
-  span(std::array<T, N>&)->span<T /*, N*/>;
+  span(std::array<T, N>&) -> span<T /*, N*/>;
 
   template <class T, size_t N>
-  span(std::array<T, N> const&)->span<const T /*, N*/>;
+  span(std::array<T, N> const&) -> span<const T /*, N*/>;
 
   template <class Container>
-  span(Container&)->span<typename Container::value_type>;
+  span(Container&) -> span<typename Container::value_type>;
 
   template <class Container>
-  span(Container const&)->span<const typename Container::value_type>;
+  span(Container const&) -> span<const typename Container::value_type>;
 
 #endif  // gsl_HAVE( DEDUCTION_GUIDES )
 

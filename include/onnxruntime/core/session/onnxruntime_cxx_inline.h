@@ -12,7 +12,11 @@ inline void ThrowOnError(const OrtApi& ort, OrtStatus* status) {
     std::string error_message = ort.GetErrorMessage(status);
     OrtErrorCode error_code = ort.GetErrorCode(status);
     ort.ReleaseStatus(status);
+#ifdef ORT_NO_EXCEPTIONS
+    abort();
+#else
     throw Ort::Exception(std::move(error_message), error_code);
+#endif
   }
 }
 

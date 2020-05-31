@@ -70,75 +70,75 @@ Status Environment::Initialize(std::unique_ptr<logging::LoggingManager> logging_
     inter_op_thread_pool_ = concurrency::CreateThreadPool(&Env::Default(), to, concurrency::ThreadPoolType::INTER_OP);
   }
 
-  try {
-    // Register Microsoft domain with min/max op_set version as 1/1.
-    std::call_once(schemaRegistrationOnceFlag, []() {
-      ONNX_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::Instance().AddDomainToVersion(onnxruntime::kMSDomain, 1, 1);
-      ONNX_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::Instance().AddDomainToVersion(onnxruntime::kMSNchwcDomain, 1, 1);
-      ONNX_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::Instance().AddDomainToVersion(onnxruntime::kMSFeaturizersDomain, 1, 1);
+  //try {
+  // Register Microsoft domain with min/max op_set version as 1/1.
+  std::call_once(schemaRegistrationOnceFlag, []() {
+    ONNX_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::Instance().AddDomainToVersion(onnxruntime::kMSDomain, 1, 1);
+    ONNX_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::Instance().AddDomainToVersion(onnxruntime::kMSNchwcDomain, 1, 1);
+    ONNX_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::Instance().AddDomainToVersion(onnxruntime::kMSFeaturizersDomain, 1, 1);
 #ifdef USE_DML
-      ONNX_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::Instance().AddDomainToVersion(onnxruntime::kMSDmlDomain, 1, 1);
+    ONNX_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::Instance().AddDomainToVersion(onnxruntime::kMSDmlDomain, 1, 1);
 #endif
 // Register contributed schemas.
 // The corresponding kernels are registered inside the appropriate execution provider.
 #ifndef DISABLE_CONTRIB_OPS
-      contrib::RegisterContribSchemas();
+    contrib::RegisterContribSchemas();
 #endif
 #ifdef ML_FEATURIZERS
-      featurizers::RegisterMSFeaturizersSchemas();
+    featurizers::RegisterMSFeaturizersSchemas();
 #endif
 #ifdef USE_DML
-      dml::RegisterDmlSchemas();
+    dml::RegisterDmlSchemas();
 #endif
-      RegisterOnnxOperatorSetSchema();
-      RegisterOnnxMLOperatorSetSchema();
-      RegisterOnnxTrainingOperatorSetSchema();
+    RegisterOnnxOperatorSetSchema();
+    RegisterOnnxMLOperatorSetSchema();
+    RegisterOnnxTrainingOperatorSetSchema();
 
 #ifdef ENABLE_TRAINING
-      // preserve this order: this depends on operatorsetschema registration.
-      training::RegisterGradientSchemas();
-      training::GradientBuilderRegistry::GetInstance().RegisterGradientBuilders();
-      training::LossFunctionRegistry::GetInstance().RegisterNonOperatorLossFunctions();
-      training::OptimizerBuilderRegistry::GetInstance().RegisterBuilders();
-      training::OptimizerGraphBuilderRegistry::GetInstance().RegisterGraphBuilders();
+    // preserve this order: this depends on operatorsetschema registration.
+    training::RegisterGradientSchemas();
+    training::GradientBuilderRegistry::GetInstance().RegisterGradientBuilders();
+    training::LossFunctionRegistry::GetInstance().RegisterNonOperatorLossFunctions();
+    training::OptimizerBuilderRegistry::GetInstance().RegisterBuilders();
+    training::OptimizerGraphBuilderRegistry::GetInstance().RegisterGraphBuilders();
 #endif
-    });
+  });
 
-    // Register MemCpy schema;
+  // Register MemCpy schema;
 
-    // These ops are internal-only, so register outside of onnx
-    ORT_ATTRIBUTE_UNUSED ONNX_OPERATOR_SCHEMA(MemcpyFromHost)
-        .Input(0, "X", "input", "T")
-        .Output(0, "Y", "output", "T")
-        .TypeConstraint(
-            "T",
-            OpSchema::all_tensor_types(),
-            "Constrain to any tensor type. If the dtype attribute is not provided this must be a valid output type.")
-        .TypeAndShapeInferenceFunction(propagateShapeAndTypeFromFirstInput)
-        .SetDoc(R"DOC(
+  // These ops are internal-only, so register outside of onnx
+  ORT_ATTRIBUTE_UNUSED ONNX_OPERATOR_SCHEMA(MemcpyFromHost)
+      .Input(0, "X", "input", "T")
+      .Output(0, "Y", "output", "T")
+      .TypeConstraint(
+          "T",
+          OpSchema::all_tensor_types(),
+          "Constrain to any tensor type. If the dtype attribute is not provided this must be a valid output type.")
+      .TypeAndShapeInferenceFunction(propagateShapeAndTypeFromFirstInput)
+      .SetDoc(R"DOC(
 Internal copy node
 )DOC");
 
-    ORT_ATTRIBUTE_UNUSED ONNX_OPERATOR_SCHEMA(MemcpyToHost)
-        .Input(0, "X", "input", "T")
-        .Output(0, "Y", "output", "T")
-        .TypeConstraint(
-            "T",
-            OpSchema::all_tensor_types(),
-            "Constrain to any tensor type. If the dtype attribute is not provided this must be a valid output type.")
-        .TypeAndShapeInferenceFunction(propagateShapeAndTypeFromFirstInput)
-        .SetDoc(R"DOC(
+  ORT_ATTRIBUTE_UNUSED ONNX_OPERATOR_SCHEMA(MemcpyToHost)
+      .Input(0, "X", "input", "T")
+      .Output(0, "Y", "output", "T")
+      .TypeConstraint(
+          "T",
+          OpSchema::all_tensor_types(),
+          "Constrain to any tensor type. If the dtype attribute is not provided this must be a valid output type.")
+      .TypeAndShapeInferenceFunction(propagateShapeAndTypeFromFirstInput)
+      .SetDoc(R"DOC(
 Internal copy node
 )DOC");
 
-    // fire off startup telemetry (this call is idempotent)
-    const Env& env = Env::Default();
-    env.GetTelemetryProvider().LogProcessInfo();
-  } catch (std::exception& ex) {
-    status = Status{ONNXRUNTIME, common::RUNTIME_EXCEPTION, std::string{"Exception caught: "} + ex.what()};
-  } catch (...) {
-    status = Status{ONNXRUNTIME, common::RUNTIME_EXCEPTION};
-  }
+  // fire off startup telemetry (this call is idempotent)
+  const Env& env = Env::Default();
+  env.GetTelemetryProvider().LogProcessInfo();
+  //} catch (std::exception& ex) {
+  //  status = Status{ONNXRUNTIME, common::RUNTIME_EXCEPTION, std::string{"Exception caught: "} + ex.what()};
+  //} catch (...) {
+  //  status = Status{ONNXRUNTIME, common::RUNTIME_EXCEPTION};
+  //}
 
   return status;
 }

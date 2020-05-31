@@ -241,12 +241,12 @@ int real_main(int argc, char* argv[], Ort::Env& env) {
     return -1;
   }
 
-  try {
-    env = Ort::Env{logging_level, "Default"};
-  } catch (std::exception& ex) {
-    fprintf(stderr, "Error creating environment: %s \n", ex.what());
-    return -1;
-  }
+  //try {
+  env = Ort::Env{logging_level, "Default"};
+  //} catch (std::exception& ex) {
+  //  fprintf(stderr, "Error creating environment: %s \n", ex.what());
+  //  return -1;
+  //}
 
   std::vector<std::basic_string<PATH_CHAR_TYPE> > data_dirs;
   TestResultStat stat;
@@ -498,19 +498,19 @@ int real_main(int argc, char* argv[], Ort::Env& env) {
       {"bitshift_right_uint16", "BitShift(11) uint16 support not enabled currently"},
       {"bitshift_left_uint16", "BitShift(11) uint16 support not enabled currently"},
       {"maxunpool_export_with_output_shape", "Invalid output in ONNX test. See https://github.com/onnx/onnx/issues/2398"},
-      {"training_dropout", "result differs", {}},               // Temporary, subsequent PR will remove this.
-      {"training_dropout_default", "result differs", {}},       // Temporary, subsequent PR will remove this.
-      {"training_dropout_default_mask", "result differs", {}},  // Temporary, subsequent PR will remove this.
-      {"training_dropout_mask", "result differs", {}},          // Temporary, subsequent PR will remove this.
-      {"adagrad", "not a registered function/op", {}},          // Op not registered.
-      {"adagrad_multiple", "not a registered function/op", {}}, // Op not registered.
-      {"adam", "not a registered function/op", {}},  // Op not registered.
-      {"adam_multiple", "not a registered function/op", {}}, // Op not registered.
-      {"gradient_of_add", "not a registered function/op", {}}, // Op not registered.
-      {"gradient_of_add_and_mul", "not a registered function/op", {}}, // Op not registered.
-      {"momentum", "not a registered function/op", {}},  // Op not registered.
-      {"momentum_multiple", "not a registered function/op", {}}, // Op not registered.
-      {"nesterov_momentum", "not a registered function/op", {}}, // Op not registered.
+      {"training_dropout", "result differs", {}},                       // Temporary, subsequent PR will remove this.
+      {"training_dropout_default", "result differs", {}},               // Temporary, subsequent PR will remove this.
+      {"training_dropout_default_mask", "result differs", {}},          // Temporary, subsequent PR will remove this.
+      {"training_dropout_mask", "result differs", {}},                  // Temporary, subsequent PR will remove this.
+      {"adagrad", "not a registered function/op", {}},                  // Op not registered.
+      {"adagrad_multiple", "not a registered function/op", {}},         // Op not registered.
+      {"adam", "not a registered function/op", {}},                     // Op not registered.
+      {"adam_multiple", "not a registered function/op", {}},            // Op not registered.
+      {"gradient_of_add", "not a registered function/op", {}},          // Op not registered.
+      {"gradient_of_add_and_mul", "not a registered function/op", {}},  // Op not registered.
+      {"momentum", "not a registered function/op", {}},                 // Op not registered.
+      {"momentum_multiple", "not a registered function/op", {}},        // Op not registered.
+      {"nesterov_momentum", "not a registered function/op", {}},        // Op not registered.
   };
 
   if (enable_ngraph) {
@@ -841,12 +841,12 @@ int main(int argc, char* argv[]) {
 #endif
   Ort::Env env{nullptr};
   int retval = -1;
-  try {
-    retval = real_main(argc, argv, env);
-  } catch (std::exception& ex) {
-    fprintf(stderr, "%s\n", ex.what());
-    retval = -1;
-  }
+  //try {
+  retval = real_main(argc, argv, env);
+  //} catch (std::exception& ex) {
+  //  fprintf(stderr, "%s\n", ex.what());
+  //  retval = -1;
+  //}
   ::google::protobuf::ShutdownProtobufLibrary();
   if (g_exit_fast)
     std::_Exit(retval);

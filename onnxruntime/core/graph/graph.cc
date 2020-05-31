@@ -60,25 +60,25 @@ static bool UsingLatestOnnxOpset(const DomainToVersionMap& opset_versions) {
 static Status MergeShapeInfo(const std::string& output_name,
                              const TypeProto_Tensor& source, TypeProto_Tensor& target,
                              bool strict, const logging::Logger& /*logger*/) {
-  try {
-    ONNX_NAMESPACE::mergeInShapeInfo(source, target);
-  } catch (const ONNX_NAMESPACE::InferenceError& ex) {
-    // if this model was not created with the latest onnx version, allow the shape inferencing failure (strict == false).
-    // we do this to have strict testing of the latest inferencing to detect bugs, but lenient shape inferencing for
-    // older models in case later changes to the ONNX shape inferencing or ORT break them.
-    if (!strict) {
-      // mergeInShapeInfo does nothing unless source.shape() is not null, and there would be no conflict if
-      // target.shape() was empty. 'assert' just in case that ever changes.
-      assert(utils::HasShape(source) && utils::HasShape(target));
-      // LOGS(logger, WARNING) << "Error merging shape info for output. '" << output_name
-      //<< "' source:" << source.shape() << " target:" << target.shape()
-      //<< ". Falling back to lenient merge.";
+  //try {
+  ONNX_NAMESPACE::mergeInShapeInfo(source, target);
+  //} catch (const ONNX_NAMESPACE::InferenceError& ex) {
+  //  // if this model was not created with the latest onnx version, allow the shape inferencing failure (strict == false).
+  //  // we do this to have strict testing of the latest inferencing to detect bugs, but lenient shape inferencing for
+  //  // older models in case later changes to the ONNX shape inferencing or ORT break them.
+  //  if (!strict) {
+  //    // mergeInShapeInfo does nothing unless source.shape() is not null, and there would be no conflict if
+  //    // target.shape() was empty. 'assert' just in case that ever changes.
+  //    assert(utils::HasShape(source) && utils::HasShape(target));
+  //    // LOGS(logger, WARNING) << "Error merging shape info for output. '" << output_name
+  //    //<< "' source:" << source.shape() << " target:" << target.shape()
+  //    //<< ". Falling back to lenient merge.";
 
-      ONNX_NAMESPACE::UnionShapeInfo(source.shape(), target);
-    } else {
-      return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Output:", output_name, " ", ex.what());
-    }
-  }
+  //    ONNX_NAMESPACE::UnionShapeInfo(source.shape(), target);
+  //  } else {
+  //    return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Output:", output_name, " ", ex.what());
+  //  }
+  //}
 
   return Status::OK();
 }
@@ -1750,11 +1750,11 @@ Status Graph::InferAndVerifyTypeMatch(Node& node, const OpSchema& op, const Reso
   SubgraphInferencingFunc func(Graph::InferAndVerifySubgraphTypes);
   InferenceContextImpl context(node, func, *this, options);
 
-  try {
-    context.RunInferencing();
-  } catch (const std::exception& ex) {
-    return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Node (", node.Name(), ") Op (", node.OpType(), ") ", ex.what());
-  }
+  //try {
+  context.RunInferencing();
+  //} catch (const std::exception& ex) {
+  //  return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Node (", node.Name(), ") Op (", node.OpType(), ") ", ex.what());
+  //}
 
   const auto& onnx_inferred_types(context.InferredOutputTypes());
 
@@ -1963,11 +1963,11 @@ Status Graph::VerifyNodeAndOpMatch(const ResolveOptions& options) {
     }
 
     if (!node.Op()) {
-      try {
-        checker::check_node(node_proto, ctx, lsc);
-      } catch (const std::exception& ex) {
-        return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_GRAPH, "This is an invalid model. Error in Node:", node_name, " : ", ex.what());
-      }
+      //try {
+      checker::check_node(node_proto, ctx, lsc);
+      //} catch (const std::exception& ex) {
+      //  return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_GRAPH, "This is an invalid model. Error in Node:", node_name, " : ", ex.what());
+      //}
 
       auto maxInclusiveVersion = DomainToVersionMap().find(domain)->second;
       node.op_ = schema_registry_->GetSchema(node.OpType(), maxInclusiveVersion, node.Domain());

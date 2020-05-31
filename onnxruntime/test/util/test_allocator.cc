@@ -40,5 +40,6 @@ const OrtMemoryInfo* MockedOrtAllocator::Info() const {
 
 void MockedOrtAllocator::LeakCheck() {
   if (memory_inuse.load())
-    throw std::runtime_error("memory leak!!!");
+    abort();
+  //throw std::runtime_error("memory leak!!!");
 }

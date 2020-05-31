@@ -89,12 +89,20 @@ LoggingManager::LoggingManager(std::unique_ptr<ISink> sink, Severity default_min
       default_max_vlog_level_{default_max_vlog_level},
       owns_default_logger_{false} {
   if (sink_ == nullptr) {
+#ifdef ORT_NO_EXCEPTIONS
+    abort();
+#else
     throw std::logic_error("ISink must be provided.");
+#endif
   }
 
   if (instance_type == InstanceType::Default) {
     if (default_logger_id == nullptr) {
+#ifdef ORT_NO_EXCEPTIONS
+      abort();
+#else
       throw std::logic_error("default_logger_id must be provided if instance_type is InstanceType::Default");
+#endif
     }
 
     // lock mutex to create instance, and enable logging
@@ -102,7 +110,11 @@ LoggingManager::LoggingManager(std::unique_ptr<ISink> sink, Severity default_min
     std::lock_guard<OrtMutex> guard(DefaultLoggerMutex());
 
     if (DefaultLoggerManagerInstance().load() != nullptr) {
+#ifdef ORT_NO_EXCEPTIONS
+      abort();
+#else
       throw std::logic_error("Only one instance of LoggingManager created with InstanceType::Default can exist at any point in time.");
+#endif
     }
 
     // This assertion passes, so using the atomic to validate calls to Log should
@@ -131,7 +143,11 @@ LoggingManager::~LoggingManager() {
 void LoggingManager::CreateDefaultLogger(const std::string& logger_id) {
   // this method is only called from ctor in scope where DefaultLoggerMutex() is already locked
   if (s_default_logger_ != nullptr) {
+#ifdef ORT_NO_EXCEPTIONS
+    abort();
+#else
     throw std::logic_error("Default logger already set. ");
+#endif
   }
 
   s_default_logger_ = CreateLogger(logger_id).release();

@@ -11,6 +11,10 @@ namespace onnxruntime {
 _Ret_notnull_ OrtStatus* ToOrtStatus(const onnxruntime::common::Status& st);
 };
 
+#ifdef ORT_NO_EXCEPTIONS
+#define API_IMPL_BEGIN {
+#define API_IMPL_END }
+#else
 #define API_IMPL_BEGIN try {
 #define API_IMPL_END                                                \
   }                                                                 \
@@ -20,3 +24,4 @@ _Ret_notnull_ OrtStatus* ToOrtStatus(const onnxruntime::common::Status& st);
   catch (const std::exception& ex) {                                \
     return OrtApis::CreateStatus(ORT_RUNTIME_EXCEPTION, ex.what()); \
   }
+#endif

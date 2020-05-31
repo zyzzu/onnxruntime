@@ -652,8 +652,9 @@ def generate_build_tree(cmake_path, source_dir, build_dir, cuda_home,
             + "/build/cmake/android.toolchain.cmake",
             "-DANDROID_PLATFORM=android-" + str(args.android_api),
             "-DANDROID_ABI=" + str(args.android_abi),
-            "-DANDROID_CPP_FEATURES=no-rtti",  # no-exceptions",
-            "-DNO_RTTI=1"
+            "-DANDROID_CPP_FEATURES=no-rtti no-exceptions",
+            "-DNO_RTTI=1",
+            "-DNO_EXCEPTIONS=1"
         ]
 
     if is_macOS() and args.use_xcode:

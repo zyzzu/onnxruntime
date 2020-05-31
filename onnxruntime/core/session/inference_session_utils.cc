@@ -119,22 +119,22 @@ Status InferenceSessionUtils::ParseOrtConfigJsonInModelProto(const ONNX_NAMESPAC
       // LOGS(logger_, INFO)
       //<< "Found session/run/environment configuration in the model file to be used while running the model";
 
-      try {
-        const auto& val = metadata_field.value();
-        // LOGS(logger_, INFO) << "ORT config json from the model: " << val;
+      //try {
+      const auto& val = metadata_field.value();
+      // LOGS(logger_, INFO) << "ORT config json from the model: " << val;
 
-        parsed_json_ = json::parse(val);
-        // set the flag indicating that the model has the ORT config json.
-        is_ort_config_json_available_ = true;
-      } catch (const std::exception& e) {
-        std::ostringstream message_stream;
-        message_stream << "Json stored in the `ort_config` key cannot be parsed. Error message: " << e.what();
+      parsed_json_ = json::parse(val);
+      // set the flag indicating that the model has the ORT config json.
+      is_ort_config_json_available_ = true;
+      //} catch (const std::exception& e) {
+      //  std::ostringstream message_stream;
+      //  message_stream << "Json stored in the `ort_config` key cannot be parsed. Error message: " << e.what();
 
-        std::string message = message_stream.str();
+      //  std::string message = message_stream.str();
 
-        // LOGS(logger_, ERROR) << message;
-        return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT, message);
-      }
+      //  // LOGS(logger_, ERROR) << message;
+      //  return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT, message);
+      //}
 
       break;
     }

@@ -435,15 +435,15 @@ TEST_F(PlannerTest, PlanOutputTest) {
 
   CreatePlan();
 
-  try {
-    std::ostringstream output;
-    output << std::make_pair(&GetPlan(), &GetState());
-    auto output_size = output.str().size();
-    // Currently, we don't check details of the output, as it may change over time.
-    EXPECT_GT(output_size, 0u);
-  } catch (const std::exception& ex) {
-    EXPECT_TRUE(false) << "Exception in producing output: " << ex.what();
-  }
+  //try {
+  std::ostringstream output;
+  output << std::make_pair(&GetPlan(), &GetState());
+  auto output_size = output.str().size();
+  // Currently, we don't check details of the output, as it may change over time.
+  EXPECT_GT(output_size, 0u);
+  //} catch (const std::exception& ex) {
+  //  EXPECT_TRUE(false) << "Exception in producing output: " << ex.what();
+  //}
 }
 
 }  // namespace test

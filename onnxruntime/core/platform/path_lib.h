@@ -260,19 +260,20 @@ void LoopDir(const std::string& dir_name, T func) {
     std::ostringstream oss;
     oss << "couldn't open '" << dir_name << "':" << msg;
     std::string s = oss.str();
-    throw std::runtime_error(s);
+    // throw std::runtime_error(s);
+    abort();
   }
-  try {
-    struct dirent* dp;
-    while ((dp = readdir(dir)) != nullptr) {
-      if (!func(dp->d_name, DTToFileType(dp->d_type))) {
-        break;
-      }
+  //try {
+  struct dirent* dp;
+  while ((dp = readdir(dir)) != nullptr) {
+    if (!func(dp->d_name, DTToFileType(dp->d_type))) {
+      break;
     }
-  } catch (std::exception& ex) {
-    closedir(dir);
-    throw;
   }
+  //} catch (std::exception& ex) {
+  //  closedir(dir);
+  //  throw;
+  //}
   closedir(dir);
 }
 #endif

@@ -115,6 +115,10 @@ if (NO_RTTI)
   add_compile_definitions("GOOGLE_PROTOBUF_NO_RTTI=1")
 endif()
 
+if (NO_EXCEPTIONS)
+  add_compile_definitions("ORT_NO_EXCEPTIONS=1")
+endif()
+
 # General C# properties
 if (onnxruntime_BUILD_CSHARP)
   check_language(CSharp)

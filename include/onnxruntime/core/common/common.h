@@ -95,6 +95,19 @@ void LogRuntimeError(uint32_t session_id, const common::Status& status, const ch
 #define ORT_WHERE_WITH_STACK \
   ::onnxruntime::CodeLocation(__FILE__, __LINE__, __PRETTY_FUNCTION__, ::onnxruntime::GetStackTrace())
 
+#ifdef ORT_NO_EXCEPTIONS
+#define ORT_THROW(...) abort()
+
+// Just in order to mark things as not implemented. Do not use in final code.
+#define ORT_NOT_IMPLEMENTED(...) abort()
+
+// Check condition.
+// NOTE: The arguments get streamed into a string via ostringstream::operator<<
+// DO NOT use a printf format string, as that will not work as you expect.
+#define ORT_ENFORCE(condition, ...) \
+  if (!(condition)) abort()
+
+#else
 // Throw an exception with optional message.
 // NOTE: The arguments get streamed into a string via ostringstream::operator<<
 // DO NOT use a printf format string, as that will not work as you expect.
@@ -112,6 +125,8 @@ void LogRuntimeError(uint32_t session_id, const common::Status& status, const ch
   if (!(condition))                                                           \
   throw ::onnxruntime::OnnxRuntimeException(ORT_WHERE_WITH_STACK, #condition, \
                                             ::onnxruntime::MakeString(__VA_ARGS__))
+
+#endif
 
 #define ORT_MAKE_STATUS(category, code, ...)                     \
   ::onnxruntime::common::Status(::onnxruntime::common::category, \

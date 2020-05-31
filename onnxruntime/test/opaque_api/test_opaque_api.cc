@@ -194,74 +194,74 @@ std::string CreateModel() {
 TEST(OpaqueApiTest, RunModelWithOpaqueInputOutput) {
   std::string model_str = CreateModel();
 
-  try {
-    // initialize session options if needed
-    Ort::SessionOptions session_options;
-    Ort::Session session(*ort_env.get(), model_str.data(), model_str.size(), session_options);
+  //try {
+  // initialize session options if needed
+  Ort::SessionOptions session_options;
+  Ort::Session session(*ort_env.get(), model_str.data(), model_str.size(), session_options);
 
-    Ort::AllocatorWithDefaultOptions allocator;
+  Ort::AllocatorWithDefaultOptions allocator;
 
-    // Expecting one input
-    size_t num_input_nodes = session.GetInputCount();
-    EXPECT_EQ(num_input_nodes, 1U);
-    const char* input_name = session.GetInputName(0, allocator);
+  // Expecting one input
+  size_t num_input_nodes = session.GetInputCount();
+  EXPECT_EQ(num_input_nodes, 1U);
+  const char* input_name = session.GetInputName(0, allocator);
 
-    size_t num_output_nodes = session.GetOutputCount();
-    EXPECT_EQ(num_output_nodes, 1U);
-    const char* output_name = session.GetOutputName(0, allocator);
+  size_t num_output_nodes = session.GetOutputCount();
+  EXPECT_EQ(num_output_nodes, 1U);
+  const char* output_name = session.GetOutputName(0, allocator);
 
-    const char* const input_names[] = {input_name};
-    const char* const output_names[] = {output_name};
+  const char* const input_names[] = {input_name};
+  const char* const output_names[] = {output_name};
 
-    // Input
-    const std::string input_string{"hi, hello, high, highest"};
-    // Expected output
-    const std::string expected_output{"_i, _ello, _ig_, _ig_est"};
+  // Input
+  const std::string input_string{"hi, hello, high, highest"};
+  // Expected output
+  const std::string expected_output{"_i, _ello, _ig_, _ig_est"};
 
-    // Place a string into Tensor OrtValue and assign to the container
-    std::vector<int64_t> input_dims{1};
-    Ort::Value container_str = Ort::Value::CreateTensor(allocator, input_dims.data(), input_dims.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING);
+  // Place a string into Tensor OrtValue and assign to the container
+  std::vector<int64_t> input_dims{1};
+  Ort::Value container_str = Ort::Value::CreateTensor(allocator, input_dims.data(), input_dims.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING);
 
-    // No C++ Api to either create a string Tensor or to fill one with string, so we use C
-    const char* const input_char_string[] = {input_string.c_str()};
-    Ort::ThrowOnError(Ort::GetApi().FillStringTensor(static_cast<OrtValue*>(container_str), input_char_string, 1U));
+  // No C++ Api to either create a string Tensor or to fill one with string, so we use C
+  const char* const input_char_string[] = {input_string.c_str()};
+  Ort::ThrowOnError(Ort::GetApi().FillStringTensor(static_cast<OrtValue*>(container_str), input_char_string, 1U));
 
-    // We put this into our container now
-    // This container life-span is supposed to eclipse the model running time
-    ExperimentalDataContainer container{static_cast<OrtValue*>(container_str)};
+  // We put this into our container now
+  // This container life-span is supposed to eclipse the model running time
+  ExperimentalDataContainer container{static_cast<OrtValue*>(container_str)};
 
-    // Now we put our container into OrtValue
-    Ort::Value container_val = Ort::Value::CreateOpaque(kMsTestDomain, kTestOpaqueType, container);
-    Ort::Value output_val(nullptr);  // empty
+  // Now we put our container into OrtValue
+  Ort::Value container_val = Ort::Value::CreateOpaque(kMsTestDomain, kTestOpaqueType, container);
+  Ort::Value output_val(nullptr);  // empty
 
-    Ort::RunOptions run_options;
-    session.Run(run_options, input_names, &container_val, num_input_nodes,
-                output_names, &output_val, num_output_nodes);
+  Ort::RunOptions run_options;
+  session.Run(run_options, input_names, &container_val, num_input_nodes,
+              output_names, &output_val, num_output_nodes);
 
-    ExperimentalDataContainer result;
-    // Need to verify that the output match the expected one
-    output_val.GetOpaqueData(kMsTestDomain, kTestOpaqueType, result);
-    // Wrap the resulting OrtValue into Ort::Value for C++ access and automatic cleanup
-    Ort::Value str_tensor_value(result.str_);
-    // Run some checks here
-    ASSERT_TRUE(str_tensor_value.IsTensor());
-    Ort::TypeInfo result_type_info = str_tensor_value.GetTypeInfo();
-    auto tensor_info = result_type_info.GetTensorTypeAndShapeInfo();
-    ASSERT_EQ(tensor_info.GetElementType(), ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING);
-    ASSERT_EQ(tensor_info.GetDimensionsCount(), 1U);
+  ExperimentalDataContainer result;
+  // Need to verify that the output match the expected one
+  output_val.GetOpaqueData(kMsTestDomain, kTestOpaqueType, result);
+  // Wrap the resulting OrtValue into Ort::Value for C++ access and automatic cleanup
+  Ort::Value str_tensor_value(result.str_);
+  // Run some checks here
+  ASSERT_TRUE(str_tensor_value.IsTensor());
+  Ort::TypeInfo result_type_info = str_tensor_value.GetTypeInfo();
+  auto tensor_info = result_type_info.GetTensorTypeAndShapeInfo();
+  ASSERT_EQ(tensor_info.GetElementType(), ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING);
+  ASSERT_EQ(tensor_info.GetDimensionsCount(), 1U);
 
-    // Get the actual value and compare
-    auto str_len = str_tensor_value.GetStringTensorDataLength();
-    ASSERT_EQ(str_len, expected_output.length());
-    std::unique_ptr<char[]> actual_result_string(new char[str_len + 1]);
-    size_t offset = 0;
-    str_tensor_value.GetStringTensorContent(actual_result_string.get(), str_len, &offset, 1);
-    actual_result_string[str_len] = 0;
-    ASSERT_EQ(expected_output.compare(actual_result_string.get()), 0);
-  } catch (const std::exception& ex) {
-    std::cerr << "Exception: " << ex.what() << std::endl;
-    ASSERT_TRUE(false);
-  }
+  // Get the actual value and compare
+  auto str_len = str_tensor_value.GetStringTensorDataLength();
+  ASSERT_EQ(str_len, expected_output.length());
+  std::unique_ptr<char[]> actual_result_string(new char[str_len + 1]);
+  size_t offset = 0;
+  str_tensor_value.GetStringTensorContent(actual_result_string.get(), str_len, &offset, 1);
+  actual_result_string[str_len] = 0;
+  ASSERT_EQ(expected_output.compare(actual_result_string.get()), 0);
+  //} catch (const std::exception& ex) {
+  //  std::cerr << "Exception: " << ex.what() << std::endl;
+  //  ASSERT_TRUE(false);
+  //}
 }
 }  // namespace test
 }  // namespace onnxruntime

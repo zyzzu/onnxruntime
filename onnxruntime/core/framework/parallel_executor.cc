@@ -190,11 +190,11 @@ Status ParallelExecutor::RunNodeAsync(size_t p_node_index,
     // V_LOGS(logger, 1) << "Computing kernel: " << node.Name();
 
     // Execute the kernel.
-    try {
-      status = p_op_kernel->Compute(&op_kernel_context);
-    } catch (const std::exception& ex) {
-      status = ORT_MAKE_STATUS(ONNXRUNTIME, RUNTIME_EXCEPTION, ex.what());
-    }
+    //try {
+    status = p_op_kernel->Compute(&op_kernel_context);
+    //} catch (const std::exception& ex) {
+    //  status = ORT_MAKE_STATUS(ONNXRUNTIME, RUNTIME_EXCEPTION, ex.what());
+    //}
 
     if (!status.IsOK()) {
       std::ostringstream ss;
@@ -295,14 +295,14 @@ void ParallelExecutor::EnqueueNode(size_t p_node_index, const SessionState& sess
     };
 
     Status status;
-    try {
-      status = ParallelExecutor::RunNodeAsync(p_node_index, std::cref(session_state), std::cref(logger));
-    } catch (const std::exception& ex) {
-      status = create_exception_message(&ex);
-    } catch (...) {
-      // catch node processing failure exceptions here to prevent app crash.
-      status = create_exception_message(nullptr);
-    }
+    //try {
+    status = ParallelExecutor::RunNodeAsync(p_node_index, std::cref(session_state), std::cref(logger));
+    //} catch (const std::exception& ex) {
+    //  status = create_exception_message(&ex);
+    //} catch (...) {
+    //  // catch node processing failure exceptions here to prevent app crash.
+    //  status = create_exception_message(nullptr);
+    //}
 
     FinishNodeRun(status);
   });

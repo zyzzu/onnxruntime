@@ -109,6 +109,7 @@ namespace onnxruntime {
 
 class OrtMutex {
   nsync::nsync_mu data_ = NSYNC_MU_INIT;
+
  public:
   constexpr OrtMutex() = default;
   ~OrtMutex() = default;
@@ -125,6 +126,7 @@ class OrtMutex {
 
 class OrtCondVar {
   nsync::nsync_cv native_cv_object = NSYNC_CV_INIT;
+
  public:
   constexpr OrtCondVar() noexcept = default;
 
@@ -137,8 +139,14 @@ class OrtCondVar {
 
   void wait(std::unique_lock<OrtMutex>& lk) {
 #ifndef NDEBUG
-    if (!lk.owns_lock())
+
+    if (!lk.owns_lock()) {
+#ifdef ORT_NO_EXCEPTIONS
+      abort();
+#else
       throw std::runtime_error("OrtCondVar wait failed: mutex not locked");
+#endif
+    }
 #endif
     nsync::nsync_cv_wait(&native_cv_object, lk.mutex()->native_handle());
   }

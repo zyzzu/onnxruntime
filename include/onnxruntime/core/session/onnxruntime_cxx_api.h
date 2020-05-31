@@ -78,12 +78,18 @@ template <typename T>
 struct Base {
   Base() = default;
   Base(T* p) : p_{p} {
-    if (!p) throw Ort::Exception("Allocation failure", ORT_FAIL);
+    if (!p) {
+#ifdef ORT_NO_EXCEPTIONS
+      abort();
+#else
+      throw Ort::Exception("Allocation failure", ORT_FAIL);
+#endif
+    }
   }
   ~Base() { OrtRelease(p_); }
 
   operator T*() { return p_; }
-  operator const T*() const { return p_; }
+  operator const T *() const { return p_; }
 
   T* release() {
     T* p = p_;
@@ -294,7 +300,7 @@ struct AllocatorWithDefaultOptions {
   AllocatorWithDefaultOptions();
 
   operator OrtAllocator*() { return p_; }
-  operator const OrtAllocator*() const { return p_; }
+  operator const OrtAllocator *() const { return p_; }
 
   void* Alloc(size_t size);
   void Free(void* p);

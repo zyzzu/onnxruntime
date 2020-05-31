@@ -283,68 +283,68 @@ void LoopDataFile(int test_data_pb_fd, bool is_input, const TestModelInfo* model
   for (proto::TraditionalMLData data;
        ParseDelimitedFromCodedStream(&data, &coded_input, &clean_eof);
        ++item_id, data.Clear()) {
-    try {
-      ORT_VALUE_HOLDER gvalue(nullptr, Ort::GetApi().ReleaseValue);
-      switch (data.values_case()) {
-        case proto::TraditionalMLData::kVectorMapStringToFloat:
-          VectorProtoToOrtValue(data.vector_map_string_to_float().v(), gvalue);
-          break;
-        case proto::TraditionalMLData::kVectorMapInt64ToFloat:
-          VectorProtoToOrtValue(data.vector_map_int64_to_float().v(), gvalue);
-          break;
-        case proto::TraditionalMLData::kMapStringToString:
-          gvalue.reset(PbMapToOrtValue(data.map_string_to_string().v()));
-          break;
-        case proto::TraditionalMLData::kMapStringToInt64:
-          gvalue.reset(PbMapToOrtValue(data.map_string_to_int64().v()));
-          break;
-        case proto::TraditionalMLData::kMapStringToFloat:
-          gvalue.reset(PbMapToOrtValue(data.map_string_to_float().v()));
-          break;
-        case proto::TraditionalMLData::kMapStringToDouble:
-          gvalue.reset(PbMapToOrtValue(data.map_string_to_double().v()));
-          break;
-        case proto::TraditionalMLData::kMapInt64ToString:
-          gvalue.reset(PbMapToOrtValue(data.map_int64_to_string().v()));
-          break;
-        case proto::TraditionalMLData::kMapInt64ToInt64:
-          gvalue.reset(PbMapToOrtValue(data.map_int64_to_int64().v()));
-          break;
-        case proto::TraditionalMLData::kMapInt64ToFloat:
-          gvalue.reset(PbMapToOrtValue(data.map_int64_to_float().v()));
-          break;
-        case proto::TraditionalMLData::kMapInt64ToDouble:
-          gvalue.reset(PbMapToOrtValue(data.map_int64_to_double().v()));
-          break;
-        case proto::TraditionalMLData::kTensor: {
-          gvalue.reset(TensorToOrtValue(data.tensor(), b));
-        } break;
-        default:
-          ORT_NOT_IMPLEMENTED("unknown data type inside TraditionalMLData");
-      }
-      if (!data.debug_info().empty()) {
-        oss << ":" << data.debug_info();
-      }
-      std::string value_name = data.name();
-      if (value_name.empty()) {
-        const size_t c = name_data_map.size();
-        value_name = is_input ? modelinfo->GetInputName(c) : modelinfo->GetOutputName(c);
-      }
-
-      auto pv = name_data_map.insert(std::make_pair(value_name, gvalue.release()));
-      if (!pv.second) {
-        ORT_THROW("duplicated test data name");
+    //try {
+    ORT_VALUE_HOLDER gvalue(nullptr, Ort::GetApi().ReleaseValue);
+    switch (data.values_case()) {
+      case proto::TraditionalMLData::kVectorMapStringToFloat:
+        VectorProtoToOrtValue(data.vector_map_string_to_float().v(), gvalue);
         break;
-      }
-    } catch (onnxruntime::NotImplementedException& ex) {
-      std::ostringstream oss2;
-      oss2 << "load the " << item_id << "-th item failed," << ex.what();
-      ORT_NOT_IMPLEMENTED(oss2.str());
-    } catch (std::exception& ex) {
-      std::ostringstream oss2;
-      oss2 << "load the " << item_id << "-th item failed," << ex.what();
-      ORT_THROW(oss2.str());
+      case proto::TraditionalMLData::kVectorMapInt64ToFloat:
+        VectorProtoToOrtValue(data.vector_map_int64_to_float().v(), gvalue);
+        break;
+      case proto::TraditionalMLData::kMapStringToString:
+        gvalue.reset(PbMapToOrtValue(data.map_string_to_string().v()));
+        break;
+      case proto::TraditionalMLData::kMapStringToInt64:
+        gvalue.reset(PbMapToOrtValue(data.map_string_to_int64().v()));
+        break;
+      case proto::TraditionalMLData::kMapStringToFloat:
+        gvalue.reset(PbMapToOrtValue(data.map_string_to_float().v()));
+        break;
+      case proto::TraditionalMLData::kMapStringToDouble:
+        gvalue.reset(PbMapToOrtValue(data.map_string_to_double().v()));
+        break;
+      case proto::TraditionalMLData::kMapInt64ToString:
+        gvalue.reset(PbMapToOrtValue(data.map_int64_to_string().v()));
+        break;
+      case proto::TraditionalMLData::kMapInt64ToInt64:
+        gvalue.reset(PbMapToOrtValue(data.map_int64_to_int64().v()));
+        break;
+      case proto::TraditionalMLData::kMapInt64ToFloat:
+        gvalue.reset(PbMapToOrtValue(data.map_int64_to_float().v()));
+        break;
+      case proto::TraditionalMLData::kMapInt64ToDouble:
+        gvalue.reset(PbMapToOrtValue(data.map_int64_to_double().v()));
+        break;
+      case proto::TraditionalMLData::kTensor: {
+        gvalue.reset(TensorToOrtValue(data.tensor(), b));
+      } break;
+      default:
+        ORT_NOT_IMPLEMENTED("unknown data type inside TraditionalMLData");
     }
+    if (!data.debug_info().empty()) {
+      oss << ":" << data.debug_info();
+    }
+    std::string value_name = data.name();
+    if (value_name.empty()) {
+      const size_t c = name_data_map.size();
+      value_name = is_input ? modelinfo->GetInputName(c) : modelinfo->GetOutputName(c);
+    }
+
+    auto pv = name_data_map.insert(std::make_pair(value_name, gvalue.release()));
+    if (!pv.second) {
+      ORT_THROW("duplicated test data name");
+      break;
+    }
+    //} catch (onnxruntime::NotImplementedException& ex) {
+    //  std::ostringstream oss2;
+    //  oss2 << "load the " << item_id << "-th item failed," << ex.what();
+    //  ORT_NOT_IMPLEMENTED(oss2.str());
+    //} catch (std::exception& ex) {
+    //  std::ostringstream oss2;
+    //  oss2 << "load the " << item_id << "-th item failed," << ex.what();
+    //  ORT_THROW(oss2.str());
+    //}
   }
   if (!clean_eof) {
     ORT_THROW("parse input file failed, has extra unparsed data");
@@ -527,13 +527,13 @@ void OnnxTestCase::LoadTestData(size_t id, onnxruntime::test::HeapBuffer& b,
       std::lock_guard<OrtMutex> l(m_);
       oss << debuginfo_strings[id];
     }
-    try {
-      LoopDataFile(test_data_pb_fd, is_input, model_info_, name_data_map, b, oss);
-    } catch (std::exception& ex) {
-      std::ostringstream oss2;
-      oss2 << "parse data file \"" << ToMBString(test_data_pb) << "\" failed:" << ex.what();
-      ORT_THROW(oss.str());
-    }
+    //try {
+    LoopDataFile(test_data_pb_fd, is_input, model_info_, name_data_map, b, oss);
+    //} catch (std::exception& ex) {
+    //  std::ostringstream oss2;
+    //  oss2 << "parse data file \"" << ToMBString(test_data_pb) << "\" failed:" << ex.what();
+    //  ORT_THROW(oss.str());
+    //}
     {
       std::lock_guard<OrtMutex> l(m_);
       debuginfo_strings[id] = oss.str();

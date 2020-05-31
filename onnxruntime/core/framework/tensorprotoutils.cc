@@ -303,16 +303,16 @@ struct UnInitializeParam {
 
 ORT_API_STATUS_IMPL(OrtInitializeBufferForTensor, _In_opt_ void* input, size_t input_len,
                     enum ONNXTensorElementDataType type) {
-  try {
-    if (type != ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING || input == nullptr) return nullptr;
-    size_t tensor_size = input_len / sizeof(std::string);
-    std::string* ptr = reinterpret_cast<std::string*>(input);
-    for (size_t i = 0, n = tensor_size; i < n; ++i) {
-      new (ptr + i) std::string();
-    }
-  } catch (const std::exception& ex) {
-    return OrtApis::CreateStatus(ORT_RUNTIME_EXCEPTION, ex.what());
+  //try {
+  if (type != ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING || input == nullptr) return nullptr;
+  size_t tensor_size = input_len / sizeof(std::string);
+  std::string* ptr = reinterpret_cast<std::string*>(input);
+  for (size_t i = 0, n = tensor_size; i < n; ++i) {
+    new (ptr + i) std::string();
   }
+  //} catch (const std::exception& ex) {
+  //  return OrtApis::CreateStatus(ORT_RUNTIME_EXCEPTION, ex.what());
+  //}
   return nullptr;
 }
 

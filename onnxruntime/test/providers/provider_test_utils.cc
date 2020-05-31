@@ -655,186 +655,186 @@ void OpTester::Run(
     const CustomOutputVerifierFn& custom_output_verifier,
     const Graph::ResolveOptions& options) {
   std::string cur_provider = "not set";
-  try {
+  //try {
 #ifndef NDEBUG
-    run_called_ = true;
+  run_called_ = true;
 #endif
-    fetches_.clear();
-    bool cache_enabled = cached_model_ != nullptr;
-    auto p_model = !cache_enabled ? BuildGraph() : cached_model_;
-    auto& graph = p_model->MainGraph();
+  fetches_.clear();
+  bool cache_enabled = cached_model_ != nullptr;
+  auto p_model = !cache_enabled ? BuildGraph() : cached_model_;
+  auto& graph = p_model->MainGraph();
 
-    Status status = Status::OK();
-    if (!cache_enabled) {
-      if (add_shape_to_tensor_data_ &&
-          expect_result == ExpectResult::kExpectFailure) {
-        // capture possible exceptions from shape inference for invalid testcase
-        try {
-          status = graph.Resolve(options);
-        } catch (const std::exception& ex) {
-          status = ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, ex.what());
-        }
+  Status status = Status::OK();
+  if (!cache_enabled) {
+    if (add_shape_to_tensor_data_ &&
+        expect_result == ExpectResult::kExpectFailure) {
+      // capture possible exceptions from shape inference for invalid testcase
+      //try {
+      status = graph.Resolve(options);
+      //} catch (const std::exception& ex) {
+      //  status = ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, ex.what());
+      //}
+    } else {
+      status = graph.Resolve(options);
+    }
+
+    if (!status.IsOK()) {
+      if (expect_result == ExpectResult::kExpectFailure) {
+        EXPECT_TRUE(!status.IsOK());
+        EXPECT_THAT(status.ErrorMessage(),
+                    testing::HasSubstr(expected_failure_string));
       } else {
-        status = graph.Resolve(options);
-      }
-
-      if (!status.IsOK()) {
-        if (expect_result == ExpectResult::kExpectFailure) {
-          EXPECT_TRUE(!status.IsOK());
-          EXPECT_THAT(status.ErrorMessage(),
-                      testing::HasSubstr(expected_failure_string));
-        } else {
-          // LOGS_DEFAULT(ERROR) << "Resolve failed with status: "          << status.ErrorMessage();
-          EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
-        }
-      }
-
-      if (!status.IsOK()) {
-        return;
+        // LOGS_DEFAULT(ERROR) << "Resolve failed with status: "          << status.ErrorMessage();
+        EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
       }
     }
 
-    // Hookup the inputs and outputs
-    std::unordered_map<std::string, OrtValue> feeds;
-    std::vector<std::string> output_names;
-    FillFeedsAndOutputNames(feeds, output_names);
-    // Run the model
-    static const std::string all_provider_types[] = {
-        kCpuExecutionProvider,
-        kCudaExecutionProvider,
-        kDnnlExecutionProvider,
-        kNGraphExecutionProvider,
-        kNupharExecutionProvider,
-        kTensorrtExecutionProvider,
-        kOpenVINOExecutionProvider,
-        kDmlExecutionProvider,
-        kAclExecutionProvider,
-    };
+    if (!status.IsOK()) {
+      return;
+    }
+  }
 
-    bool has_run = false;
+  // Hookup the inputs and outputs
+  std::unordered_map<std::string, OrtValue> feeds;
+  std::vector<std::string> output_names;
+  FillFeedsAndOutputNames(feeds, output_names);
+  // Run the model
+  static const std::string all_provider_types[] = {
+      kCpuExecutionProvider,
+      kCudaExecutionProvider,
+      kDnnlExecutionProvider,
+      kNGraphExecutionProvider,
+      kNupharExecutionProvider,
+      kTensorrtExecutionProvider,
+      kOpenVINOExecutionProvider,
+      kDmlExecutionProvider,
+      kAclExecutionProvider,
+  };
 
-    if (execution_providers) {
-      for (auto& entry : *execution_providers) {
-        if (entry->Type() == kDmlExecutionProvider) {
-          so.enable_mem_pattern = false;
-          so.execution_mode = ExecutionMode::ORT_SEQUENTIAL;
-          break;
+  bool has_run = false;
+
+  if (execution_providers) {
+    for (auto& entry : *execution_providers) {
+      if (entry->Type() == kDmlExecutionProvider) {
+        so.enable_mem_pattern = false;
+        so.execution_mode = ExecutionMode::ORT_SEQUENTIAL;
+        break;
+      }
+    }
+
+    InferenceSession session_object{so, GetEnvironment()};
+
+    ASSERT_TRUE(!execution_providers->empty())
+        << "Empty execution providers vector.";
+    std::string provider_types;
+
+    for (auto& entry : *execution_providers) {
+      provider_types += entry->Type() + ":";
+      ASSERT_STATUS_OK(session_object.RegisterExecutionProvider(std::move(entry)));
+    }
+
+    fetches_ = ExecuteModel<InferenceSession>(
+        *p_model, session_object, expect_result, expected_failure_string,
+        run_options, feeds, output_names, provider_types,
+        custom_output_verifier);
+
+  } else {
+    for (const std::string& provider_type : all_provider_types) {
+      if (excluded_provider_types.count(provider_type) > 0)
+        continue;
+
+      cur_provider = provider_type;
+
+      if (provider_type == kDmlExecutionProvider) {
+        so.enable_mem_pattern = false;
+        so.execution_mode = ExecutionMode::ORT_SEQUENTIAL;
+      }
+      InferenceSession session_object{so, GetEnvironment()};
+
+      for (auto& custom_session_registry : custom_session_registries_)
+        ASSERT_PROVIDER_STATUS_OK(session_object.RegisterCustomRegistry(custom_session_registry));
+
+      std::unique_ptr<IExecutionProvider> execution_provider;
+      if (provider_type == onnxruntime::kCpuExecutionProvider)
+        execution_provider = DefaultCpuExecutionProvider();
+      else if (provider_type == onnxruntime::kCudaExecutionProvider)
+        execution_provider = DefaultCudaExecutionProvider();
+      else if (provider_type == onnxruntime::kDnnlExecutionProvider)
+        execution_provider = DefaultDnnlExecutionProvider();
+      else if (provider_type == onnxruntime::kNGraphExecutionProvider)
+        execution_provider = DefaultNGraphExecutionProvider();
+      else if (provider_type == onnxruntime::kOpenVINOExecutionProvider)
+        execution_provider = DefaultOpenVINOExecutionProvider();
+      else if (provider_type == onnxruntime::kNupharExecutionProvider)
+        execution_provider = DefaultNupharExecutionProvider();
+      else if (provider_type == onnxruntime::kTensorrtExecutionProvider)
+        execution_provider = DefaultTensorrtExecutionProvider();
+      else if (provider_type == onnxruntime::kNnapiExecutionProvider)
+        execution_provider = DefaultNnapiExecutionProvider();
+      else if (provider_type == onnxruntime::kRknpuExecutionProvider)
+        execution_provider = DefaultRknpuExecutionProvider();
+      else if (provider_type == onnxruntime::kAclExecutionProvider)
+        execution_provider = DefaultAclExecutionProvider();
+      // skip if execution provider is disabled
+      if (execution_provider == nullptr)
+        continue;
+
+      bool valid = true;
+
+      // set execution provider for all nodes in the graph
+      for (auto& node : graph.Nodes()) {
+        if (node.OpType() == kConstant)
+          continue;
+
+        // if node is not registered for the provider, skip
+        node.SetExecutionProviderType(provider_type);
+        if (provider_type == onnxruntime::kNGraphExecutionProvider ||
+            provider_type == onnxruntime::kOpenVINOExecutionProvider ||
+            provider_type == onnxruntime::kTensorrtExecutionProvider ||
+            provider_type == onnxruntime::kNupharExecutionProvider)
+          continue;
+        auto reg = execution_provider->GetKernelRegistry();
+        if (!KernelRegistry::HasImplementationOf(*reg, node, execution_provider->Type())) {
+          valid = false;
+          for (auto& custom_session_registry : custom_session_registries_) {
+            if (KernelRegistry::HasImplementationOf(*custom_session_registry->GetKernelRegistry(),
+                                                    node, execution_provider->Type())) {
+              valid = true;
+              break;
+            }
+          }
+
+          if (!valid)
+            break;
         }
       }
 
-      InferenceSession session_object{so, GetEnvironment()};
+      if (!valid)
+        continue;
 
-      ASSERT_TRUE(!execution_providers->empty())
-          << "Empty execution providers vector.";
-      std::string provider_types;
+      for (auto& custom_session_registry : custom_session_registries_)
+        ASSERT_PROVIDER_STATUS_OK(session_object.RegisterCustomRegistry(custom_session_registry));
 
-      for (auto& entry : *execution_providers) {
-        provider_types += entry->Type() + ":";
-        ASSERT_STATUS_OK(session_object.RegisterExecutionProvider(std::move(entry)));
-      }
+      has_run = true;
+
+      ASSERT_PROVIDER_STATUS_OK(session_object.RegisterExecutionProvider(std::move(execution_provider)));
 
       fetches_ = ExecuteModel<InferenceSession>(
           *p_model, session_object, expect_result, expected_failure_string,
-          run_options, feeds, output_names, provider_types,
+          run_options, feeds, output_names, provider_type,
           custom_output_verifier);
 
-    } else {
-      for (const std::string& provider_type : all_provider_types) {
-        if (excluded_provider_types.count(provider_type) > 0)
-          continue;
-
-        cur_provider = provider_type;
-
-        if (provider_type == kDmlExecutionProvider) {
-          so.enable_mem_pattern = false;
-          so.execution_mode = ExecutionMode::ORT_SEQUENTIAL;
-        }
-        InferenceSession session_object{so, GetEnvironment()};
-
-        for (auto& custom_session_registry : custom_session_registries_)
-          ASSERT_PROVIDER_STATUS_OK(session_object.RegisterCustomRegistry(custom_session_registry));
-
-        std::unique_ptr<IExecutionProvider> execution_provider;
-        if (provider_type == onnxruntime::kCpuExecutionProvider)
-          execution_provider = DefaultCpuExecutionProvider();
-        else if (provider_type == onnxruntime::kCudaExecutionProvider)
-          execution_provider = DefaultCudaExecutionProvider();
-        else if (provider_type == onnxruntime::kDnnlExecutionProvider)
-          execution_provider = DefaultDnnlExecutionProvider();
-        else if (provider_type == onnxruntime::kNGraphExecutionProvider)
-          execution_provider = DefaultNGraphExecutionProvider();
-        else if (provider_type == onnxruntime::kOpenVINOExecutionProvider)
-          execution_provider = DefaultOpenVINOExecutionProvider();
-        else if (provider_type == onnxruntime::kNupharExecutionProvider)
-          execution_provider = DefaultNupharExecutionProvider();
-        else if (provider_type == onnxruntime::kTensorrtExecutionProvider)
-          execution_provider = DefaultTensorrtExecutionProvider();
-        else if (provider_type == onnxruntime::kNnapiExecutionProvider)
-          execution_provider = DefaultNnapiExecutionProvider();
-        else if (provider_type == onnxruntime::kRknpuExecutionProvider)
-          execution_provider = DefaultRknpuExecutionProvider();
-        else if (provider_type == onnxruntime::kAclExecutionProvider)
-          execution_provider = DefaultAclExecutionProvider();
-        // skip if execution provider is disabled
-        if (execution_provider == nullptr)
-          continue;
-
-        bool valid = true;
-
-        // set execution provider for all nodes in the graph
-        for (auto& node : graph.Nodes()) {
-          if (node.OpType() == kConstant)
-            continue;
-
-          // if node is not registered for the provider, skip
-          node.SetExecutionProviderType(provider_type);
-          if (provider_type == onnxruntime::kNGraphExecutionProvider ||
-              provider_type == onnxruntime::kOpenVINOExecutionProvider ||
-              provider_type == onnxruntime::kTensorrtExecutionProvider ||
-              provider_type == onnxruntime::kNupharExecutionProvider)
-            continue;
-          auto reg = execution_provider->GetKernelRegistry();
-          if (!KernelRegistry::HasImplementationOf(*reg, node, execution_provider->Type())) {
-            valid = false;
-            for (auto& custom_session_registry : custom_session_registries_) {
-              if (KernelRegistry::HasImplementationOf(*custom_session_registry->GetKernelRegistry(),
-                                                      node, execution_provider->Type())) {
-                valid = true;
-                break;
-              }
-            }
-
-            if (!valid)
-              break;
-          }
-        }
-
-        if (!valid)
-          continue;
-
-        for (auto& custom_session_registry : custom_session_registries_)
-          ASSERT_PROVIDER_STATUS_OK(session_object.RegisterCustomRegistry(custom_session_registry));
-
-        has_run = true;
-
-        ASSERT_PROVIDER_STATUS_OK(session_object.RegisterExecutionProvider(std::move(execution_provider)));
-
-        fetches_ = ExecuteModel<InferenceSession>(
-            *p_model, session_object, expect_result, expected_failure_string,
-            run_options, feeds, output_names, provider_type,
-            custom_output_verifier);
-
-        cur_provider = "not set";
-      }
-
-      EXPECT_TRUE(has_run)
-          << "No registered execution providers were able to run the model.";
+      cur_provider = "not set";
     }
-  } catch (const std::exception& ex) {
-    std::cerr << ex.what() << "\nProvider:" << cur_provider << "\n";
-    // rethrow as some tests for error handling expect this
-    throw;
+
+    EXPECT_TRUE(has_run)
+        << "No registered execution providers were able to run the model.";
   }
+  //} catch (const std::exception& ex) {
+  //  std::cerr << ex.what() << "\nProvider:" << cur_provider << "\n";
+  //  // rethrow as some tests for error handling expect this
+  //  throw;
+  //}
 }
 
 #ifdef ENABLE_TRAINING

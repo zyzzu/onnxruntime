@@ -310,7 +310,11 @@ class Logger {
 inline const Logger& LoggingManager::DefaultLogger() {
   if (s_default_logger_ == nullptr) {
     // fail early for attempted misuse. don't use logging macros as we have no logger.
+#ifdef ORT_NO_EXCEPTIONS
+    abort();
+#else
     throw std::logic_error("Attempt to use DefaultLogger but none has been registered.");
+#endif
   }
 
   return *s_default_logger_;
@@ -319,7 +323,11 @@ inline const Logger& LoggingManager::DefaultLogger() {
 inline void LoggingManager::SetDefaultLoggerSeverity(Severity severity) {
   if (s_default_logger_ == nullptr) {
     // fail early for attempted misuse. don't use logging macros as we have no logger.
+#ifdef ORT_NO_EXCEPTIONS
+    abort();
+#else
     throw std::logic_error("Attempt to use DefaultLogger but none has been registered.");
+#endif
   }
 
   s_default_logger_->SetSeverity(severity);

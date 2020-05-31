@@ -2084,13 +2084,13 @@ TEST(InferenceSessionTests, LoadModelWithInValidOrtConfigJson) {
   std::string model_path = "testdata/model_with_invalid_ort_config_json.onnx";
 
   // Create session (should throw as the json within the model is invalid/improperly formed)
-  try {
-    InferenceSession session_object_1{so, GetEnvironment(), model_path};
-  } catch (const std::exception& e) {
-    std::string e_message(std::string(e.what()));
-    ASSERT_TRUE(e_message.find("Could not finalize session options while constructing the inference session. Error Message:") != std::string::npos);
-    ASSERT_TRUE(e_message.find("Json stored in the `ort_config` key cannot be parsed.") != std::string::npos);
-  }
+  //try {
+  InferenceSession session_object_1{so, GetEnvironment(), model_path};
+  //} catch (const std::exception& e) {
+  //  std::string e_message(std::string(e.what()));
+  //  ASSERT_TRUE(e_message.find("Could not finalize session options while constructing the inference session. Error Message:") != std::string::npos);
+  //  ASSERT_TRUE(e_message.find("Json stored in the `ort_config` key cannot be parsed.") != std::string::npos);
+  //}
 
   // Part 2 - Load config from model feature disabled
   // The invalid/improperly formed config json in the model should not come into the picture here
@@ -2178,14 +2178,14 @@ TEST(InferenceSessionTests, LoadModelWithEnvVarSetToUnsupportedVal) {
   std::string model_path = "testdata/model_with_valid_ort_config_json.onnx";
 
   // Create session (should throw because of the unsupported value for the env var - ORT_LOAD_CONFIG_FROM_MODEL)
-  try {
-    InferenceSession session_object_1{so, GetEnvironment(), model_path};
-  } catch (const std::exception& e) {
-    std::string e_message(std::string(e.what()));
-    ASSERT_TRUE(e_message.find("Could not finalize session options while constructing the inference session. Error Message:") != std::string::npos);
-    ASSERT_TRUE(e_message.find("The only supported values for the environment variable ") != std::string::npos);
-    ASSERT_TRUE(e_message.find("The environment variable contained the value: 10") != std::string::npos);
-  }
+  //try {
+  InferenceSession session_object_1{so, GetEnvironment(), model_path};
+  //} catch (const std::exception& e) {
+  //  std::string e_message(std::string(e.what()));
+  //  ASSERT_TRUE(e_message.find("Could not finalize session options while constructing the inference session. Error Message:") != std::string::npos);
+  //  ASSERT_TRUE(e_message.find("The only supported values for the environment variable ") != std::string::npos);
+  //  ASSERT_TRUE(e_message.find("The environment variable contained the value: 10") != std::string::npos);
+  //}
 
   // Disable the feature before exiting the test as this process is likely to be used for running other tests
 #ifdef _WIN32
@@ -2354,15 +2354,15 @@ TEST(InferenceSessionTests, InvalidSessionEnvCombination) {
   auto st = Environment::Create(std::move(logging_manager), env);
   ASSERT_TRUE(st.IsOK());
 
-  try {
-    InferenceSessionTestGlobalThreadPools session_object{so, *env.get()};
-  } catch (const std::exception& e) {
-    std::string e_message(std::string(e.what()));
-    ASSERT_TRUE(e_message.find(
-                    "When the session is not configured to use per session"
-                    " threadpools, the env must be created with the the CreateEnvWithGlobalThreadPools API") !=
-                std::string::npos);
-  }
+  //try {
+  InferenceSessionTestGlobalThreadPools session_object{so, *env.get()};
+  //} catch (const std::exception& e) {
+  //  std::string e_message(std::string(e.what()));
+  //  ASSERT_TRUE(e_message.find(
+  //                  "When the session is not configured to use per session"
+  //                  " threadpools, the env must be created with the the CreateEnvWithGlobalThreadPools API") !=
+  //              std::string::npos);
+  //}
 }
 
 }  // namespace test
