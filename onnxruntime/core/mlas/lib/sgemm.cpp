@@ -228,6 +228,46 @@ Return Value:
     }
 }
 
+MLAS_FORCEINLINE
+void
+MlasSgemmCopyPackB16x1(
+    float* D,
+    const float* B
+    )
+/*++
+
+Routine Description:
+
+    This routine copies one group of 16 elements from the source matrix to the
+    destination packed buffer.
+
+Arguments:
+
+    D - Supplies the address of the destination packed buffer.
+
+    B - Supplies the address of the source matrix.
+
+Return Value:
+
+    None.
+
+--*/
+{
+#if defined(MLAS_NEON_INTRINSICS)
+    vst4q_f32(D, vld4q_f32(B));
+#else
+    MLAS_FLOAT32X4 t0 = MlasLoadFloat32x4(&B[0]);
+    MLAS_FLOAT32X4 t1 = MlasLoadFloat32x4(&B[4]);
+    MLAS_FLOAT32X4 t2 = MlasLoadFloat32x4(&B[8]);
+    MLAS_FLOAT32X4 t3 = MlasLoadFloat32x4(&B[12]);
+
+    MlasStoreAlignedFloat32x4(&D[0], t0);
+    MlasStoreAlignedFloat32x4(&D[4], t1);
+    MlasStoreAlignedFloat32x4(&D[8], t2);
+    MlasStoreAlignedFloat32x4(&D[12], t3);
+#endif
+}
+
 void
 MlasSgemmCopyPackB(
     float* D,
@@ -266,6 +306,39 @@ Return Value:
 --*/
 {
     //
+    // Copy data from matrix B into the destination buffer 64 columns at a
+    // time.
+    //
+    // N.B. This loop coalesces several batches of reads from the source buffer
+    // to improve cache locality especially when the stride of the source matrix
+    // is large.
+    //
+
+    while (CountX >= 64) {
+
+        const float* b = B;
+        size_t y = CountY;
+        size_t ldd = 16 * CountY;
+
+        do {
+
+            MlasSgemmCopyPackB16x1(&D[ldd * 0], &b[0]);
+            MlasSgemmCopyPackB16x1(&D[ldd * 1], &b[16]);
+            MlasSgemmCopyPackB16x1(&D[ldd * 2], &b[32]);
+            MlasSgemmCopyPackB16x1(&D[ldd * 3], &b[48]);
+
+            D += 16;
+            b += ldb;
+            y--;
+
+        } while (y > 0);
+
+        D += ldd * 3;
+        B += 64;
+        CountX -= 64;
+    }
+
+    //
     // Copy data from matrix B into the destination buffer 16 columns at a
     // time.
     //
@@ -277,19 +350,7 @@ Return Value:
 
         do {
 
-#if defined(MLAS_NEON_INTRINSICS)
-            vst4q_f32(D, vld4q_f32(b));
-#else
-            MLAS_FLOAT32X4 t0 = MlasLoadFloat32x4(&b[0]);
-            MLAS_FLOAT32X4 t1 = MlasLoadFloat32x4(&b[4]);
-            MLAS_FLOAT32X4 t2 = MlasLoadFloat32x4(&b[8]);
-            MLAS_FLOAT32X4 t3 = MlasLoadFloat32x4(&b[12]);
-
-            MlasStoreAlignedFloat32x4(&D[0], t0);
-            MlasStoreAlignedFloat32x4(&D[4], t1);
-            MlasStoreAlignedFloat32x4(&D[8], t2);
-            MlasStoreAlignedFloat32x4(&D[12], t3);
-#endif
+            MlasSgemmCopyPackB16x1(&D[0], &b[0]);
 
             D += 16;
             b += ldb;
