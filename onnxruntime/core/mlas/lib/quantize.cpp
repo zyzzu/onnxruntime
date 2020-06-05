@@ -329,10 +329,10 @@ MlasQuantizeLinearUnpackBytes<int8_t>(
 template <typename DataType>
 MLAS_FORCEINLINE
 MLAS_INT32X4
-ShiftRight(MLAS_INT32X4 v, int imm);
+ShiftRightInt32(MLAS_INT32X4 v, int imm);
 
-template<> MLAS_INT32X4 ShiftRight<int8_t>(MLAS_INT32X4 v, int imm) { return _mm_srai_epi32(v, imm); }
-template<> MLAS_INT32X4 ShiftRight<uint8_t>(MLAS_INT32X4 v, int imm) { return _mm_srli_epi32(v, imm); }
+template<> MLAS_INT32X4 ShiftRightInt32<int8_t>(MLAS_INT32X4 v, int imm) { return _mm_srai_epi32(v, imm); }
+template<> MLAS_INT32X4 ShiftRightInt32<uint8_t>(MLAS_INT32X4 v, int imm) { return _mm_srli_epi32(v, imm); }
 
 // Simple strict QLinearAdd with unroll
 template<typename DataType, bool IsScalarA, bool IsScalarB>
@@ -381,8 +381,8 @@ MlasQLinearAddKernelHelper_SSE2StrictWithUnroll(
         if (!IsScalarA) {
             auto IntegerVectorA0 = _mm_loadl_epi64((__m128i const*)InputA);
             IntegerVectorA0 = _mm_unpacklo_epi8(IntegerVectorA0, IntegerVectorA0);
-            const auto IntegerVectorA1 = ShiftRight<DataType>(_mm_unpackhi_epi16(IntegerVectorA0, IntegerVectorA0), 24);
-            IntegerVectorA0 = ShiftRight<DataType>(_mm_unpacklo_epi16(IntegerVectorA0, IntegerVectorA0), 24);
+            const auto IntegerVectorA1 = ShiftRightInt32<DataType>(_mm_unpackhi_epi16(IntegerVectorA0, IntegerVectorA0), 24);
+            IntegerVectorA0 = ShiftRightInt32<DataType>(_mm_unpacklo_epi16(IntegerVectorA0, IntegerVectorA0), 24);
             InputA += 8;
             FloatVectorA = MlasDequantizeLinearVector(IntegerVectorA0, ScaleVectorA, ZeroPointVectorA);
             FloatVectorA1 = MlasDequantizeLinearVector(IntegerVectorA1, ScaleVectorA, ZeroPointVectorA);
@@ -390,8 +390,8 @@ MlasQLinearAddKernelHelper_SSE2StrictWithUnroll(
         if (!IsScalarB) {
             auto IntegerVectorB0 = _mm_loadl_epi64((__m128i const*)InputB);
             IntegerVectorB0 = _mm_unpacklo_epi8(IntegerVectorB0, IntegerVectorB0);
-            const auto IntegerVectorB1 = ShiftRight<DataType>(_mm_unpackhi_epi16(IntegerVectorB0, IntegerVectorB0), 24);
-            IntegerVectorB0 = ShiftRight<DataType>(_mm_unpacklo_epi16(IntegerVectorB0, IntegerVectorB0), 24);
+            const auto IntegerVectorB1 = ShiftRightInt32<DataType>(_mm_unpackhi_epi16(IntegerVectorB0, IntegerVectorB0), 24);
+            IntegerVectorB0 = ShiftRightInt32<DataType>(_mm_unpacklo_epi16(IntegerVectorB0, IntegerVectorB0), 24);
             InputB += 8;
             FloatVectorB = MlasDequantizeLinearVector(IntegerVectorB0, ScaleVectorB, ZeroPointVectorB);
             FloatVectorB1 = MlasDequantizeLinearVector(IntegerVectorB1, ScaleVectorB, ZeroPointVectorB);
@@ -928,6 +928,85 @@ MlasQLinearAddKernelHelper_SSE2XNNPack(
     }
 }
 
+template<typename DataType, bool IsScalarA, bool IsScalarB>
+void
+MlasQLinearAddKernelHelper_SSE2XNNPackFloatMultiply(
+    const DataType* InputA,
+    float ScaleA,
+    int32_t ZeroPointA,
+    const DataType* InputB,
+    float ScaleB,
+    int32_t ZeroPointB,
+    float ScaleC,
+    int32_t ZeroPointC,
+    DataType* OutputC,
+    size_t p_N
+    )
+{
+    const auto ScaleVectorA_C = MlasBroadcastFloat32x4(ScaleA / ScaleC);
+    const auto ScaleVectorB_C = MlasBroadcastFloat32x4(ScaleB / ScaleC);
+    auto const_part = MlasBroadcastFloat32x4((float)ZeroPointC - ScaleA / ScaleC * ZeroPointA - ScaleB / ScaleC * ZeroPointB);
+
+    MLAS_FLOAT32X4 a_lo_4xfp32, a_hi_4xfp32, b_lo_4xfp32, b_hi_4xfp32;
+    if (IsScalarA) {
+        a_lo_4xfp32 = _mm_set1_ps((float)*InputA);
+        const_part = _mm_add_ps(const_part, _mm_mul_ps(a_lo_4xfp32, ScaleVectorA_C));
+    }
+    if (IsScalarB) {
+        b_lo_4xfp32 = _mm_set1_ps((float)*InputB);
+        const_part = _mm_add_ps(const_part, _mm_mul_ps(b_lo_4xfp32, ScaleVectorB_C));
+    }
+
+    int64_t N = static_cast<int64_t>(p_N);
+    __m128i vy = _mm_setzero_si128();
+    while (N > 0) {
+        if (!IsScalarA) {
+            auto a_8xi16 = _mm_loadl_epi64((const __m128i*)InputA);
+            a_8xi16 = _mm_unpacklo_epi8(a_8xi16, a_8xi16);
+            InputA += 8;
+            a_lo_4xfp32 = _mm_cvtepi32_ps(ShiftRightInt32<DataType>(_mm_unpacklo_epi16(a_8xi16, a_8xi16), 24));
+            a_hi_4xfp32 = _mm_cvtepi32_ps(ShiftRightInt32<DataType>(_mm_unpackhi_epi16(a_8xi16, a_8xi16), 24));
+        }
+        if (!IsScalarB) {
+            auto b_8xi16 = _mm_loadl_epi64((const __m128i*)InputB);
+            b_8xi16 = _mm_unpacklo_epi8(b_8xi16, b_8xi16);
+            InputB += 8;
+            b_lo_4xfp32 = _mm_cvtepi32_ps(ShiftRightInt32<DataType>(_mm_unpacklo_epi16(b_8xi16, b_8xi16), 24));
+            b_hi_4xfp32 = _mm_cvtepi32_ps(ShiftRightInt32<DataType>(_mm_unpackhi_epi16(b_8xi16, b_8xi16), 24));
+        }
+
+        MLAS_INT32X4 r_lo, r_hi;
+        if (IsScalarA) {
+            r_lo = _mm_cvtps_epi32(_mm_add_ps(const_part, _mm_mul_ps(b_lo_4xfp32, ScaleVectorB_C)));
+            r_hi = _mm_cvtps_epi32(_mm_add_ps(const_part, _mm_mul_ps(b_hi_4xfp32, ScaleVectorB_C)));
+        } else if (IsScalarB) {
+            r_lo = _mm_cvtps_epi32(_mm_add_ps(const_part, _mm_mul_ps(a_lo_4xfp32, ScaleVectorA_C)));
+            r_hi = _mm_cvtps_epi32(_mm_add_ps(const_part, _mm_mul_ps(a_hi_4xfp32, ScaleVectorA_C)));
+        } else {
+            r_lo = _mm_cvtps_epi32(_mm_add_ps(_mm_add_ps(const_part, _mm_mul_ps(a_lo_4xfp32, ScaleVectorA_C)), _mm_mul_ps(b_lo_4xfp32, ScaleVectorB_C)));
+            r_hi = _mm_cvtps_epi32(_mm_add_ps(_mm_add_ps(const_part, _mm_mul_ps(a_hi_4xfp32, ScaleVectorA_C)), _mm_mul_ps(b_hi_4xfp32, ScaleVectorB_C)));
+        }
+
+        const auto c_8xi16 = _mm_packs_epi32(r_lo, r_hi);
+        vy = Pack16Bits<DataType>(c_8xi16, c_8xi16);
+
+        N -= 8;
+        if (N < 0) break;
+
+        _mm_storel_epi64((__m128i*)OutputC, vy);
+        OutputC += 8;
+    }
+
+    if (N < 0) {
+        N += 8;
+        uint64_t PackedValueC = (uint64_t)_mm_cvtsi128_si64(vy);
+        for (int64_t n = 0; n < N; ++n) {
+            *((uint8_t*)OutputC + n) = (uint8_t)PackedValueC;
+            PackedValueC >>= 8;
+        }
+    }
+}
+
 #endif
 
 template<typename DataType>
@@ -1063,6 +1142,10 @@ MlasQLinearAdd<int8_t>(
                 helper_true_false = MlasQLinearAddKernelHelper_SSE2XNNPack<int8_t, true, false>;
                 helper_false_true = MlasQLinearAddKernelHelper_SSE2XNNPack<int8_t, false, true>;
                 helper_false_false = MlasQLinearAddKernelHelper_SSE2XNNPack<int8_t, false, false>;
+            } else if (strcasecmp(env_p, "SSE2XNNFloatMultiply") == 0) {
+                helper_true_false = MlasQLinearAddKernelHelper_SSE2XNNPackFloatMultiply<int8_t, true, false>;
+                helper_false_true = MlasQLinearAddKernelHelper_SSE2XNNPackFloatMultiply<int8_t, false, true>;
+                helper_false_false = MlasQLinearAddKernelHelper_SSE2XNNPackFloatMultiply<int8_t, false, false>;
             } else if (strcasecmp(env_p, "SSE2StrictWithUnroll") == 0) {
                 helper_true_false = MlasQLinearAddKernelHelper_SSE2StrictWithUnroll<int8_t, true, false>;
                 helper_false_true = MlasQLinearAddKernelHelper_SSE2StrictWithUnroll<int8_t, false, true>;
@@ -1152,7 +1235,11 @@ MlasQLinearAdd<uint8_t>(
                 helper_true_false = MlasQLinearAddKernelHelper_SSE2XNNPack<uint8_t, true, false>;
                 helper_false_true = MlasQLinearAddKernelHelper_SSE2XNNPack<uint8_t, false, true>;
                 helper_false_false = MlasQLinearAddKernelHelper_SSE2XNNPack<uint8_t, false, false>;
-            } else if (strcasecmp(env_p, "SSE2StrictWithUnroll") == 0) {
+            } else if (strcasecmp(env_p, "SSE2XNNFloatMultiply") == 0) {
+                helper_true_false = MlasQLinearAddKernelHelper_SSE2XNNPackFloatMultiply<uint8_t, true, false>;
+                helper_false_true = MlasQLinearAddKernelHelper_SSE2XNNPackFloatMultiply<uint8_t, false, true>;
+                helper_false_false = MlasQLinearAddKernelHelper_SSE2XNNPackFloatMultiply<uint8_t, false, false>;
+            }  else if (strcasecmp(env_p, "SSE2StrictWithUnroll") == 0) {
                 helper_true_false = MlasQLinearAddKernelHelper_SSE2StrictWithUnroll<uint8_t, true, false>;
                 helper_false_true = MlasQLinearAddKernelHelper_SSE2StrictWithUnroll<uint8_t, false, true>;
                 helper_false_false = MlasQLinearAddKernelHelper_SSE2StrictWithUnroll<uint8_t, false, false>;
