@@ -414,28 +414,148 @@ MlasQLinearAddKernelAvx2Helper_XNNFloatMultiply(
 }
 
 
-//////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 // Simple but strict with unroll
-/////////////////////////////////////////////////////////////////////////////////
-// template<typename DataType, bool IsScalarA, bool IsScalarB>
-// void
-// MlasQLinearAddKernelAvx2Helper_StrictWithUnroll(
-// void
-// MlasQLinearAddKernelAvx2Helper_XNNFloatMultiply(
-//     const DataType* InputA,
-//     float ScaleA,
-//     int32_t ZeroPointA,
-//     const DataType* InputB,
-//     float ScaleB,
-//     int32_t ZeroPointB,
-//     float ScaleC,
-//     int32_t ZeroPointC,
-//     DataType* OutputC,
-//     size_t p_N
-//     )
-// {
-// }
+///////////////////////////////////////////////////////////////////////////////
+template<typename DataType, bool IsScalarA, bool IsScalarB>
+void
+MlasQLinearAddKernelAvx2Helper_StrictWithUnroll(
+    const DataType* InputA,
+    float ScaleA,
+    int32_t ZeroPointA,
+    const DataType* InputB,
+    float ScaleB,
+    int32_t ZeroPointB,
+    float ScaleC,
+    int32_t ZeroPointC,
+    DataType* OutputC,
+    size_t p_N
+    )
+{
+    __m256 VectorScaleA = _mm256_set1_ps(ScaleA);
+    __m256 VectorScaleB = _mm256_set1_ps(ScaleB);
+    const __m256 VectorScaleC = _mm256_set1_ps(ScaleC);
+    const __m256i VectorZeroPointA = _mm256_set1_epi32(ZeroPointA);
+    const __m256i VectorZeroPointB = _mm256_set1_epi32(ZeroPointB);
+    const __m256 VectorZeroPointC = _mm256_set1_ps((float)ZeroPointC);
 
+    if (IsScalarA) {
+        VectorScaleA = _mm256_set1_ps(ScaleA * ((int32_t)*InputA - ZeroPointA));
+    }
+    if (IsScalarB) {
+        VectorScaleB = _mm256_set1_ps(ScaleB * ((int32_t)*InputB - ZeroPointB));
+    }
+
+    int64_t N = static_cast<int64_t>(p_N);
+    __m256i vy = _mm256_setzero_si256();
+    while (N > 0) {
+        __m256i a_32xi8, b_32xi8, vy02, vy13;
+
+        if (!IsScalarA) {
+            a_32xi8 = _mm256_lddqu_si256((const __m256i*)InputA);
+            InputA += 32;
+        }
+        if (!IsScalarB) {
+            b_32xi8 = _mm256_lddqu_si256((const __m256i*)InputB);
+            InputB += 32;
+        }
+
+        // First half (16 x i8)
+        {
+            __m256 lolo_8xfp32, lohi_8xfp32;
+            if (IsScalarA) {
+                const auto b_16xi16 = _mm256_unpacklo_epi8(b_32xi8, b_32xi8);
+                lolo_8xfp32 = _mm256_cvtepi32_ps(_mm256_sub_epi32(ShiftRight24Epi32<DataType>(_mm256_unpacklo_epi16(b_16xi16, b_16xi16)), VectorZeroPointB));
+                lohi_8xfp32 = _mm256_cvtepi32_ps(_mm256_sub_epi32(ShiftRight24Epi32<DataType>(_mm256_unpackhi_epi16(b_16xi16, b_16xi16)), VectorZeroPointB));
+                lolo_8xfp32 = _mm256_fmadd_ps(lolo_8xfp32, VectorScaleB, VectorScaleA);
+                lohi_8xfp32 = _mm256_fmadd_ps(lohi_8xfp32, VectorScaleB, VectorScaleA);
+            } else if (IsScalarB) {
+                const auto a_16xi16 = _mm256_unpacklo_epi8(a_32xi8, a_32xi8);
+                lolo_8xfp32 = _mm256_cvtepi32_ps(_mm256_sub_epi32(ShiftRight24Epi32<DataType>(_mm256_unpacklo_epi16(a_16xi16, a_16xi16)), VectorZeroPointA));
+                lohi_8xfp32 = _mm256_cvtepi32_ps(_mm256_sub_epi32(ShiftRight24Epi32<DataType>(_mm256_unpackhi_epi16(a_16xi16, a_16xi16)), VectorZeroPointA));
+                lolo_8xfp32 = _mm256_fmadd_ps(lolo_8xfp32, VectorScaleA, VectorScaleB);
+                lohi_8xfp32 = _mm256_fmadd_ps(lohi_8xfp32, VectorScaleA, VectorScaleB);
+            } else {
+                const auto b_16xi16 = _mm256_unpacklo_epi8(b_32xi8, b_32xi8);
+                lolo_8xfp32 = _mm256_cvtepi32_ps(_mm256_sub_epi32(ShiftRight24Epi32<DataType>(_mm256_unpacklo_epi16(b_16xi16, b_16xi16)), VectorZeroPointB));
+                lohi_8xfp32 = _mm256_cvtepi32_ps(_mm256_sub_epi32(ShiftRight24Epi32<DataType>(_mm256_unpackhi_epi16(b_16xi16, b_16xi16)), VectorZeroPointB));
+                lolo_8xfp32 = _mm256_mul_ps(lolo_8xfp32, VectorScaleB);
+                lohi_8xfp32 = _mm256_mul_ps(lohi_8xfp32, VectorScaleB);
+
+                const auto a_16xi16 = _mm256_unpacklo_epi8(a_32xi8, a_32xi8);
+                const auto alolo_8xfp32 = _mm256_cvtepi32_ps(_mm256_sub_epi32(ShiftRight24Epi32<DataType>(_mm256_unpacklo_epi16(a_16xi16, a_16xi16)), VectorZeroPointA));
+                const auto alohi_8xfp32 = _mm256_cvtepi32_ps(_mm256_sub_epi32(ShiftRight24Epi32<DataType>(_mm256_unpackhi_epi16(a_16xi16, a_16xi16)), VectorZeroPointA));
+                lolo_8xfp32 = _mm256_fmadd_ps(alolo_8xfp32, VectorScaleA, lolo_8xfp32);
+                lohi_8xfp32 = _mm256_fmadd_ps(alohi_8xfp32, VectorScaleA, lohi_8xfp32);
+            }
+            lolo_8xfp32 = _mm256_add_ps(VectorZeroPointC, _mm256_div_ps(lolo_8xfp32, VectorScaleC));
+            lohi_8xfp32 = _mm256_add_ps(VectorZeroPointC, _mm256_div_ps(lohi_8xfp32, VectorScaleC));
+            vy02 = _mm256_packs_epi32(_mm256_cvtps_epi32(lolo_8xfp32), _mm256_cvtps_epi32(lohi_8xfp32));
+        }
+
+
+        // Another half (16 x i8)
+        {
+            __m256 hilo_8xfp32, hihi_8xfp32;
+            if (IsScalarA) {
+                const auto b_16xi16 = _mm256_unpackhi_epi8(b_32xi8, b_32xi8);
+                hilo_8xfp32 = _mm256_cvtepi32_ps(_mm256_sub_epi32(ShiftRight24Epi32<DataType>(_mm256_unpacklo_epi16(b_16xi16, b_16xi16)), VectorZeroPointB));
+                hihi_8xfp32 = _mm256_cvtepi32_ps(_mm256_sub_epi32(ShiftRight24Epi32<DataType>(_mm256_unpackhi_epi16(b_16xi16, b_16xi16)), VectorZeroPointB));
+                hilo_8xfp32 = _mm256_fmadd_ps(hilo_8xfp32, VectorScaleB, VectorScaleA);
+                hihi_8xfp32 = _mm256_fmadd_ps(hihi_8xfp32, VectorScaleB, VectorScaleA);
+            } else if (IsScalarB) {
+                const auto a_16xi16 = _mm256_unpackhi_epi8(a_32xi8, a_32xi8);
+                hilo_8xfp32 = _mm256_cvtepi32_ps(_mm256_sub_epi32(ShiftRight24Epi32<DataType>(_mm256_unpacklo_epi16(a_16xi16, a_16xi16)), VectorZeroPointA));
+                hihi_8xfp32 = _mm256_cvtepi32_ps(_mm256_sub_epi32(ShiftRight24Epi32<DataType>(_mm256_unpackhi_epi16(a_16xi16, a_16xi16)), VectorZeroPointA));
+                hilo_8xfp32 = _mm256_fmadd_ps(hilo_8xfp32, VectorScaleA, VectorScaleB);
+                hihi_8xfp32 = _mm256_fmadd_ps(hihi_8xfp32, VectorScaleA, VectorScaleB);
+            } else {
+                const auto b_16xi16 = _mm256_unpackhi_epi8(b_32xi8, b_32xi8);
+                hilo_8xfp32 = _mm256_cvtepi32_ps(_mm256_sub_epi32(ShiftRight24Epi32<DataType>(_mm256_unpacklo_epi16(b_16xi16, b_16xi16)), VectorZeroPointB));
+                hihi_8xfp32 = _mm256_cvtepi32_ps(_mm256_sub_epi32(ShiftRight24Epi32<DataType>(_mm256_unpackhi_epi16(b_16xi16, b_16xi16)), VectorZeroPointB));
+                hilo_8xfp32 = _mm256_mul_ps(hilo_8xfp32, VectorScaleB);
+                hihi_8xfp32 = _mm256_mul_ps(hihi_8xfp32, VectorScaleB);
+
+                const auto a_16xi16 = _mm256_unpackhi_epi8(a_32xi8, a_32xi8);
+                const auto ahilo_8xfp32 = _mm256_cvtepi32_ps(_mm256_sub_epi32(ShiftRight24Epi32<DataType>(_mm256_unpacklo_epi16(a_16xi16, a_16xi16)), VectorZeroPointA));
+                const auto ahihi_8xfp32 = _mm256_cvtepi32_ps(_mm256_sub_epi32(ShiftRight24Epi32<DataType>(_mm256_unpackhi_epi16(a_16xi16, a_16xi16)), VectorZeroPointA));
+                hilo_8xfp32 = _mm256_fmadd_ps(ahilo_8xfp32, VectorScaleA, hilo_8xfp32);
+                hihi_8xfp32 = _mm256_fmadd_ps(ahihi_8xfp32, VectorScaleA, hihi_8xfp32);
+            }
+            hilo_8xfp32 = _mm256_add_ps(VectorZeroPointC, _mm256_div_ps(hilo_8xfp32, VectorScaleC));
+            hihi_8xfp32 = _mm256_add_ps(VectorZeroPointC, _mm256_div_ps(hihi_8xfp32, VectorScaleC));
+            vy13 = _mm256_packs_epi32(_mm256_cvtps_epi32(hilo_8xfp32), _mm256_cvtps_epi32(hihi_8xfp32));
+        }
+
+        vy = Pack16Bits<DataType>(vy02, vy13);
+
+        N -= 32;
+        if (N < 0) break;
+
+        _mm256_storeu_si256((__m256i*)OutputC, vy);
+        OutputC += 32;
+    }
+
+    if (N < 0) {
+        N += 32;
+        int k = static_cast<int>(N / 4);
+        if (k > 0) {
+            const __m256i mask = _mm256_cmpgt_epi32(_mm256_set1_epi32(k), _mm256_set_epi32(7, 6, 5, 4, 3, 2, 1, 0));
+            _mm256_maskstore_epi32((int*)OutputC, mask, vy);
+            OutputC += k * 4;
+        }
+
+        int r = static_cast<int>(N % 4);
+        if (r > 0) {
+            auto permuted = _mm256_permutevar8x32_epi32(vy, _mm256_set1_epi32(k));
+            uint32_t PackedValueC = (uint32_t)_mm256_extract_epi32(permuted, 0);
+            for (int n = 0; n < r; ++n) {
+                *((uint8_t*)OutputC + n) = (uint8_t)PackedValueC;
+                PackedValueC >>= 8;
+            }
+        }
+    }
+}
 
 ///////////////////////////////////////////////////////////////////////////////////
 // Wrapper for different entry
@@ -476,6 +596,10 @@ MlasQLinearAddS8KernelAvx2(
                 helper_true_false = MlasQLinearAddKernelAvx2Helper_XNNFloatMultiply<int8_t, true, false>;
                 helper_false_true = MlasQLinearAddKernelAvx2Helper_XNNFloatMultiply<int8_t, false, true>;
                 helper_false_false = MlasQLinearAddKernelAvx2Helper_XNNFloatMultiply<int8_t, false, false>;
+            } else if (strcasecmp(env_p, "StrictWithUnroll") == 0){
+                helper_true_false = MlasQLinearAddKernelAvx2Helper_StrictWithUnroll<int8_t, true, false>;
+                helper_false_true = MlasQLinearAddKernelAvx2Helper_StrictWithUnroll<int8_t, false, true>;
+                helper_false_false = MlasQLinearAddKernelAvx2Helper_StrictWithUnroll<int8_t, false, false>;
             } else if (strcasecmp(env_p, "XNNPack") == 0){
                 helper_true_false = MlasQLinearAddKernelAvx2Helper_XNNPack<int8_t, true, false>;
                 helper_false_true = MlasQLinearAddKernelAvx2Helper_XNNPack<int8_t, false, true>;
@@ -545,6 +669,10 @@ MlasQLinearAddU8KernelAvx2(
                 helper_true_false = MlasQLinearAddKernelAvx2Helper_XNNFloatMultiply<uint8_t, true, false>;
                 helper_false_true = MlasQLinearAddKernelAvx2Helper_XNNFloatMultiply<uint8_t, false, true>;
                 helper_false_false = MlasQLinearAddKernelAvx2Helper_XNNFloatMultiply<uint8_t, false, false>;
+            } else if (strcasecmp(env_p, "StrictWithUnroll") == 0){
+                helper_true_false = MlasQLinearAddKernelAvx2Helper_StrictWithUnroll<uint8_t, true, false>;
+                helper_false_true = MlasQLinearAddKernelAvx2Helper_StrictWithUnroll<uint8_t, false, true>;
+                helper_false_false = MlasQLinearAddKernelAvx2Helper_StrictWithUnroll<uint8_t, false, false>;
             } else if (strcasecmp(env_p, "XNNPack") == 0){
                 helper_true_false = MlasQLinearAddKernelAvx2Helper_XNNPack<uint8_t, true, false>;
                 helper_false_true = MlasQLinearAddKernelAvx2Helper_XNNPack<uint8_t, false, true>;
