@@ -96,16 +96,27 @@ void LogRuntimeError(uint32_t session_id, const common::Status& status, const ch
   ::onnxruntime::CodeLocation(__FILE__, __LINE__, __PRETTY_FUNCTION__, ::onnxruntime::GetStackTrace())
 
 #ifdef ORT_NO_EXCEPTIONS
-#define ORT_THROW(...) abort()
-
-// Just in order to mark things as not implemented. Do not use in final code.
-#define ORT_NOT_IMPLEMENTED(...) abort()
+#define ORT_THROW(...)                                                                     \
+  std::cerr << ::onnxruntime::OnnxRuntimeException(ORT_WHERE_WITH_STACK,                   \
+                                                   ::onnxruntime::MakeString(__VA_ARGS__)) \
+                   .what()                                                                 \
+            << std::endl();
+abort()
+#define ORT_NOT_IMPLEMENTED(...)                                                                                   \
+  std::cerr << ::onnxruntime::NotImplementedException(::onnxruntime::MakeString(__VA_ARGS__)).what() << std::endl; \
+  abort()
 
 // Check condition.
 // NOTE: The arguments get streamed into a string via ostringstream::operator<<
 // DO NOT use a printf format string, as that will not work as you expect.
-#define ORT_ENFORCE(condition, ...) \
-  if (!(condition)) abort()
+#define ORT_ENFORCE(condition, ...)                                                                               \
+  do {                                                                                                            \
+    if (!(condition)) {                                                                                           \
+      std::cerr << ::onnxruntime::OnnxRuntimeException(ORT_WHERE_WITH_STACK, #condition,                          \
+                                                      ::onnxruntime::MakeString(__VA_ARGS__).what() << std::endl; \
+      abort();                                                                                                    \
+    }                                                                                                             \
+  } while (false)
 
 #else
 // Throw an exception with optional message.
@@ -203,7 +214,7 @@ void LogRuntimeError(uint32_t session_id, const common::Status& status, const ch
 #define GSL_SUPPRESS(tag)
 #endif
 
-inline void MakeStringInternal(std::ostringstream& /*ss*/) noexcept {
+    inline void MakeStringInternal(std::ostringstream& /*ss*/) noexcept {
 }
 
 template <typename T>

@@ -13,6 +13,7 @@ inline void ThrowOnError(const OrtApi& ort, OrtStatus* status) {
     OrtErrorCode error_code = ort.GetErrorCode(status);
     ort.ReleaseStatus(status);
 #ifdef ORT_NO_EXCEPTIONS
+    std::cerr << "Error " << error_code << ":" << error_message << std::endl;
     abort();
 #else
     throw Ort::Exception(std::move(error_message), error_code);
