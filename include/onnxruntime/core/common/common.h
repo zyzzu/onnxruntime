@@ -40,6 +40,10 @@
 #include <mimalloc.h>
 #endif
 
+#ifdef ORT_NO_EXCEPTIONS
+#include <iostream>
+#endif
+
 namespace onnxruntime {
 
 using TimePoint = std::chrono::high_resolution_clock::time_point;
@@ -96,26 +100,33 @@ void LogRuntimeError(uint32_t session_id, const common::Status& status, const ch
   ::onnxruntime::CodeLocation(__FILE__, __LINE__, __PRETTY_FUNCTION__, ::onnxruntime::GetStackTrace())
 
 #ifdef ORT_NO_EXCEPTIONS
-#define ORT_THROW(...)                                                                     \
-  std::cerr << ::onnxruntime::OnnxRuntimeException(ORT_WHERE_WITH_STACK,                   \
-                                                   ::onnxruntime::MakeString(__VA_ARGS__)) \
-                   .what()                                                                 \
-            << std::endl();
-abort()
-#define ORT_NOT_IMPLEMENTED(...)                                                                                   \
-  std::cerr << ::onnxruntime::NotImplementedException(::onnxruntime::MakeString(__VA_ARGS__)).what() << std::endl; \
-  abort()
+#define ORT_THROW(...)                                                                       \
+  do {                                                                                       \
+    std::cerr << ::onnxruntime::OnnxRuntimeException(ORT_WHERE_WITH_STACK,                   \
+                                                     ::onnxruntime::MakeString(__VA_ARGS__)) \
+                     .what()                                                                 \
+              << std::endl;                                                                  \
+    abort();                                                                                 \
+  } while (false)
+
+#define ORT_NOT_IMPLEMENTED(...)                                                                                     \
+  do {                                                                                                               \
+    std::cerr << ::onnxruntime::NotImplementedException(::onnxruntime::MakeString(__VA_ARGS__)).what() << std::endl; \
+    abort();                                                                                                         \
+  } while (false)
 
 // Check condition.
 // NOTE: The arguments get streamed into a string via ostringstream::operator<<
 // DO NOT use a printf format string, as that will not work as you expect.
-#define ORT_ENFORCE(condition, ...)                                                                               \
-  do {                                                                                                            \
-    if (!(condition)) {                                                                                           \
-      std::cerr << ::onnxruntime::OnnxRuntimeException(ORT_WHERE_WITH_STACK, #condition,                          \
-                                                      ::onnxruntime::MakeString(__VA_ARGS__).what() << std::endl; \
-      abort();                                                                                                    \
-    }                                                                                                             \
+#define ORT_ENFORCE(condition, ...)                                                            \
+  do {                                                                                         \
+    if (!(condition)) {                                                                        \
+      std::cerr << ::onnxruntime::OnnxRuntimeException(ORT_WHERE_WITH_STACK, #condition,       \
+                                                       ::onnxruntime::MakeString(__VA_ARGS__)) \
+                       .what()                                                                 \
+                << std::endl;                                                                  \
+      abort();                                                                                 \
+    }                                                                                          \
   } while (false)
 
 #else
@@ -214,7 +225,7 @@ abort()
 #define GSL_SUPPRESS(tag)
 #endif
 
-    inline void MakeStringInternal(std::ostringstream& /*ss*/) noexcept {
+inline void MakeStringInternal(std::ostringstream& /*ss*/) noexcept {
 }
 
 template <typename T>

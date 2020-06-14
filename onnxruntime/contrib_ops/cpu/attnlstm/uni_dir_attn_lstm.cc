@@ -501,7 +501,7 @@ void UniDirectionalAttnLstm<T>::SetNumThreads() {
     hidden_num_threads_ = hmt;
   }
 
-  VLOGS(logger_, 1) << "Hidden Threads : " << hidden_num_threads_;
+  // VLOGS(logger_, 1) << "Hidden Threads : " << hidden_num_threads_;
 }
 
 template class UniDirectionalAttnLstm<float>;

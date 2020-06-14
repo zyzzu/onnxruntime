@@ -28,6 +28,7 @@ file(GLOB_RECURSE onnx_exclude_src CONFIGURE_DEPENDS
     "${ONNX_SOURCE_ROOT}/onnx/backend/test/cpp/*"
     "${ONNX_SOURCE_ROOT}/onnx/test/*"
     "${ONNX_SOURCE_ROOT}/onnx/cpp2py_export.cc"
+#    "${ONNX_SOURCE_ROOT}/onnx/*/old.cc"
 )
 
 if (MSVC)

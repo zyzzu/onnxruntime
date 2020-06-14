@@ -23,6 +23,10 @@
 #include <utility>
 #include <type_traits>
 
+#ifdef ORT_NO_EXCEPTIONS
+#include <iostream>
+#endif
+
 namespace Ort {
 
 // All C++ methods that can fail will throw an exception of this type

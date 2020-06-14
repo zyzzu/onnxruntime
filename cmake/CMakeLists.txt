@@ -116,6 +116,7 @@ if (NO_RTTI)
 endif()
 
 if (NO_EXCEPTIONS)
+  add_compile_definitions("ONNX_NO_EXCEPTIONS=1")
   add_compile_definitions("ORT_NO_EXCEPTIONS=1")
 endif()
 
