@@ -17,7 +17,7 @@ Status UnsqueezeElimination::Apply(Graph& graph, Node& node, RewriteRuleEffect& 
 
   auto new_name = graph.GenerateNodeArgName("UnsqueezeElimination_" + input_def.Name());
   if (!graph_utils::CanReplaceNodeWithInitializer(graph, node, new_name, logger)) {
-      LOGS(logger, WARNING) << "UnsqueezeElimination cannot remove node " << node.Name();
+    //LOGS(logger, WARNING) << "UnsqueezeElimination cannot remove node " << node.Name();
     return Status::OK();
   }
 

@@ -1084,7 +1084,7 @@ void UniDirectionalLstm<T>::SetNumThreads() {
   // parallelize by partitioning the batch rows
   if (num_rows > 4 || (num_rows >= 2 && num_columns <= 256)) {
     batch_parallel_ = true;
-    VLOGS(logger_, 1) << "Hidden Threads : " << hidden_num_threads_;
+    // VLOGS(logger_, 1) << "Hidden Threads : " << hidden_num_threads_;
   }
 }
 

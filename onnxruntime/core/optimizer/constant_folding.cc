@@ -119,8 +119,8 @@ Status ConstantFolding::ApplyImpl(Graph& graph, bool& modified, int graph_level,
       }
 
       if (kernel == nullptr) {
-        LOGS(logger, WARNING) << "Could not find a CPU kernel and hence "
-                              << "can't constant fold " << node->OpType() << " node '" << node->Name() << "'";
+        //LOGS(logger, WARNING) << "Could not find a CPU kernel and hence "
+        //                      << "can't constant fold " << node->OpType() << " node '" << node->Name() << "'";
 
         // Move on to the next candidate node
         continue;
@@ -142,8 +142,8 @@ Status ConstantFolding::ApplyImpl(Graph& graph, bool& modified, int graph_level,
         OrtValue& ort_value = fetches[fetch_idx];
 
         if (!ort_value.IsTensor()) {
-          LOGS(logger, WARNING) << "Unsupported output type of " << ort_value.Type()
-                                << ". Can't constant fold " << node->OpType() << " node '" << node->Name() << "'";
+          //LOGS(logger, WARNING) << "Unsupported output type of " << ort_value.Type()
+          //                      << ". Can't constant fold " << node->OpType() << " node '" << node->Name() << "'";
           converted_to_constant = false;
           break;
         }

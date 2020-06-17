@@ -512,8 +512,8 @@ Status LoopImpl::Execute(const FeedsFetchesManager& ffm) {
         // TODO: We could try and call ExecuteGraph to get the output shape from fetches so the rank is correct,
         // however that could still fail as we would potentially be passing in invalid data.
         // Until we know this is required just output a warning and return the rank 1 empty output.
-        LOGS(context_.Logger(), WARNING) << "Loop had zero iterations and the shape of subgraph output " << i + 1
-                                         << " was not found. Defaulting to a rank 1 shape of {0}.";
+        //LOGS(context_.Logger(), WARNING) << "Loop had zero iterations and the shape of subgraph output " << i + 1
+        //                                 << " was not found. Defaulting to a rank 1 shape of {0}.";
       }
 
       ORT_IGNORE_RETURN_VALUE(context_.Output(i, TensorShape(output_dims)));

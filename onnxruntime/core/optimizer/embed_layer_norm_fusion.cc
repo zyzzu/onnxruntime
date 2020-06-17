@@ -8,7 +8,8 @@
 #include "core/framework/tensorprotoutils.h"
 #include "float.h"
 
-#define DEBUG_LOG(x) LOGS(logger, VERBOSE) << x
+#define DEBUG_LOG(x)
+//#define DEBUG_LOG(x) LOGS(logger, VERBOSE) << x
 
 using namespace ONNX_NAMESPACE;
 using namespace onnxruntime::common;

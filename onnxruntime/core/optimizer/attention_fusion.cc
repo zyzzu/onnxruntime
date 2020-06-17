@@ -7,7 +7,8 @@
 #include "core/optimizer/utils.h"
 #include <cmath>
 
-#define DEBUG_LOG(x) LOGS(logger, VERBOSE) << x
+#define DEBUG_LOG(x)
+//#define DEBUG_LOG(x) LOGS(logger, VERBOSE) << x
 
 using namespace ONNX_NAMESPACE;
 using namespace onnxruntime::common;
@@ -228,7 +229,7 @@ static NodeArg* ProcessMask(Graph& graph, NodeArg* mask_input, ProviderType prov
 
   NodeArg* reduce_sum_input = mask_input;
   if (data_type == ONNX_NAMESPACE::TensorProto_DataType_INT64 ||
-    data_type == ONNX_NAMESPACE::TensorProto_DataType_FLOAT) {
+      data_type == ONNX_NAMESPACE::TensorProto_DataType_FLOAT) {
     NodeArg& cast_int32 = CastMaskToInt32(graph, mask_input, provider_type);
     reduce_sum_input = &cast_int32;
   }
@@ -317,9 +318,9 @@ Status AttentionFusion::ApplyImpl(Graph& graph, bool& modified, int graph_level,
     }
   }
 
-  if (fused_count > 0) {
-    LOGS(logger, INFO) << "Total fused Attention node count: " << fused_count;
-  }
+  //if (fused_count > 0) {
+  //  LOGS(logger, INFO) << "Total fused Attention node count: " << fused_count;
+  //}
 
   return Status::OK();
 }
@@ -468,7 +469,7 @@ bool AttentionFusion::FuseSubGraph(Node& layer_norm, const Node& add_after_layer
   }
 
   // path 2 to find mask. Unsqueeze -> Unsqueeze -> (Cast) -> Sub -> Mul -> Add -> Softmax
-  // The "Cast" node in parentheses is optional. 
+  // The "Cast" node in parentheses is optional.
   std::vector<graph_utils::EdgeEndToMatch> mask_path{
       {0, 0, "Softmax", {1, 11}, kOnnxDomain},
       {0, 0, "Add", {7}, kOnnxDomain},
@@ -479,7 +480,7 @@ bool AttentionFusion::FuseSubGraph(Node& layer_norm, const Node& add_after_layer
     DEBUG_LOG("Failed to find path for mask");
     return false;
   }
-  
+
   const Node& softmax = edges[0]->GetNode();
   const Node& mask_add = edges[1]->GetNode();
   const Node& mask_mul = edges[2]->GetNode();
@@ -490,7 +491,7 @@ bool AttentionFusion::FuseSubGraph(Node& layer_norm, const Node& add_after_layer
   Node* p_mask_unsqueeze_2 = nullptr;
   Node* p_mask_unsqueeze_1 = nullptr;
   std::vector<graph_utils::EdgeEndToMatch> mask_path_format_1{
-      {0, 1, "Cast", {9}, kOnnxDomain}, 
+      {0, 1, "Cast", {9}, kOnnxDomain},
       {0, 0, "Unsqueeze", {1, 11}, kOnnxDomain},
       {0, 0, "Unsqueeze", {1, 11}, kOnnxDomain}};
 
@@ -509,7 +510,7 @@ bool AttentionFusion::FuseSubGraph(Node& layer_norm, const Node& add_after_layer
     DEBUG_LOG("Failed to find path for mask");
     return false;
   }
-  
+
   const Node& mask_unsqueeze_2 = *p_mask_unsqueeze_2;
   const Node& mask_unsqueeze_1 = *p_mask_unsqueeze_1;
 

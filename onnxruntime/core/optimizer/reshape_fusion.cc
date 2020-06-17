@@ -30,11 +30,11 @@ Status ReshapeFusion::ApplyImpl(Graph& graph, bool& modified, int graph_level, c
 
     if (ReshapeFusion::Fuse_Subgraph1(reshape, graph, logger)) {
       fused_count++;
-      LOGS(logger, INFO) << "Fused reshape node: " << reshape.OutputDefs()[0]->Name();
+      //LOGS(logger, INFO) << "Fused reshape node: " << reshape.OutputDefs()[0]->Name();
       modified = true;
     }
   }
-  LOGS(logger, INFO) << "Total fused reshape node count: " << fused_count;
+  //LOGS(logger, INFO) << "Total fused reshape node count: " << fused_count;
 
   return Status::OK();
 }
@@ -88,7 +88,9 @@ bool ReshapeFusion::Fuse_Subgraph1(Node& reshape, Graph& graph, const logging::L
   std::vector<int64_t> shape_value;
   shape_value.reserve(concat_input_count);
   // Used to keep the following nodes in the order of their potential removal.
-  enum class NodeType { Unsqueeze, Gather, Shape };
+  enum class NodeType { Unsqueeze,
+                        Gather,
+                        Shape };
   std::set<std::pair<NodeType, NodeIndex>> candidates_for_removal;
   for (int i = 0; i < concat_input_count; ++i) {
     // First check if the i-th argument is a constant initializer.
@@ -135,7 +137,7 @@ bool ReshapeFusion::Fuse_Subgraph1(Node& reshape, Graph& graph, const logging::L
   // Create an initializer with the same name as the concat node output, and replace the concat node
   const auto& new_initializer_name = concat.OutputDefs()[0]->Name();
   if (!graph_utils::CanReplaceNodeWithInitializer(graph, concat, new_initializer_name, logger)) {
-    LOGS(logger, WARNING) << "Cannot replace concat node with initializer:" << new_initializer_name;
+    //LOGS(logger, WARNING) << "Cannot replace concat node with initializer:" << new_initializer_name;
     return false;
   }
   const auto* shape_def = concat.OutputDefs()[0];

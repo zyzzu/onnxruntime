@@ -293,18 +293,22 @@ InferenceSession::InferenceSession(const SessionOptions& session_options, const 
 
 InferenceSession::~InferenceSession() {
   if (session_options_.enable_profiling) {
-    //try {
-    EndProfiling();
-    //} catch (std::exception& e) {
-    //  // TODO: Currently we have no way to transport this error to the API user
-    //  // Maybe this should be refactored, so that profiling must be explicitly
-    //  // started and stopped via C-API functions.
-    //  // And not like now a session option and therefore profiling must be started
-    //  // and stopped implicitly.
-    //  // LOGS(*session_logger_, ERROR) << "Error during EndProfiling(): " << e.what();
-    //} catch (...) {
-    //  // LOGS(*session_logger_, ERROR) << "Unknown error during EndProfiling()";
-    //}
+#ifndef ORT_NO_EXCEPTIONS
+    try {
+#endif
+      EndProfiling();
+#ifndef ORT_NO_EXCEPTIONS
+    } catch (std::exception& e) {
+      // TODO: Currently we have no way to transport this error to the API user
+      // Maybe this should be refactored, so that profiling must be explicitly
+      // started and stopped via C-API functions.
+      // And not like now a session option and therefore profiling must be started
+      // and stopped implicitly.
+      // LOGS(*session_logger_, ERROR) << "Error during EndProfiling(): " << e.what();
+    } catch (...) {
+      // LOGS(*session_logger_, ERROR) << "Unknown error during EndProfiling()";
+    }
+#endif
   }
 #ifdef ONNXRUNTIME_ENABLE_INSTRUMENT
   if (session_activity_started_)
@@ -387,33 +391,38 @@ common::Status InferenceSession::Load(std::function<common::Status(std::shared_p
   if (session_profiler_.IsEnabled()) {
     tp = session_profiler_.StartTime();
   }
-  //try {
-  std::lock_guard<onnxruntime::OrtMutex> l(session_mutex_);
-  if (is_model_loaded_) {  // already loaded
-    // LOGS(*session_logger_, ERROR) << "This session already contains a loaded model.";
-    return common::Status(common::ONNXRUNTIME, common::MODEL_LOADED, "This session already contains a loaded model.");
+
+#ifndef ORT_NO_EXCEPTIONS
+  try {
+#endif
+    std::lock_guard<onnxruntime::OrtMutex> l(session_mutex_);
+    if (is_model_loaded_) {  // already loaded
+      // LOGS(*session_logger_, ERROR) << "This session already contains a loaded model.";
+      return common::Status(common::ONNXRUNTIME, common::MODEL_LOADED, "This session already contains a loaded model.");
+    }
+
+    std::shared_ptr<onnxruntime::Model> p_tmp_model;
+    status = loader(p_tmp_model);
+    ORT_RETURN_IF_ERROR_SESSIONID_(status);
+
+    model_ = p_tmp_model;
+
+    status = DoPostLoadProcessing(*model_);
+    ORT_RETURN_IF_ERROR_SESSIONID_(status);
+
+    // all steps complete, mark the model as loaded.
+    is_model_loaded_ = true;
+
+    telemetry_.event_name_ = event_name;
+
+#ifndef ORT_NO_EXCEPTIONS
+  } catch (const std::exception& ex) {
+    status = Status(common::ONNXRUNTIME, common::FAIL, "Exception during loading: " + std::string(ex.what()));
+  } catch (...) {
+    // LOGS(*session_logger_, ERROR) << "Unknown exception in Load()";
+    status = Status(common::ONNXRUNTIME, common::RUNTIME_EXCEPTION, "Encountered unknown exception in Load()");
   }
-
-  std::shared_ptr<onnxruntime::Model> p_tmp_model;
-  status = loader(p_tmp_model);
-  ORT_RETURN_IF_ERROR_SESSIONID_(status);
-
-  model_ = p_tmp_model;
-
-  status = DoPostLoadProcessing(*model_);
-  ORT_RETURN_IF_ERROR_SESSIONID_(status);
-
-  // all steps complete, mark the model as loaded.
-  is_model_loaded_ = true;
-
-  telemetry_.event_name_ = event_name;
-
-  //} catch (const std::exception& ex) {
-  //  status = Status(common::ONNXRUNTIME, common::FAIL, "Exception during loading: " + std::string(ex.what()));
-  //} catch (...) {
-  //  // LOGS(*session_logger_, ERROR) << "Unknown exception in Load()";
-  //  status = Status(common::ONNXRUNTIME, common::RUNTIME_EXCEPTION, "Encountered unknown exception in Load()");
-  //}
+#endif
 
   if (session_profiler_.IsEnabled()) {
     session_profiler_.EndTimeAndRecordEvent(profiling::SESSION_EVENT, event_name, tp);
@@ -832,106 +841,111 @@ common::Status InferenceSession::Load(const std::basic_string<T>& model_uri) {
                 tp = session_profiler_.StartTime();
               }
 
-              //try {
-              // LOGS(*session_logger_, INFO) << "Initializing session.";
-              std::lock_guard<onnxruntime::OrtMutex> l(session_mutex_);
-              const Env& env = Env::Default();
-              env.GetTelemetryProvider().LogSessionCreationStart();
-              if (!is_model_loaded_) {
-                // LOGS(*session_logger_, ERROR) << "Model was not loaded";
-                return common::Status(common::ONNXRUNTIME, common::FAIL, "Model was not loaded.");
-              }
-              if (is_inited_) {  // already initialized
-                // LOGS(*session_logger_, INFO) << "Session has already been initialized.";
-                return common::Status::OK();
-              }
-#ifdef ONNXRUNTIME_ENABLE_INSTRUMENT
-              TraceLoggingWriteStart(session_activity, "OrtInferenceSessionActivity");
-              session_activity_started_ = true;
+#ifndef ORT_NO_EXCEPTIONS
+              try {
 #endif
-              // Register default CPUExecutionProvider if user didn't provide it through the Register() calls
-              if (!execution_providers_.Get(onnxruntime::kCpuExecutionProvider)) {
-                // LOGS(*session_logger_, INFO) << "Adding default CPU execution provider.";
-                CPUExecutionProviderInfo epi{session_options_.enable_cpu_mem_arena};
-                auto p_cpu_exec_provider = onnxruntime::make_unique<CPUExecutionProvider>(epi);
-                ORT_RETURN_IF_ERROR_SESSIONID_(RegisterExecutionProvider(std::move(p_cpu_exec_provider)));
-              }
-
-              if (session_options_.execution_mode == ExecutionMode::ORT_PARALLEL &&
-                  execution_providers_.Get(onnxruntime::kCudaExecutionProvider)) {
-                // LOGS(*session_logger_, ERROR) << "Parallel execution mode doesn't support "                  "CUDA Execution Provider currently.";
-                return common::Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT,
-                                      "Parallel execution mode doesn't support "
-                                      "CUDA Execution Provider currently.");
-              }
-
-              // add predefined transformers
-              AddPredefinedTransformers(graph_transformation_mgr_, session_options_.graph_optimization_level,
-                                        transformers_to_enable_);
-
-              onnxruntime::Graph& graph = model_->MainGraph();
-
-              // Collect the kernel registries from execution provider instances;
-              // There are 2 kinds of kernel registries with priority from high to low as below,
-              // 1. Custom execution provider type specific kernel registries.
-              // 2. common execution provider type specific kernel registries.
-              // Kernel registries are shared across sessions.
-              // The 1st ones should have already been registered via session-level API into KernelRegistryManager.
-              //
-              // Register 2nd registries into KernelRegistryManager.
-              ORT_RETURN_IF_ERROR_SESSIONID_(kernel_registry_manager_.RegisterKernels(execution_providers_));
-
-              SessionStateInitializer session_initializer(session_options_.enable_mem_pattern, model_location_, graph,
-                                                          *session_state_, execution_providers_, kernel_registry_manager_);
-
-              // create SessionState for subgraphs as it's needed by the transformers
-              ORT_RETURN_IF_ERROR_SESSIONID_(CreateSubgraphSessionState(graph, *session_state_));
-
-              // apply any transformations to the main graph and any subgraphs
-              ORT_RETURN_IF_ERROR_SESSIONID_(TransformGraph(graph, graph_transformation_mgr_,
-                                                            execution_providers_, kernel_registry_manager_,
-                                                            insert_cast_transformer_,
-                                                            *session_state_));
-
-              // now that all the transforms are done, call Resolve on the main graph. this will recurse into the subgraphs.
-              ORT_RETURN_IF_ERROR_SESSIONID_(graph.Resolve());
-
-              if (!session_options_.optimized_model_filepath.empty()) {
-                // Serialize optimized ONNX model.
-                ORT_RETURN_IF_ERROR_SESSIONID_(Model::Save(*model_, session_options_.optimized_model_filepath));
-                if (session_options_.graph_optimization_level >= TransformerLevel::Level3) {
-                  // LOGS(*session_logger_, WARNING) << "Serializing Optimized ONNX model with Graph Optimization"
-                  //" level greater than ORT_ENABLE_EXTENDED. The generated"
-                  //" model may contain hardware and execution provider specific"
-                  //" optimizations, and should only be used in the same environment"
-                  //" the model was optimized for.";
+                // LOGS(*session_logger_, INFO) << "Initializing session.";
+                std::lock_guard<onnxruntime::OrtMutex> l(session_mutex_);
+                const Env& env = Env::Default();
+                env.GetTelemetryProvider().LogSessionCreationStart();
+                if (!is_model_loaded_) {
+                  // LOGS(*session_logger_, ERROR) << "Model was not loaded";
+                  return common::Status(common::ONNXRUNTIME, common::FAIL, "Model was not loaded.");
                 }
+                if (is_inited_) {  // already initialized
+                  // LOGS(*session_logger_, INFO) << "Session has already been initialized.";
+                  return common::Status::OK();
+                }
+#ifdef ONNXRUNTIME_ENABLE_INSTRUMENT
+                TraceLoggingWriteStart(session_activity, "OrtInferenceSessionActivity");
+                session_activity_started_ = true;
+#endif
+                // Register default CPUExecutionProvider if user didn't provide it through the Register() calls
+                if (!execution_providers_.Get(onnxruntime::kCpuExecutionProvider)) {
+                  // LOGS(*session_logger_, INFO) << "Adding default CPU execution provider.";
+                  CPUExecutionProviderInfo epi{session_options_.enable_cpu_mem_arena};
+                  auto p_cpu_exec_provider = onnxruntime::make_unique<CPUExecutionProvider>(epi);
+                  ORT_RETURN_IF_ERROR_SESSIONID_(RegisterExecutionProvider(std::move(p_cpu_exec_provider)));
+                }
+
+                if (session_options_.execution_mode == ExecutionMode::ORT_PARALLEL &&
+                    execution_providers_.Get(onnxruntime::kCudaExecutionProvider)) {
+                  // LOGS(*session_logger_, ERROR) << "Parallel execution mode doesn't support "                  "CUDA Execution Provider currently.";
+                  return common::Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT,
+                                        "Parallel execution mode doesn't support "
+                                        "CUDA Execution Provider currently.");
+                }
+
+                // add predefined transformers
+                AddPredefinedTransformers(graph_transformation_mgr_, session_options_.graph_optimization_level,
+                                          transformers_to_enable_);
+
+                onnxruntime::Graph& graph = model_->MainGraph();
+
+                // Collect the kernel registries from execution provider instances;
+                // There are 2 kinds of kernel registries with priority from high to low as below,
+                // 1. Custom execution provider type specific kernel registries.
+                // 2. common execution provider type specific kernel registries.
+                // Kernel registries are shared across sessions.
+                // The 1st ones should have already been registered via session-level API into KernelRegistryManager.
+                //
+                // Register 2nd registries into KernelRegistryManager.
+                ORT_RETURN_IF_ERROR_SESSIONID_(kernel_registry_manager_.RegisterKernels(execution_providers_));
+
+                SessionStateInitializer session_initializer(session_options_.enable_mem_pattern, model_location_, graph,
+                                                            *session_state_, execution_providers_, kernel_registry_manager_);
+
+                // create SessionState for subgraphs as it's needed by the transformers
+                ORT_RETURN_IF_ERROR_SESSIONID_(CreateSubgraphSessionState(graph, *session_state_));
+
+                // apply any transformations to the main graph and any subgraphs
+                ORT_RETURN_IF_ERROR_SESSIONID_(TransformGraph(graph, graph_transformation_mgr_,
+                                                              execution_providers_, kernel_registry_manager_,
+                                                              insert_cast_transformer_,
+                                                              *session_state_));
+
+                // now that all the transforms are done, call Resolve on the main graph. this will recurse into the subgraphs.
+                ORT_RETURN_IF_ERROR_SESSIONID_(graph.Resolve());
+
+                if (!session_options_.optimized_model_filepath.empty()) {
+                  // Serialize optimized ONNX model.
+                  ORT_RETURN_IF_ERROR_SESSIONID_(Model::Save(*model_, session_options_.optimized_model_filepath));
+                  if (session_options_.graph_optimization_level >= TransformerLevel::Level3) {
+                    // LOGS(*session_logger_, WARNING) << "Serializing Optimized ONNX model with Graph Optimization"
+                    //" level greater than ORT_ENABLE_EXTENDED. The generated"
+                    //" model may contain hardware and execution provider specific"
+                    //" optimizations, and should only be used in the same environment"
+                    //" the model was optimized for.";
+                  }
+                }
+
+                ORT_RETURN_IF_ERROR_SESSIONID_(session_initializer.CreatePlan(nullptr, nullptr, session_options_.execution_mode));
+
+                // handle any subgraphs
+                ORT_RETURN_IF_ERROR_SESSIONID_(InitializeSubgraphSessions(graph, *session_state_));
+                session_state_->ResolveMemoryPatternFlag();
+                is_inited_ = true;
+
+                // and log telemetry
+                bool model_has_fp16_inputs = ModelHasFP16Inputs(graph);
+                env.GetTelemetryProvider().LogSessionCreation(
+                    session_id_, model_->IrVersion(), model_->ProducerName(), model_->ProducerVersion(), model_->Domain(),
+                    model_->MainGraph().DomainToVersionMap(), model_->MainGraph().Name(), model_->MetaData(),
+                    telemetry_.event_name_, execution_providers_.GetIds(), model_has_fp16_inputs);
+                // LOGS(*session_logger_, INFO) << "Session successfully initialized.";
+
+#ifndef ORT_NO_EXCEPTIONS
+              } catch (const NotImplementedException& ex) {
+                status = ORT_MAKE_STATUS(ONNXRUNTIME, NOT_IMPLEMENTED, "Exception during initialization: ", ex.what());
+                // LOGS(*session_logger_, ERROR) << status.ErrorMessage();
+              } catch (const std::exception& ex) {
+                status = ORT_MAKE_STATUS(ONNXRUNTIME, RUNTIME_EXCEPTION, "Exception during initialization: ", ex.what());
+                // LOGS(*session_logger_, ERROR) << status.ErrorMessage();
+              } catch (...) {
+                status = ORT_MAKE_STATUS(ONNXRUNTIME, RUNTIME_EXCEPTION, "Encountered unknown exception in Initialize()");
+                // LOGS(*session_logger_, ERROR) << status.ErrorMessage();
               }
-
-              ORT_RETURN_IF_ERROR_SESSIONID_(session_initializer.CreatePlan(nullptr, nullptr, session_options_.execution_mode));
-
-              // handle any subgraphs
-              ORT_RETURN_IF_ERROR_SESSIONID_(InitializeSubgraphSessions(graph, *session_state_));
-              session_state_->ResolveMemoryPatternFlag();
-              is_inited_ = true;
-
-              // and log telemetry
-              bool model_has_fp16_inputs = ModelHasFP16Inputs(graph);
-              env.GetTelemetryProvider().LogSessionCreation(
-                  session_id_, model_->IrVersion(), model_->ProducerName(), model_->ProducerVersion(), model_->Domain(),
-                  model_->MainGraph().DomainToVersionMap(), model_->MainGraph().Name(), model_->MetaData(),
-                  telemetry_.event_name_, execution_providers_.GetIds(), model_has_fp16_inputs);
-              // LOGS(*session_logger_, INFO) << "Session successfully initialized.";
-              //} catch (const NotImplementedException& ex) {
-              //  status = ORT_MAKE_STATUS(ONNXRUNTIME, NOT_IMPLEMENTED, "Exception during initialization: ", ex.what());
-              //  // LOGS(*session_logger_, ERROR) << status.ErrorMessage();
-              //} catch (const std::exception& ex) {
-              //  status = ORT_MAKE_STATUS(ONNXRUNTIME, RUNTIME_EXCEPTION, "Exception during initialization: ", ex.what());
-              //  // LOGS(*session_logger_, ERROR) << status.ErrorMessage();
-              //} catch (...) {
-              //  status = ORT_MAKE_STATUS(ONNXRUNTIME, RUNTIME_EXCEPTION, "Encountered unknown exception in Initialize()");
-              //  // LOGS(*session_logger_, ERROR) << status.ErrorMessage();
-              //}
+#endif
 
               if (session_profiler_.IsEnabled()) {
                 session_profiler_.EndTimeAndRecordEvent(profiling::SESSION_EVENT, "session_initialization", tp);
@@ -1117,69 +1131,73 @@ common::Status InferenceSession::Load(const std::basic_string<T>& model_uri) {
               std::vector<IExecutionProvider*> exec_providers_to_stop;
               exec_providers_to_stop.reserve(execution_providers_.NumProviders());
 
-              //try {
-              if (!is_inited_) {
-                // LOGS(*session_logger_, ERROR) << "Session was not initialized";
-                return Status(common::ONNXRUNTIME, common::FAIL, "Session not initialized.");
+#ifndef ORT_NO_EXCEPTIONS
+              try {
+#endif
+
+                if (!is_inited_) {
+                  // LOGS(*session_logger_, ERROR) << "Session was not initialized";
+                  return Status(common::ONNXRUNTIME, common::FAIL, "Session not initialized.");
+                }
+
+                // check the frequency to send Evalutaion Stop event
+                if (TimeDiffMicroSeconds(telemetry_.time_sent_last_evalutation_start_) >
+                    telemetry_.kDurationBetweenSendingEvaluationStart) {
+                  env.GetTelemetryProvider().LogEvaluationStart();
+                  // reset counters
+                  telemetry_.time_sent_last_evalutation_start_ = std::chrono::high_resolution_clock::now();
+                  telemetry_.isEvaluationStart = true;
+                }
+
+                ORT_RETURN_IF_ERROR_SESSIONID_(ValidateInputs(feed_names, feeds));
+                ORT_RETURN_IF_ERROR_SESSIONID_(ValidateOutputs(output_names, p_fetches));
+
+                FeedsFetchesInfo info(feed_names, output_names, session_state_->GetOrtValueNameIdxMap());
+                FeedsFetchesManager feeds_fetches_manager{std::move(info)};
+
+                if (!run_options.run_tag.empty()) {
+                  // LOGS(*session_logger_, INFO) << "Running with tag: " << run_options.run_tag;
+                }
+
+                ++current_num_runs_;
+
+                // TODO should we add this exec to the list of executors? i guess its not needed now?
+
+                // scope of owned_run_logger is just the call to Execute.
+                // If Execute ever becomes async we need a different approach
+                std::unique_ptr<logging::Logger> owned_run_logger;
+                auto run_logger = CreateLoggerForRun(run_options, owned_run_logger);
+
+                // info all execution providers InferenceSession:Run started
+                // TODO: only call OnRunStart for all providers in-use
+                for (auto& xp : execution_providers_) {
+                  // call OnRunStart and add to exec_providers_to_stop if successful
+                  auto start_func = [&xp, &exec_providers_to_stop]() {
+                    auto status = xp->OnRunStart();
+                    if (status.IsOK())
+                      exec_providers_to_stop.push_back(xp.get());
+
+                    return status;
+                  };
+
+                  ORT_CHECK_AND_SET_RETVAL(start_func());
+                }
+
+                if (run_options.only_execute_path_to_fetches) {
+                  session_state_->UpdateToBeExecutedNodes(feeds_fetches_manager.GetFeedsFetchesInfo().fetches_mlvalue_idxs);
+                }
+                // execute the graph
+                ORT_CHECK_AND_SET_RETVAL(utils::ExecuteGraph(*session_state_, feeds_fetches_manager, feeds, *p_fetches,
+                                                             session_options_.execution_mode, run_options.terminate, run_logger,
+                                                             run_options.only_execute_path_to_fetches));
+
+#ifndef ORT_NO_EXCEPTIONS
+              } catch (const std::exception& e) {
+                retval = Status(common::ONNXRUNTIME, common::FAIL, e.what());
+              } catch (...) {
+                retval = Status(common::ONNXRUNTIME, common::RUNTIME_EXCEPTION, "Encountered unknown exception in Run()");
               }
-
-              // check the frequency to send Evalutaion Stop event
-              if (TimeDiffMicroSeconds(telemetry_.time_sent_last_evalutation_start_) >
-                  telemetry_.kDurationBetweenSendingEvaluationStart) {
-                env.GetTelemetryProvider().LogEvaluationStart();
-                // reset counters
-                telemetry_.time_sent_last_evalutation_start_ = std::chrono::high_resolution_clock::now();
-                telemetry_.isEvaluationStart = true;
-              }
-
-              ORT_RETURN_IF_ERROR_SESSIONID_(ValidateInputs(feed_names, feeds));
-              ORT_RETURN_IF_ERROR_SESSIONID_(ValidateOutputs(output_names, p_fetches));
-
-              FeedsFetchesInfo info(feed_names, output_names, session_state_->GetOrtValueNameIdxMap());
-              FeedsFetchesManager feeds_fetches_manager{std::move(info)};
-
-              if (!run_options.run_tag.empty()) {
-                // LOGS(*session_logger_, INFO) << "Running with tag: " << run_options.run_tag;
-              }
-
-              ++current_num_runs_;
-
-              // TODO should we add this exec to the list of executors? i guess its not needed now?
-
-              // scope of owned_run_logger is just the call to Execute.
-              // If Execute ever becomes async we need a different approach
-              std::unique_ptr<logging::Logger> owned_run_logger;
-              auto run_logger = CreateLoggerForRun(run_options, owned_run_logger);
-
-              // info all execution providers InferenceSession:Run started
-              // TODO: only call OnRunStart for all providers in-use
-              for (auto& xp : execution_providers_) {
-                // call OnRunStart and add to exec_providers_to_stop if successful
-                auto start_func = [&xp, &exec_providers_to_stop]() {
-                  auto status = xp->OnRunStart();
-                  if (status.IsOK())
-                    exec_providers_to_stop.push_back(xp.get());
-
-                  return status;
-                };
-
-                ORT_CHECK_AND_SET_RETVAL(start_func());
-              }
-
-              if (run_options.only_execute_path_to_fetches) {
-                session_state_->UpdateToBeExecutedNodes(feeds_fetches_manager.GetFeedsFetchesInfo().fetches_mlvalue_idxs);
-              }
-              // execute the graph
-              ORT_CHECK_AND_SET_RETVAL(utils::ExecuteGraph(*session_state_, feeds_fetches_manager, feeds, *p_fetches,
-                                                           session_options_.execution_mode, run_options.terminate, run_logger,
-                                                           run_options.only_execute_path_to_fetches));
-
-              //} catch (const std::exception& e) {
-              //  retval = Status(common::ONNXRUNTIME, common::FAIL, e.what());
-              //} catch (...) {
-              //  retval = Status(common::ONNXRUNTIME, common::RUNTIME_EXCEPTION, "Encountered unknown exception in Run()");
-              //}
-
+#endif
               // info all execution providers InferenceSession:Run ended
               for (auto* xp : exec_providers_to_stop) {
                 auto status = xp->OnRunEnd();

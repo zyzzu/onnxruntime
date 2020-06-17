@@ -28,7 +28,7 @@ static bool IsSupportedDataType(const Node& node) {
 static bool CheckInputShape(const Node& node, const NodeArg& input, const NodeArg& bias) {
   const TensorShapeProto* bias_shape = bias.Shape();
   if (nullptr == bias_shape ||
-      bias_shape->dim_size() != 1 || 
+      bias_shape->dim_size() != 1 ||
       !utils::HasDimValue(bias_shape->dim(0))) {
     return false;
   }
@@ -111,7 +111,7 @@ Status GeluApproximation::ApplyImpl(Graph& graph, bool& modified, int graph_leve
 
   if (count > 0) {
     modified = true;
-    LOGS(logger, INFO) << "Total Gelu Approximation (FastGelu) node count: " << count;
+    //LOGS(logger, INFO) << "Total Gelu Approximation (FastGelu) node count: " << count;
   }
 
   return Status::OK();
