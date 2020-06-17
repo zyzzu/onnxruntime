@@ -42,21 +42,41 @@ OrtValueTensorSlicer<T>::Iterator::Iterator(T& ort_value, size_t slice_dimension
   assert(per_iteration_shape_size >= 0);
   if (!IAllocator::CalcMemSizeForArray(static_cast<size_t>(per_iteration_shape_size), tensor.DataType()->Size(),
                                        &per_iteration_offset_))
-    //throw std::runtime_error("size overflow");
-    abort();
+#ifdef ORT_NO_EXCEPTIONS
+#ifdef LOG_BEFORE_ABORT
+    std::cerr << "size overflow" << std::endl;
+#endif
+  abort();
+#else
+    throw std::runtime_error("size overflow");
+#endif
 
   const int64_t slice_dimension_size = shape.Slice(slice_dimension).Size();
   assert(slice_dimension_size >= 0);
 
   size_t total_len;
   if (!IAllocator::CalcMemSizeForArray(static_cast<size_t>(slice_dimension_size), tensor.DataType()->Size(),
-                                       &total_len))
-    //throw std::runtime_error("size overflow");
+                                       &total_len)) {
+#ifdef ORT_NO_EXCEPTIONS
+#ifdef LOG_BEFORE_ABORT
+    std::cerr << "size overflow" << std::endl;
+#endif
     abort();
+#else
+    throw std::runtime_error("size overflow");
+#endif
+  }
 
-  if (!IAllocator::CalcMemSizeForArray(dim0_offset, total_len, &total_len))
-    //throw std::runtime_error("size overflow");
+  if (!IAllocator::CalcMemSizeForArray(dim0_offset, total_len, &total_len)) {
+#ifdef ORT_NO_EXCEPTIONS
+#ifdef LOG_BEFORE_ABORT
+    std::cerr << "size overflow" << std::endl;
+#endif
     abort();
+#else
+    throw std::runtime_error("size overflow");
+#endif
+  }
 
   // move tensor_data_raw_ to the start of the section to slice
   tensor_data_raw_ = static_cast<const char*>(tensor.DataRaw()) + total_len;

@@ -433,8 +433,7 @@ struct SetMapTypes {
     MLDataType dt = GetMLDataType<V, IsTensorContainedType<V>::value>::Get();
     const auto* value_proto = dt->GetTypeProto();
 #ifdef ORT_NO_RTTI
-    ORT_ENFORCE(value_proto != nullptr, "typeid(V).name()",
-                " expected to be a registered ONNX type");
+    ORT_ENFORCE(value_proto != nullptr, "got unregistered ONNX type");
 #else
     ORT_ENFORCE(value_proto != nullptr, typeid(V).name(),
                 " expected to be a registered ONNX type");
@@ -455,8 +454,7 @@ struct SetSequenceType {
     MLDataType dt = GetMLDataType<T, IsTensorContainedType<T>::value>::Get();
     const auto* elem_proto = dt->GetTypeProto();
 #ifdef ORT_NO_RTTI
-    ORT_ENFORCE(elem_proto != nullptr, "typeid(V).name()",
-                " expected to be a registered ONNX type");
+    ORT_ENFORCE(elem_proto != nullptr, "got unregistered ONNX type");
 #else
     ORT_ENFORCE(elem_proto != nullptr, typeid(T).name(),
                 " expected to be a registered ONNX type");

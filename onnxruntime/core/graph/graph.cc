@@ -57,9 +57,9 @@ static bool UsingLatestOnnxOpset(const DomainToVersionMap& opset_versions) {
   return is_latest_opset;
 }
 
-static Status MergeShapeInfo(const std::string& output_name,
+static Status MergeShapeInfo(const std::string& /*output_name*/,
                              const TypeProto_Tensor& source, TypeProto_Tensor& target,
-                             bool strict, const logging::Logger& /*logger*/) {
+                             bool /*strict*/, const logging::Logger& /*logger*/) {
   //try {
   ONNX_NAMESPACE::mergeInShapeInfo(source, target);
   //} catch (const ONNX_NAMESPACE::InferenceError& ex) {

@@ -763,6 +763,9 @@ common::Status InferenceSession::Load(const std::basic_string<T>& model_uri) {
                   auto* p_op_kernel = session_state.GetMutableKernel(node.Index());
                   ORT_ENFORCE(p_op_kernel);
 #ifdef ORT_NO_RTTI
+                  auto& control_flow_kernel = reinterpret_cast<controlflow::IControlFlowKernel&>(*p_op_kernel);
+                  ORT_RETURN_IF_ERROR_SESSIONID_(
+                      control_flow_kernel.SetupSubgraphExecutionInfo(session_state, name, *subgraph_session_state));
 #else
       auto& control_flow_kernel = dynamic_cast<controlflow::IControlFlowKernel&>(*p_op_kernel);
       ORT_RETURN_IF_ERROR_SESSIONID_(
@@ -997,15 +1000,15 @@ common::Status InferenceSession::Load(const std::basic_string<T>& model_uri) {
               if (actual == expected) {
                 return Status::OK();
               }
+
 #ifdef ORT_NO_RTTI
-              std::string actual_name = "std::string(typeid(*actual).name())";
-              std::string expected_name = "std::string(typeid(*expected).name())";
+              return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT, "Unexpected input data type");
 #else
   auto actual_name = std::string(typeid(*actual).name());
   auto expected_name = std::string(typeid(*expected).name());
+  return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT,
+                "Unexpected input data type. Actual: (" + actual_name + ") , expected: (" + expected_name + ")");
 #endif
-              return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT,
-                            "Unexpected input data type. Actual: (" + actual_name + ") , expected: (" + expected_name + ")");
             }
 
             common::Status InferenceSession::ValidateInputs(const std::vector<std::string>& feed_names,

@@ -142,7 +142,9 @@ class OrtCondVar {
 
     if (!lk.owns_lock()) {
 #ifdef ORT_NO_EXCEPTIONS
+#ifdef LOG_BEFORE_ABORT
       std::cerr << "OrtCondVar wait failed: mutex not locked" << std::endl;
+#endif
       abort();
 #else
       throw std::runtime_error("OrtCondVar wait failed: mutex not locked");

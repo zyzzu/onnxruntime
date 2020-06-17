@@ -84,7 +84,9 @@ struct Base {
   Base(T* p) : p_{p} {
     if (!p) {
 #ifdef ORT_NO_EXCEPTIONS
+#ifdef LOG_BEFORE_ABORT
       std::cerr << "Allocation failure" << std::endl;
+#endif
       abort();
 #else
       throw Ort::Exception("Allocation failure", ORT_FAIL);

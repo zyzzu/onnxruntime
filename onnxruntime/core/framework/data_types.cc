@@ -698,7 +698,7 @@ const char* DataTypeImpl::ToString(MLDataType type) {
     return ONNX_NAMESPACE::Utils::DataTypeUtils::ToType(*type_proto)->c_str();
   }
 #ifdef ORT_NO_RTTI
-  return "typeid(*type).name()";
+  ORT_THROW("got non-ONNX data type");
 #else
   return typeid(*type).name();
 #endif
@@ -956,7 +956,8 @@ std::ostream& operator<<(std::ostream& out, const DataTypeImpl* data_type) {
     return out << "(null)";
 
 #ifdef ORT_NO_RTTI
-  return out << "typeid(*data_type).name()";
+  // would need a string with the type name in DataTypeImpl to output anything meaningful here
+  return out;
 #else
   return out << typeid(*data_type).name();
 #endif

@@ -185,6 +185,7 @@ static void RemoveGraphEdges(Graph& graph, const std::vector<GraphEdge>& edges) 
 static bool CanUpdateImplicitInputNameInSubgraphs(const Graph& graph,
                                                   const std::vector<GraphEdge>& output_edges,
                                                   const std::string& new_arg_name, const logging::Logger& logger) {
+  ORT_UNUSED_PARAMETER(logger);
   for (const auto& output_edge : output_edges) {
     if (OutputEdgeProvidesImplicitInput(graph, output_edge)) {
       const Node& output_edge_node = *graph.GetNode(output_edge.dst_node);
@@ -694,9 +695,11 @@ inline std::string ToString(const std::vector<ONNX_NAMESPACE::OperatorSetVersion
   return output.str();
 }
 
-bool FindPath(const Node& node, bool is_input_edge, const std::vector<EdgeEndToMatch>& edges_to_match, std::vector<const Node::EdgeEnd*>& result, const logging::Logger& logger) {
+bool FindPath(const Node& node, bool is_input_edge, const std::vector<EdgeEndToMatch>& edges_to_match,
+              std::vector<const Node::EdgeEnd*>& result, const logging::Logger& logger) {
   result.clear();
   result.reserve(edges_to_match.size());
+  ORT_UNUSED_PARAMETER(logger);
 
   const Node* current_node = &node;
   for (const auto& edge : edges_to_match) {

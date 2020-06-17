@@ -85,18 +85,40 @@ Model::Model(ModelProto&& model_proto, const PathString& model_path, const IOnnx
              const logging::Logger& logger)
     : model_path_(Path::Parse(model_path)) {
   if (!utils::HasGraph(model_proto)) {
-    abort();  // throw std::invalid_argument("ModelProto does not have a graph.");
+#ifdef ORT_NO_EXCEPTIONS
+#ifdef LOG_BEFORE_ABORT
+    std::cerr << "ModelProto does not have a graph." << std::endl;
+#endif
+    abort();
+#else
+    throw std::invalid_argument("ModelProto does not have a graph.");
+#endif
   }
 
   if (model_proto.opset_import_size() == 0) {
-    //throw std::invalid_argument(
-    //    "Missing opset in the model. All ModelProtos MUST have at least one entry that"
-    //    " specifies which version of the ONNX OperatorSet is being imported.");
+#ifdef ORT_NO_EXCEPTIONS
+#ifdef LOG_BEFORE_ABORT
+    std::cerr << "Missing opset in the model. All ModelProtos MUST have at least one entry that"
+                 " specifies which version of the ONNX OperatorSet is being imported."
+              << std::endl;
+#endif
     abort();
+#else
+    throw std::invalid_argument(
+        "Missing opset in the model. All ModelProtos MUST have at least one entry that"
+        " specifies which version of the ONNX OperatorSet is being imported.");
+#endif
   }
 
   if (!model_proto.has_ir_version() || model_proto.ir_version() > ONNX_NAMESPACE::Version::IR_VERSION) {
-    abort();  // throw std::invalid_argument("Unknown model file format version.");
+#ifdef ORT_NO_EXCEPTIONS
+#ifdef LOG_BEFORE_ABORT
+    std::cerr << "Unknown model file format version." << std::endl;
+#endif
+    abort();
+#else
+    throw std::invalid_argument("Unknown model file format version.");
+#endif
   }
 
   model_proto_ = std::move(model_proto);

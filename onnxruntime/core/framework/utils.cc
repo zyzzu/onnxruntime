@@ -71,13 +71,41 @@ void* DefaultAlloc(size_t size) {
   size_t alignment = MlasGetPreferredBufferAlignment();
 #if _MSC_VER
   p = _aligned_malloc(size, alignment);
-  if (p == nullptr) abort();  // throw std::bad_alloc();
+  if (p == nullptr) {
+#ifdef ORT_NO_EXCEPTIONS
+#ifdef LOG_BEFORE_ABORT
+    std::cerr << "_aligned_malloc returned nullptr for size " << size << std::endl;
+#endif
+    abort();
+#else
+    throw std::bad_alloc();
+#endif
+  }
+
 #elif defined(_LIBCPP_SGX_CONFIG)
   p = memalign(alignment, size);
-  if (p == nullptr) abort();  // throw std::bad_alloc();
+  if (p == nullptr) {
+#ifdef ORT_NO_EXCEPTIONS
+#ifdef LOG_BEFORE_ABORT
+    std::cerr << "memalign returned nullptr for size " << size << std::endl;
+#endif
+    abort();
+#else
+    throw std::bad_alloc();
+#endif
+  }
 #else
   int ret = posix_memalign(&p, alignment, size);
-  if (ret != 0) abort();  // throw std::bad_alloc();
+  if (ret != 0) {
+#ifdef ORT_NO_EXCEPTIONS
+#ifdef LOG_BEFORE_ABORT
+    std::cerr << "posix_memalign returned nullptr for size " << size << std::endl;
+#endif
+    abort();
+#else
+    throw std::bad_alloc();
+#endif
+  }
 #endif
   return p;
 }

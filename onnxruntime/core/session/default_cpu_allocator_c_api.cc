@@ -18,7 +18,14 @@ void ThrowOnError(OrtStatus* status) {
     std::string ort_error_message = OrtApis::GetErrorMessage(status);
     OrtErrorCode ort_error_code = OrtApis::GetErrorCode(status);
     OrtApis::ReleaseStatus(status);
-    abort();  // throw Ort::Exception(std::move(ort_error_message), ort_error_code);
+#ifdef ORT_NO_EXCEPTIONS
+#ifdef LOG_BEFORE_ABORT
+    std::cerr << ort_error_code << ":" << ort_error_message << std::endl;
+#endif
+    abort();
+#else
+    throw Ort::Exception(std::move(ort_error_message), ort_error_code);
+#endif
   }
 }
 

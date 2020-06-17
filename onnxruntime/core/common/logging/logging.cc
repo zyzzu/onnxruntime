@@ -90,7 +90,9 @@ LoggingManager::LoggingManager(std::unique_ptr<ISink> sink, Severity default_min
       owns_default_logger_{false} {
   if (sink_ == nullptr) {
 #ifdef ORT_NO_EXCEPTIONS
+#ifdef LOG_BEFORE_ABORT
     std::cerr << "ISink must be provided." << std::endl;
+#endif
     abort();
 #else
     throw std::logic_error("ISink must be provided.");
@@ -100,7 +102,9 @@ LoggingManager::LoggingManager(std::unique_ptr<ISink> sink, Severity default_min
   if (instance_type == InstanceType::Default) {
     if (default_logger_id == nullptr) {
 #ifdef ORT_NO_EXCEPTIONS
+#ifdef LOG_BEFORE_ABORT
       std::cerr << "default_logger_id must be provided if instance_type is InstanceType::Default" << std::endl;
+#endif
       abort();
 #else
       throw std::logic_error("default_logger_id must be provided if instance_type is InstanceType::Default");
@@ -113,9 +117,11 @@ LoggingManager::LoggingManager(std::unique_ptr<ISink> sink, Severity default_min
 
     if (DefaultLoggerManagerInstance().load() != nullptr) {
 #ifdef ORT_NO_EXCEPTIONS
+#ifdef LOG_BEFORE_ABORT
       std::cerr << "Only one instance of LoggingManager created with InstanceType::Default "
                    "can exist at any point in time."
                 << std::endl;
+#endif
       abort();
 #else
       throw std::logic_error(
@@ -151,7 +157,9 @@ void LoggingManager::CreateDefaultLogger(const std::string& logger_id) {
   // this method is only called from ctor in scope where DefaultLoggerMutex() is already locked
   if (s_default_logger_ != nullptr) {
 #ifdef ORT_NO_EXCEPTIONS
+#ifdef LOG_BEFORE_ABORT
     std::cerr << "Default logger already set." << std::endl;
+#endif
     abort();
 #else
     throw std::logic_error("Default logger already set.");

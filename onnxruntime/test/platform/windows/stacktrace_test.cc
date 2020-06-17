@@ -32,6 +32,7 @@ TEST(StacktraceTests, BasicTests) {
     // check that we have
     EXPECT_THAT(result[0], HasSubstr("Unknown symbol"));
 
+#ifndef ORT_NO_EXCEPTIONS
   try {
     ORT_THROW("Testing");
   } catch (const OnnxRuntimeException& ex) {
@@ -45,6 +46,7 @@ TEST(StacktraceTests, BasicTests) {
       // otherwise just make sure we captured where the throw was from
       EXPECT_THAT(msg, HasSubstr("BasicTests"));
   }
+#endif
 }
 #endif
 }  // namespace test

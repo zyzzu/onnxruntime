@@ -260,8 +260,14 @@ void LoopDir(const std::string& dir_name, T func) {
     std::ostringstream oss;
     oss << "couldn't open '" << dir_name << "':" << msg;
     std::string s = oss.str();
-    // throw std::runtime_error(s);
+#ifdef ORT_NO_EXCEPTIONS
+#ifdef LOG_BEFORE_ABORT
+    std::cerr << s << std::endl;
+#endif
     abort();
+#else
+    throw std::runtime_error(s);
+#endif
   }
   //try {
   struct dirent* dp;

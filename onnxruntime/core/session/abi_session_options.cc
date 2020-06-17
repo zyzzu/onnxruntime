@@ -13,7 +13,14 @@
 OrtSessionOptions::~OrtSessionOptions() = default;
 
 OrtSessionOptions& OrtSessionOptions::operator=(const OrtSessionOptions&) {
-  abort();  // throw std::runtime_error("not implemented");
+#ifdef ORT_NO_EXCEPTIONS
+#ifdef LOG_BEFORE_ABORT
+  std::cerr << "not implemented" << std::endl;
+#endif
+  abort();
+#else
+  throw std::runtime_error("not implemented");
+#endif
 }
 OrtSessionOptions::OrtSessionOptions(const OrtSessionOptions& other)
     : value(other.value), provider_factories(other.provider_factories) {

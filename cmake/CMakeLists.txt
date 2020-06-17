@@ -113,11 +113,28 @@ if (NO_RTTI)
   add_compile_definitions("ORT_NO_RTTI=1")
   add_compile_definitions("ONNX_NO_RTTI=1")
   add_compile_definitions("GOOGLE_PROTOBUF_NO_RTTI=1")
+  if(MSVC)
+	string(REGEX REPLACE "/GR" "/GR-" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+  else()
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
+  endif()
 endif()
 
 if (NO_EXCEPTIONS)
   add_compile_definitions("ONNX_NO_EXCEPTIONS=1")
   add_compile_definitions("ORT_NO_EXCEPTIONS=1")
+  add_compile_definitions("LOG_BEFORE_ABORT=1")
+  if(MSVC)
+    string(REGEX REPLACE "/EHsc" "/EHs-c-" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    # Eigen throw_std_bad_alloc calls 'new' instead of throwing which results in a nodiscard warning.
+    # It also has unreachable code as there's no good way to avoid EIGEN_EXCEPTIONS being set in macros.h
+    # TODO: see if we can limit the code this is disabled for.
+    string(APPEND CMAKE_CXX_FLAGS " /wd4834 /wd4702")
+    add_compile_definitions("_HAS_EXCEPTIONS=0")
+  else()
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions")
+  endif()
+
 endif()
 
 # General C# properties
@@ -232,9 +249,13 @@ if (MSVC)
     set(protobuf_MSVC_STATIC_RUNTIME OFF CACHE BOOL "Link protobuf to static runtime libraries" FORCE)
     set(gtest_force_shared_crt ON CACHE BOOL "Use shared (DLL) run-time lib for gtest" FORCE)
   endif()
+  
   #Always enable exception handling, even for Windows ARM
-  string(APPEND CMAKE_CXX_FLAGS " /EHsc /wd26812")
-  string(APPEND CMAKE_C_FLAGS " /EHsc /wd26812")
+  if(NOT NO_EXCEPTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " /EHsc /wd26812")
+    string(APPEND CMAKE_C_FLAGS " /EHsc /wd26812")
+  endif()
+
   if(onnxruntime_USE_AVX)
     string(APPEND CMAKE_CXX_FLAGS " /arch:AVX")
     string(APPEND CMAKE_C_FLAGS " /arch:AVX")
@@ -475,10 +496,16 @@ endif()
 # throw instead of calling terminate if there's a bounds checking violation.
 # we make it through via a handler so CUDA does not complain
 # The following -DGSL macros are recognized by gsl-lite along with -Dgsl macros
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Dgsl_CONFIG_CONTRACT_VIOLATION_THROWS")
+if (NO_EXCEPTIONS)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGSL_TERMINATE_ON_CONTRACT_VIOLATION")
+else()
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGSL_THROW_ON_CONTRACT_VIOLATION")
+endif()
+
 # no bounds checking in release build so no perf cost
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DGSL_UNENFORCED_ON_CONTRACT_VIOLATION")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -DGSL_UNENFORCED_ON_CONTRACT_VIOLATION")
+set(CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL} -DGSL_UNENFORCED_ON_CONTRACT_VIOLATION")
 
 include(eigen)
 
