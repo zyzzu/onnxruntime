@@ -178,14 +178,14 @@ Status LinearClassifier::Compute(OpKernelContext* ctx) const {
         CastInputToFloat<int32_t>(X, cast_span);
         break;
       }
-      case ONNX_NAMESPACE::TensorProto_DataType_INT64: {
-        CastInputToFloat<int64_t>(X, cast_span);
-        break;
-      }
-      case ONNX_NAMESPACE::TensorProto_DataType_DOUBLE: {
-        CastInputToFloat<double>(X, cast_span);
-        break;
-      }
+      //case ONNX_NAMESPACE::TensorProto_DataType_INT64: {
+      //  CastInputToFloat<int64_t>(X, cast_span);
+      //  break;
+      //}
+      //case ONNX_NAMESPACE::TensorProto_DataType_DOUBLE: {
+      //  CastInputToFloat<double>(X, cast_span);
+      //  break;
+      //}
       default:
         return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Unsupported input element type of ", element_type);
     }

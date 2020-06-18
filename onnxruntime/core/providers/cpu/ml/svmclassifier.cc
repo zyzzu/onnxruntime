@@ -116,24 +116,24 @@ Status SVMClassifier::Compute(OpKernelContext* ctx) const {
     tmp_data = static_cast<float*>(allocator->AllocArray(num_elements, sizeof(float)));
 
     switch (element_type) {
-      case ONNX_NAMESPACE::TensorProto_DataType_DOUBLE: {
-        auto in_vector = ConstEigenVectorMap<double>(X.Data<double>(), num_elements);
-        auto output_vector = EigenVectorMap<float>(tmp_data, num_elements);
-        output_vector = in_vector.cast<float>();
-        break;
-      }
+      //case ONNX_NAMESPACE::TensorProto_DataType_DOUBLE: {
+      //  auto in_vector = ConstEigenVectorMap<double>(X.Data<double>(), num_elements);
+      //  auto output_vector = EigenVectorMap<float>(tmp_data, num_elements);
+      //  output_vector = in_vector.cast<float>();
+      //  break;
+      //}
       case ONNX_NAMESPACE::TensorProto_DataType_INT32: {
         auto in_vector = ConstEigenVectorMap<int32_t>(X.Data<int32_t>(), num_elements);
         auto output_vector = EigenVectorMap<float>(tmp_data, num_elements);
         output_vector = in_vector.cast<float>();
         break;
       }
-      case ONNX_NAMESPACE::TensorProto_DataType_INT64: {
-        auto in_vector = ConstEigenVectorMap<int64_t>(X.Data<int64_t>(), num_elements);
-        auto output_vector = EigenVectorMap<float>(tmp_data, num_elements);
-        output_vector = in_vector.cast<float>();
-        break;
-      }
+      //case ONNX_NAMESPACE::TensorProto_DataType_INT64: {
+      //  auto in_vector = ConstEigenVectorMap<int64_t>(X.Data<int64_t>(), num_elements);
+      //  auto output_vector = EigenVectorMap<float>(tmp_data, num_elements);
+      //  output_vector = in_vector.cast<float>();
+      //  break;
+      //}
       default:
         return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Unsupported data type of ", element_type);
     }

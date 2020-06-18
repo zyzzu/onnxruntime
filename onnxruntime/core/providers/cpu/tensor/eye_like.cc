@@ -18,16 +18,14 @@ ONNX_CPU_OPERATOR_KERNEL(
                                           DataTypeImpl::GetTensorType<double>(),
                                           DataTypeImpl::GetTensorType<uint64_t>(),
                                           DataTypeImpl::GetTensorType<int64_t>(),
-                                          DataTypeImpl::GetTensorType<int32_t>()
-                                      })
-                        .TypeConstraint("T2",
-                                        std::vector<MLDataType>{
-                                            DataTypeImpl::GetTensorType<float>(),
-                                            DataTypeImpl::GetTensorType<double>(),
-                                            DataTypeImpl::GetTensorType<uint64_t>(),
-                                            DataTypeImpl::GetTensorType<int64_t>(),
-                                            DataTypeImpl::GetTensorType<int32_t>()
-                                        }),
+                                          DataTypeImpl::GetTensorType<int32_t>()})
+        .TypeConstraint("T2",
+                        std::vector<MLDataType>{
+                            DataTypeImpl::GetTensorType<float>(),
+                            DataTypeImpl::GetTensorType<double>(),
+                            DataTypeImpl::GetTensorType<uint64_t>(),
+                            DataTypeImpl::GetTensorType<int64_t>(),
+                            DataTypeImpl::GetTensorType<int32_t>()}),
     EyeLike);
 
 Status EyeLike::Compute(OpKernelContext* context) const {
@@ -38,14 +36,14 @@ Status EyeLike::Compute(OpKernelContext* context) const {
   switch (output_tensor_dtype) {
     case ONNX_NAMESPACE::TensorProto_DataType_FLOAT:
       return ComputeImpl<float>(context, T1);
-    case ONNX_NAMESPACE::TensorProto_DataType_DOUBLE:
-      return ComputeImpl<double>(context, T1);
+    //case ONNX_NAMESPACE::TensorProto_DataType_DOUBLE:
+    //  return ComputeImpl<double>(context, T1);
     case ONNX_NAMESPACE::TensorProto_DataType_INT32:
       return ComputeImpl<int32_t>(context, T1);
-    case ONNX_NAMESPACE::TensorProto_DataType_UINT64:
-      return ComputeImpl<uint64_t>(context, T1);
-    case ONNX_NAMESPACE::TensorProto_DataType_INT64:
-      return ComputeImpl<int64_t>(context, T1);
+    //case ONNX_NAMESPACE::TensorProto_DataType_UINT64:
+    //  return ComputeImpl<uint64_t>(context, T1);
+    //case ONNX_NAMESPACE::TensorProto_DataType_INT64:
+    //  return ComputeImpl<int64_t>(context, T1);
     default:
       ORT_THROW("Unsupported 'dtype' value: ", output_tensor_dtype);
   }
@@ -65,7 +63,7 @@ Status EyeLike::ComputeImpl(OpKernelContext* context, const Tensor* T1) const {
       input_dims[0],
       input_dims[1]);
   output_mat.setZero();
-  
+
   if ((k_ >= 0 && k_ >= input_dims[1]) || (k_ < 0 && std::abs(k_) >= input_dims[0])) {
     return Status::OK();
   }
