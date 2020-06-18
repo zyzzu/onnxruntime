@@ -2,33 +2,33 @@
 // Licensed under the MIT License.
 
 #include "core/optimizer/graph_transformer_utils.h"
-#include "core/optimizer/identity_elimination.h"
-#include "core/optimizer/slice_elimination.h"
-#include "core/optimizer/conv_mul_fusion.h"
-#include "core/optimizer/conv_bn_fusion.h"
-#include "core/optimizer/conv_add_fusion.h"
-#include "core/optimizer/constant_folding.h"
-#include "core/optimizer/unsqueeze_elimination.h"
-#include "core/optimizer/rule_based_graph_transformer.h"
-#include "core/optimizer/conv_activation_fusion.h"
-#include "core/optimizer/gemm_activation_fusion.h"
-#include "core/optimizer/matmul_add_fusion.h"
-#include "core/optimizer/dropout_elimination.h"
-#include "core/optimizer/relu_clip_fusion.h"
-#include "core/optimizer/shape_to_initializer.h"
+//#include "core/optimizer/identity_elimination.h"
+//#include "core/optimizer/slice_elimination.h"
+//#include "core/optimizer/conv_mul_fusion.h"
+//#include "core/optimizer/conv_bn_fusion.h"
+//#include "core/optimizer/conv_add_fusion.h"
+//#include "core/optimizer/constant_folding.h"
+//#include "core/optimizer/unsqueeze_elimination.h"
+//#include "core/optimizer/rule_based_graph_transformer.h"
+//#include "core/optimizer/conv_activation_fusion.h"
+//#include "core/optimizer/gemm_activation_fusion.h"
+//#include "core/optimizer/matmul_add_fusion.h"
+//#include "core/optimizer/dropout_elimination.h"
+//#include "core/optimizer/relu_clip_fusion.h"
+//#include "core/optimizer/shape_to_initializer.h"
 #include "core/optimizer/nchwc_transformer.h"
-#include "core/optimizer/free_dim_override_transformer.h"
-#include "core/optimizer/bias_gelu_fusion.h"
-#include "core/optimizer/gelu_fusion.h"
-#include "core/optimizer/gelu_approximation.h"
-#include "core/optimizer/fast_gelu_fusion.h"
-#include "core/optimizer/layer_norm_fusion.h"
-#include "core/optimizer/skip_layer_norm_fusion.h"
-#include "core/optimizer/embed_layer_norm_fusion.h"
-#include "core/optimizer/reshape_fusion.h"
-#include "core/optimizer/attention_fusion.h"
-#include "core/optimizer/expand_elimination.h"
-#include "core/optimizer/cast_elimination.h"
+//#include "core/optimizer/free_dim_override_transformer.h"
+//#include "core/optimizer/bias_gelu_fusion.h"
+//#include "core/optimizer/gelu_fusion.h"
+//#include "core/optimizer/gelu_approximation.h"
+//#include "core/optimizer/fast_gelu_fusion.h"
+//#include "core/optimizer/layer_norm_fusion.h"
+//#include "core/optimizer/skip_layer_norm_fusion.h"
+//#include "core/optimizer/embed_layer_norm_fusion.h"
+//#include "core/optimizer/reshape_fusion.h"
+//#include "core/optimizer/attention_fusion.h"
+//#include "core/optimizer/expand_elimination.h"
+//#include "core/optimizer/cast_elimination.h"
 #include "core/mlas/inc/mlas.h"
 
 namespace onnxruntime {
@@ -47,17 +47,17 @@ std::vector<std::unique_ptr<RewriteRule>> GenerateRewriteRules(TransformerLevel 
 
   switch (level) {
     case TransformerLevel::Level1:
-      rules.push_back(onnxruntime::make_unique<EliminateIdentity>());
-      rules.push_back(onnxruntime::make_unique<EliminateSlice>());
-      rules.push_back(onnxruntime::make_unique<UnsqueezeElimination>());
-      rules.push_back(onnxruntime::make_unique<EliminateDropout>());
-      rules.push_back(onnxruntime::make_unique<ExpandElimination>());
-      rules.push_back(onnxruntime::make_unique<CastElimination>());
-      rules.push_back(onnxruntime::make_unique<FuseReluClip>());
-      rules.push_back(onnxruntime::make_unique<ShapeToInitializer>());
-      rules.push_back(onnxruntime::make_unique<ConvAddFusion>());
-      rules.push_back(onnxruntime::make_unique<ConvMulFusion>());
-      rules.push_back(onnxruntime::make_unique<ConvBNFusion>());
+      //rules.push_back(onnxruntime::make_unique<EliminateIdentity>());
+      //rules.push_back(onnxruntime::make_unique<EliminateSlice>());
+      //rules.push_back(onnxruntime::make_unique<UnsqueezeElimination>());
+      //rules.push_back(onnxruntime::make_unique<EliminateDropout>());
+      //rules.push_back(onnxruntime::make_unique<ExpandElimination>());
+      //rules.push_back(onnxruntime::make_unique<CastElimination>());
+      //rules.push_back(onnxruntime::make_unique<FuseReluClip>());
+      //rules.push_back(onnxruntime::make_unique<ShapeToInitializer>());
+      //rules.push_back(onnxruntime::make_unique<ConvAddFusion>());
+      //rules.push_back(onnxruntime::make_unique<ConvMulFusion>());
+      //rules.push_back(onnxruntime::make_unique<ConvBNFusion>());
       break;
 
     case TransformerLevel::Level2:
@@ -123,10 +123,10 @@ std::vector<std::unique_ptr<GraphTransformer>> GenerateTransformers(TransformerL
     case TransformerLevel::Level1: {
       std::unordered_set<std::string> l1_execution_providers = {};
 
-      transformers.emplace_back(onnxruntime::make_unique<ConstantFolding>(l1_execution_providers));
-      transformers.emplace_back(onnxruntime::make_unique<MatMulAddFusion>(l1_execution_providers));
-      transformers.emplace_back(onnxruntime::make_unique<ReshapeFusion>(l1_execution_providers));
-      transformers.emplace_back(onnxruntime::make_unique<FreeDimensionOverrideTransformer>(free_dimension_overrides));
+      //transformers.emplace_back(onnxruntime::make_unique<ConstantFolding>(l1_execution_providers));
+      //transformers.emplace_back(onnxruntime::make_unique<MatMulAddFusion>(l1_execution_providers));
+      //transformers.emplace_back(onnxruntime::make_unique<ReshapeFusion>(l1_execution_providers));
+      //transformers.emplace_back(onnxruntime::make_unique<FreeDimensionOverrideTransformer>(free_dimension_overrides));
 
       rule_transformer = GenerateRuleBasedGraphTransformer(level, transformers_and_rules_to_enable, l1_execution_providers);
     } break;
@@ -138,22 +138,22 @@ std::vector<std::unique_ptr<GraphTransformer>> GenerateTransformers(TransformerL
       rule_transformer = GenerateRuleBasedGraphTransformer(level, transformers_and_rules_to_enable, cpu_execution_providers);
 
 #ifndef DISABLE_CONTRIB_OPS
-      transformers.emplace_back(onnxruntime::make_unique<GemmActivationFusion>(cpu_execution_providers));
+      //transformers.emplace_back(onnxruntime::make_unique<GemmActivationFusion>(cpu_execution_providers));
 
-      std::unordered_set<std::string> cpu_acl_execution_providers = {onnxruntime::kCpuExecutionProvider, onnxruntime::kAclExecutionProvider};
+      //std::unordered_set<std::string> cpu_acl_execution_providers = {onnxruntime::kCpuExecutionProvider, onnxruntime::kAclExecutionProvider};
 
-      transformers.emplace_back(onnxruntime::make_unique<ConvActivationFusion>(cpu_acl_execution_providers));
+      //transformers.emplace_back(onnxruntime::make_unique<ConvActivationFusion>(cpu_acl_execution_providers));
 
-      std::unordered_set<std::string> cpu_cuda_execution_providers = {onnxruntime::kCpuExecutionProvider, onnxruntime::kCudaExecutionProvider};
-      transformers.emplace_back(onnxruntime::make_unique<GeluFusion>(cpu_cuda_execution_providers));
-      transformers.emplace_back(onnxruntime::make_unique<LayerNormFusion>(cpu_cuda_execution_providers));
-      transformers.emplace_back(onnxruntime::make_unique<AttentionFusion>(cpu_cuda_execution_providers));
-      transformers.emplace_back(onnxruntime::make_unique<EmbedLayerNormFusion>(cpu_cuda_execution_providers));
+      //std::unordered_set<std::string> cpu_cuda_execution_providers = {onnxruntime::kCpuExecutionProvider, onnxruntime::kCudaExecutionProvider};
+      //transformers.emplace_back(onnxruntime::make_unique<GeluFusion>(cpu_cuda_execution_providers));
+      //transformers.emplace_back(onnxruntime::make_unique<LayerNormFusion>(cpu_cuda_execution_providers));
+      //transformers.emplace_back(onnxruntime::make_unique<AttentionFusion>(cpu_cuda_execution_providers));
+      //transformers.emplace_back(onnxruntime::make_unique<EmbedLayerNormFusion>(cpu_cuda_execution_providers));
 
-      transformers.emplace_back(onnxruntime::make_unique<BiasGelu>(cpu_cuda_execution_providers));
-      transformers.emplace_back(onnxruntime::make_unique<SkipLayerNormFusion>(cpu_cuda_execution_providers));
+      //transformers.emplace_back(onnxruntime::make_unique<BiasGelu>(cpu_cuda_execution_providers));
+      //transformers.emplace_back(onnxruntime::make_unique<SkipLayerNormFusion>(cpu_cuda_execution_providers));
 
-      transformers.emplace_back(onnxruntime::make_unique<FastGeluFusion>(cpu_cuda_execution_providers));
+      //transformers.emplace_back(onnxruntime::make_unique<FastGeluFusion>(cpu_cuda_execution_providers));
 #endif
     } break;
 
@@ -183,10 +183,10 @@ std::vector<std::unique_ptr<GraphTransformer>> GenerateTransformers(TransformerL
   // Some transformers have side-effect like result is not exactly same.
   // These transformers could only be enabled by custom transformer list.
 #ifndef DISABLE_CONTRIB_OPS
-  if (level == TransformerLevel::Level2) {
-    std::unordered_set<std::string> cuda_execution_providers = {onnxruntime::kCudaExecutionProvider};
-    transformers.emplace_back(onnxruntime::make_unique<GeluApproximation>(cuda_execution_providers));
-  }
+  //if (level == TransformerLevel::Level2) {
+  //  std::unordered_set<std::string> cuda_execution_providers = {onnxruntime::kCudaExecutionProvider};
+  //  transformers.emplace_back(onnxruntime::make_unique<GeluApproximation>(cuda_execution_providers));
+  //}
 #endif
 
   std::vector<std::unique_ptr<GraphTransformer>> filtered_list;
