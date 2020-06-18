@@ -126,14 +126,15 @@ Status GatherNDBase::PrepareForCompute(OpKernelContext* context, Prepare& p, con
 }
 
 template Status GatherNDBase::PrepareForCompute<int32_t>(OpKernelContext*, Prepare&, concurrency::ThreadPool*) const;
-template Status GatherNDBase::PrepareForCompute<int64_t>(OpKernelContext*, Prepare&, concurrency::ThreadPool*) const;
+//template Status GatherNDBase::PrepareForCompute<int64_t>(OpKernelContext*, Prepare&, concurrency::ThreadPool*) const;
 
 Status GatherND::Compute(OpKernelContext* context) const {
   Prepare p;
   concurrency::ThreadPool* tp = context->GetOperatorThreadPool();
-  ORT_RETURN_IF_ERROR(context->Input<Tensor>(1)->IsDataType<int32_t>()
-                          ? PrepareForCompute<int32_t>(context, p, tp)
-                          : PrepareForCompute<int64_t>(context, p, tp));
+  //ORT_RETURN_IF_ERROR(context->Input<Tensor>(1)->IsDataType<int32_t>()
+  //                        ? PrepareForCompute<int32_t>(context, p, tp)
+  //                        : PrepareForCompute<int64_t>(context, p, tp));
+  ORT_RETURN_IF_ERROR(PrepareForCompute<int32_t>(context, p, tp));
 
   return nullptr == p.input_str_base ? GatherNumber(p, tp) : GatherString(p, tp);
 }

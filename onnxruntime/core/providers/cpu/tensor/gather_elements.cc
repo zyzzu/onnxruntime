@@ -88,10 +88,10 @@ static std::vector<int64_t> parse_and_validate_indices_tensor(const Tensor* indi
     const auto* data = indices_tensor->Data<int32_t>();
     for (int64_t i = 0; i < num_elements; ++i)
       indices_data.push_back(data[i]);
-  } else if (indices_tensor->IsDataType<int64_t>()) {
-    const auto* data = indices_tensor->Data<int64_t>();
-    for (int64_t i = 0; i < num_elements; ++i)
-      indices_data.push_back(data[i]);
+    //} else if (indices_tensor->IsDataType<int64_t>()) {
+    //  const auto* data = indices_tensor->Data<int64_t>();
+    //  for (int64_t i = 0; i < num_elements; ++i)
+    //    indices_data.push_back(data[i]);
   } else {
     ORT_THROW("GatherElements op: Data type for 'indices' tensor must be 'int32_t' and 'int64_t'");
   }
@@ -260,12 +260,11 @@ Status GatherElements::Compute(OpKernelContext* context) const {
   if (indices_shape.Size() == 0)
     return Status::OK();
 
+  //if (input_tensor->IsDataTypeString())
+  //  core_impl<true, std::string>(input_tensor, indices_tensor, output_tensor, axis);
 
-  if (input_tensor->IsDataTypeString())
-    core_impl<true, std::string>(input_tensor, indices_tensor, output_tensor, axis);
-
-  else
-    core_impl<false, int8_t>(input_tensor, indices_tensor, output_tensor, axis);
+  //else
+  core_impl<false, int8_t>(input_tensor, indices_tensor, output_tensor, axis);
 
   return Status::OK();
 }

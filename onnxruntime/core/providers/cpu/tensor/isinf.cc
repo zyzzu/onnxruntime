@@ -77,8 +77,8 @@ Status IsInf::Compute(OpKernelContext* context) const {
 
   if (X.IsDataType<float>()) {
     ComputeImpl<float>(X, Y, detect_positive_ != 0, detect_negative_ != 0);
-  } else if (X.IsDataType<double>()) {
-    ComputeImpl<double>(X, Y, detect_positive_ != 0, detect_negative_ != 0);
+    //} else if (X.IsDataType<double>()) {
+    //  ComputeImpl<double>(X, Y, detect_positive_ != 0, detect_negative_ != 0);
   } else {
     // should not reach this as no kernel is registered for this condition to be triggered - just an additional safety check
     ORT_THROW("Data type X must be float or double, but instead got ", X.DataType());

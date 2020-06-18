@@ -125,19 +125,19 @@ Status Tile::Compute(OpKernelContext* ctx) const {
       input_tensor.IsDataType<uint32_t>())
     return TileCoreForFixedSizeTypes(input_tensor, output_tensor, repeats, input_counters, output_pitches, sizeof(float));
 
-  if (input_tensor.IsDataType<double>() || input_tensor.IsDataType<int64_t>() ||
-      input_tensor.IsDataType<uint64_t>())
-    return TileCoreForFixedSizeTypes(input_tensor, output_tensor, repeats, input_counters, output_pitches, sizeof(double));
+  //if (input_tensor.IsDataType<double>() || input_tensor.IsDataType<int64_t>() ||
+  //    input_tensor.IsDataType<uint64_t>())
+  //  return TileCoreForFixedSizeTypes(input_tensor, output_tensor, repeats, input_counters, output_pitches, sizeof(double));
 
-  else if (input_tensor.IsDataType<int8_t>() ||
-           input_tensor.IsDataType<uint8_t>())
-    return TileCoreForFixedSizeTypes(input_tensor, output_tensor, repeats, input_counters, output_pitches, sizeof(int8_t));
+  //else if (input_tensor.IsDataType<int8_t>() ||
+  //         input_tensor.IsDataType<uint8_t>())
+  //  return TileCoreForFixedSizeTypes(input_tensor, output_tensor, repeats, input_counters, output_pitches, sizeof(int8_t));
 
-  if (input_tensor.IsDataType<int16_t>() || input_tensor.IsDataType<uint16_t>())
-    return TileCoreForFixedSizeTypes(input_tensor, output_tensor, repeats, input_counters, output_pitches, sizeof(int16_t));
+  //if (input_tensor.IsDataType<int16_t>() || input_tensor.IsDataType<uint16_t>())
+  //  return TileCoreForFixedSizeTypes(input_tensor, output_tensor, repeats, input_counters, output_pitches, sizeof(int16_t));
 
-  else if (input_tensor.IsDataType<bool>())
-    return TileCoreForFixedSizeTypes(input_tensor, output_tensor, repeats, input_counters, output_pitches, sizeof(bool));
+  //else if (input_tensor.IsDataType<bool>())
+  //  return TileCoreForFixedSizeTypes(input_tensor, output_tensor, repeats, input_counters, output_pitches, sizeof(bool));
 
   // TODO: Support 'string' and 'float16' types for completeness
   else

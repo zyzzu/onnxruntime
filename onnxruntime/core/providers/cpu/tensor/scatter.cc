@@ -227,8 +227,8 @@ Status Scatter::Compute(OpKernelContext* context) const {
   Status status;
   if (indices_input->IsDataType<int32_t>()) {
     DispatchOnTensorTypeWithReturn(Tdata_type, status, CopyInt32Index, data_input, indices_input, updates_input, axis, data_output);
-  } else if (indices_input->IsDataType<int64_t>()) {
-    DispatchOnTensorTypeWithReturn(Tdata_type, status, CopyInt64Index, data_input, indices_input, updates_input, axis, data_output);
+    //} else if (indices_input->IsDataType<int64_t>()) {
+    //  DispatchOnTensorTypeWithReturn(Tdata_type, status, CopyInt64Index, data_input, indices_input, updates_input, axis, data_output);
   } else {
     return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT, "Expecting indices to be either int32_t or int64_t");
   }

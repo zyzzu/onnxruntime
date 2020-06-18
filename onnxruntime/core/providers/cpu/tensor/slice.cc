@@ -248,15 +248,15 @@ void SliceBase::FillVectorsFromInput(const Tensor& start_tensor,
       std::copy(steps_tensor->Data<int32_t>(), steps_tensor->Data<int32_t>() + size, input_steps.begin());
   }
 
-  else if (start_tensor.IsDataType<int64_t>()) {
-    std::copy(start_tensor.Data<int64_t>(), start_tensor.Data<int64_t>() + size, input_starts.begin());
-    std::copy(ends_tensor.Data<int64_t>(), ends_tensor.Data<int64_t>() + size, input_ends.begin());
-    if (nullptr != axes_tensor)
-      std::copy(axes_tensor->Data<int64_t>(), axes_tensor->Data<int64_t>() + size, input_axes.begin());
-    // Slice V10
-    if (nullptr != steps_tensor)
-      std::copy(steps_tensor->Data<int64_t>(), steps_tensor->Data<int64_t>() + size, input_steps.begin());
-  }
+  //else if (start_tensor.IsDataType<int64_t>()) {
+  //  std::copy(start_tensor.Data<int64_t>(), start_tensor.Data<int64_t>() + size, input_starts.begin());
+  //  std::copy(ends_tensor.Data<int64_t>(), ends_tensor.Data<int64_t>() + size, input_ends.begin());
+  //  if (nullptr != axes_tensor)
+  //    std::copy(axes_tensor->Data<int64_t>(), axes_tensor->Data<int64_t>() + size, input_axes.begin());
+  //  // Slice V10
+  //  if (nullptr != steps_tensor)
+  //    std::copy(steps_tensor->Data<int64_t>(), steps_tensor->Data<int64_t>() + size, input_steps.begin());
+  //}
 
   // should not reach this as no kernel is registered for this condition to be triggered - just an additional safety check
   else {

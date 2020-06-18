@@ -354,8 +354,8 @@ Status SplitToSequence::Compute(OpKernelContext* context) const {
 
   if (input.IsDataType<float>())
     status = ComputeImpl<float>(*context, input, p_split_input);
-  else if (input.IsDataType<double>())
-    status = ComputeImpl<double>(*context, input, p_split_input);
+  //else if (input.IsDataType<double>())
+  //  status = ComputeImpl<double>(*context, input, p_split_input);
   else if (input.IsDataType<int32_t>())
     status = ComputeImpl<int32_t>(*context, input, p_split_input);
   else if (input.IsDataTypeString())
@@ -427,8 +427,8 @@ static int64_t GetScalarSplitInput(const Tensor& tensor) {
   int64_t retval = INT_MAX;
   if (tensor.IsDataType<int32_t>()) {
     retval = *(tensor.Data<int32_t>());
-  } else if (tensor.IsDataType<int64_t>()) {
-    retval = *(tensor.Data<int64_t>());
+    //} else if (tensor.IsDataType<int64_t>()) {
+    //  retval = *(tensor.Data<int64_t>());
   } else {
     ORT_THROW("Invalid data type for split tensor ", DataTypeImpl::ToString(tensor.DataType()));
   }
@@ -441,9 +441,9 @@ static void GetSplitSizesInput(const Tensor& tensor, std::vector<int64_t>& split
   if (tensor.IsDataType<int32_t>()) {
     const int32_t* data_ptr = tensor.Data<int32_t>();
     std::copy(data_ptr, data_ptr + num_elems, std::back_inserter(split_sizes));
-  } else if (tensor.IsDataType<int64_t>()) {
-    const int64_t* data_ptr = tensor.Data<int64_t>();
-    std::copy(data_ptr, data_ptr + num_elems, std::back_inserter(split_sizes));
+    //} else if (tensor.IsDataType<int64_t>()) {
+    //  const int64_t* data_ptr = tensor.Data<int64_t>();
+    //  std::copy(data_ptr, data_ptr + num_elems, std::back_inserter(split_sizes));
   } else {
     ORT_THROW("Invalid data type for split tensor ", DataTypeImpl::ToString(tensor.DataType()));
   }
