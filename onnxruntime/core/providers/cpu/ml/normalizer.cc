@@ -169,7 +169,7 @@ struct Normalizer::CallNormalizerImpl {
 Status Normalizer::Compute(OpKernelContext* context) const {
   const auto& input_tensor_ptr = *context->Input<Tensor>(0);
 
-  utils::MLTypeCallDispatcherRet<Status, CallNormalizerImpl, float, double, int64_t, int32_t>
+  utils::MLTypeCallDispatcherRet<Status, CallNormalizerImpl, float, /*double, int64_t, */ int32_t>
       t_disp(input_tensor_ptr.GetElementType());
 
   auto status = t_disp.Invoke(this, context);

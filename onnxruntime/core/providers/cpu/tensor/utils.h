@@ -252,18 +252,18 @@ struct SliceIteratorBase {
     if (!is_string_tensor_) {
       // switch on element size so copy is efficient
       switch (element_size_) {
-        case sizeof(uint8_t):
-          output = TypedCopyInnermostAxisNonSolitaryInnerStep<uint8_t>(output);
-          break;
-        case sizeof(uint16_t):
-          output = TypedCopyInnermostAxisNonSolitaryInnerStep<uint16_t>(output);
-          break;
+        //case sizeof(uint8_t):
+        //  output = TypedCopyInnermostAxisNonSolitaryInnerStep<uint8_t>(output);
+        //  break;
+        //case sizeof(uint16_t):
+        //  output = TypedCopyInnermostAxisNonSolitaryInnerStep<uint16_t>(output);
+        //  break;
         case sizeof(uint32_t):
           output = TypedCopyInnermostAxisNonSolitaryInnerStep<uint32_t>(output);
           break;
-        case sizeof(uint64_t):
-          output = TypedCopyInnermostAxisNonSolitaryInnerStep<uint64_t>(output);
-          break;
+        //case sizeof(uint64_t):
+        //  output = TypedCopyInnermostAxisNonSolitaryInnerStep<uint64_t>(output);
+        //  break;
         default:
           ORT_THROW("Unexpected element size of ", element_size_);
       }

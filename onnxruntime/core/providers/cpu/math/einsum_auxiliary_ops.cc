@@ -170,10 +170,10 @@ static std::unique_ptr<Tensor> DiagonalInnermostDims(const Tensor& input,
       DiagonalDataAssignment<float>(reinterpret_cast<const float*>(input.DataRaw()), reinterpret_cast<float*>(output->MutableDataRaw()),
                                     batch_size, base_stride, inner_stride);
       break;
-    case 8:
-      DiagonalDataAssignment<double>(reinterpret_cast<const double*>(input.DataRaw()), reinterpret_cast<double*>(output->MutableDataRaw()),
-                                     batch_size, base_stride, inner_stride);
-      break;
+      //case 8:
+      //  DiagonalDataAssignment<double>(reinterpret_cast<const double*>(input.DataRaw()), reinterpret_cast<double*>(output->MutableDataRaw()),
+      //                                 batch_size, base_stride, inner_stride);
+      //  break;
 
     default:
       ORT_THROW("Einsum op: Unsupported data type for Diagonal ", input.DataType());
@@ -288,18 +288,18 @@ template std::unique_ptr<Tensor> ReduceSum<int32_t>(const Tensor& input, const s
                                                     const std::vector<int64_t>& reduce_axes, AllocatorPtr allocator, concurrency::ThreadPool* tp);
 
 // double
-template std::unique_ptr<Tensor> MatMul<double>(const Tensor& input_1, const std::vector<int64_t>& input_shape_1_override,
-                                                const Tensor& input_2, const std::vector<int64_t>& input_shape_2_override,
-                                                AllocatorPtr allocator, concurrency::ThreadPool* tp);
-template std::unique_ptr<Tensor> ReduceSum<double>(const Tensor& input, const std::vector<int64_t>& input_shape_override,
-                                                   const std::vector<int64_t>& reduce_axes, AllocatorPtr allocator, concurrency::ThreadPool* tp);
-
-// int64_t
-template std::unique_ptr<Tensor> MatMul<int64_t>(const Tensor& input_1, const std::vector<int64_t>& input_shape_1_override,
-                                                 const Tensor& input_2, const std::vector<int64_t>& input_shape_2_override,
-                                                 AllocatorPtr allocator, concurrency::ThreadPool* tp);
-template std::unique_ptr<Tensor> ReduceSum<int64_t>(const Tensor& input, const std::vector<int64_t>& input_shape_override,
-                                                    const std::vector<int64_t>& reduce_axes, AllocatorPtr allocator, concurrency::ThreadPool* tp);
+//template std::unique_ptr<Tensor> MatMul<double>(const Tensor& input_1, const std::vector<int64_t>& input_shape_1_override,
+//                                                const Tensor& input_2, const std::vector<int64_t>& input_shape_2_override,
+//                                                AllocatorPtr allocator, concurrency::ThreadPool* tp);
+//template std::unique_ptr<Tensor> ReduceSum<double>(const Tensor& input, const std::vector<int64_t>& input_shape_override,
+//                                                   const std::vector<int64_t>& reduce_axes, AllocatorPtr allocator, concurrency::ThreadPool* tp);
+//
+//// int64_t
+//template std::unique_ptr<Tensor> MatMul<int64_t>(const Tensor& input_1, const std::vector<int64_t>& input_shape_1_override,
+//                                                 const Tensor& input_2, const std::vector<int64_t>& input_shape_2_override,
+//                                                 AllocatorPtr allocator, concurrency::ThreadPool* tp);
+//template std::unique_ptr<Tensor> ReduceSum<int64_t>(const Tensor& input, const std::vector<int64_t>& input_shape_override,
+//                                                    const std::vector<int64_t>& reduce_axes, AllocatorPtr allocator, concurrency::ThreadPool* tp);
 
 }  // namespace EinsumOp
 }  // namespace onnxruntime

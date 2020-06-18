@@ -24,7 +24,7 @@ namespace contrib {
       LayerNorm<T>);
 
 REGISTER_KERNEL_TYPED(float)
-REGISTER_KERNEL_TYPED(double)
+//REGISTER_KERNEL_TYPED(double)
 
 template <typename T>
 LayerNorm<T>::LayerNorm(const OpKernelInfo& op_kernel_info)
@@ -88,29 +88,31 @@ Status LayerNorm<T>::Compute(OpKernelContext* p_ctx) const {
     inv_std_var_data = static_cast<T*>(inv_std_var_data_buf_ptr.get());
   }
 
-  concurrency::ThreadPool::TryBatchParallelFor(p_ctx->GetOperatorThreadPool(), static_cast<int32_t>(norm_count),
-                                               [&](ptrdiff_t task_idx) {
-                                                 const T* p_input = X_data + task_idx * norm_size;
-                                                 T* p_output = Y_data + task_idx * norm_size;
+  concurrency::ThreadPool::TryBatchParallelFor(
+      p_ctx->GetOperatorThreadPool(), static_cast<int32_t>(norm_count),
+      [&](ptrdiff_t task_idx) {
+        const T* p_input = X_data + task_idx * norm_size;
+        T* p_output = Y_data + task_idx * norm_size;
 
-                                                 T mean = 0;
-                                                 T mean_square = 0;
+        T mean = 0;
+        T mean_square = 0;
 
-                                                 for (int64_t h = 0; h < norm_size; h++) {
-                                                   mean += p_input[h];
-                                                   mean_square += p_input[h] * p_input[h];
-                                                 }
+        for (int64_t h = 0; h < norm_size; h++) {
+          mean += p_input[h];
+          mean_square += p_input[h] * p_input[h];
+        }
 
-                                                 mean = mean / norm_size;
-                                                 mean_square = sqrt(mean_square / norm_size - mean * mean + epsilon_);
+        mean = mean / norm_size;
+        mean_square = sqrt(mean_square / norm_size - mean * mean + epsilon_);
 
-                                                 for (int64_t h = 0; h < norm_size; h++) {
-                                                   p_output[h] = (p_input[h] - mean) / mean_square * scale_data[h] + bias_data[h];
-                                                 }
+        for (int64_t h = 0; h < norm_size; h++) {
+          p_output[h] = (p_input[h] - mean) / mean_square * scale_data[h] + bias_data[h];
+        }
 
-                                                 mean_data[task_idx] = mean;
-                                                 inv_std_var_data[task_idx] = 1 / mean_square;
-                                               }, 0);
+        mean_data[task_idx] = mean;
+        inv_std_var_data[task_idx] = 1 / mean_square;
+      },
+      0);
 
   return Status::OK();
 }

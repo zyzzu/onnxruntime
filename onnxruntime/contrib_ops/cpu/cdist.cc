@@ -15,7 +15,7 @@ namespace contrib {
                                 KernelDefBuilder().TypeConstraint("T", DataTypeImpl::GetTensorType<data_type>()), \
                                 CDist<data_type>);
 DEFINE_KERNEL(float);
-DEFINE_KERNEL(double);
+//DEFINE_KERNEL(double);
 
 template <typename T>
 static void CalculateSqeuclidean(const Tensor& a, const Tensor& b, Tensor& c, concurrency::ThreadPool* threadpool) {

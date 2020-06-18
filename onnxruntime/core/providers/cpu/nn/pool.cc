@@ -130,9 +130,8 @@ Status Pool<float, AveragePool>::Compute(OpKernelContext* context) const {
                            pool_attrs_.count_include_pad ? MlasAveragePoolingIncludePad : MlasAveragePoolingExcludePad);
 }
 
-
 Status MaxPoolV8::Compute(OpKernelContext* context) const {
-  utils::MLTypeCallDispatcherRet<Status, ComputeHelper, float, double, int8_t, uint8_t>
+  utils::MLTypeCallDispatcherRet<Status, ComputeHelper, float /*, double*/, int8_t /*, uint8_t*/>
       t_disp(context->Input<Tensor>(0)->GetElementType());
   return t_disp.Invoke(this, context);
 }
@@ -239,12 +238,12 @@ ONNX_CPU_OPERATOR_VERSIONED_KERNEL(MaxPool, 1, 7,
                                    KernelDefBuilder().TypeConstraint("T", DataTypeImpl::GetTensorType<float>()),
                                    Pool<float, MaxPool<1 /*VERSION*/>>);
 
-ONNX_CPU_OPERATOR_VERSIONED_KERNEL(MaxPool, 8, 11, 
-                                         KernelDefBuilder()
-                                             .TypeConstraint("T", {DataTypeImpl::GetTensorType<float>(),
-                                                                   DataTypeImpl::GetTensorType<double>()})
-                                             .TypeConstraint("I", DataTypeImpl::GetTensorType<int64_t>()),
-                                         MaxPoolV8);
+ONNX_CPU_OPERATOR_VERSIONED_KERNEL(MaxPool, 8, 11,
+                                   KernelDefBuilder()
+                                       .TypeConstraint("T", {DataTypeImpl::GetTensorType<float>(),
+                                                             DataTypeImpl::GetTensorType<double>()})
+                                       .TypeConstraint("I", DataTypeImpl::GetTensorType<int64_t>()),
+                                   MaxPoolV8);
 
 ONNX_CPU_OPERATOR_KERNEL(MaxPool, 12,
                          KernelDefBuilder()

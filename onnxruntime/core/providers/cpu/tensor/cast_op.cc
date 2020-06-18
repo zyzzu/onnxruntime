@@ -291,17 +291,17 @@ const std::vector<MLDataType> castOpTypeConstraints{
     return Status::OK();                                                                                                           \
   }
 
-ADD_FROM_CAST_OP(uint8_t);
-ADD_FROM_CAST_OP(uint16_t);
-ADD_FROM_CAST_OP(uint32_t);
-ADD_FROM_CAST_OP(uint64_t);
-ADD_FROM_CAST_OP(int8_t);
-ADD_FROM_CAST_OP(int16_t);
+//ADD_FROM_CAST_OP(uint8_t);
+//ADD_FROM_CAST_OP(uint16_t);
+//ADD_FROM_CAST_OP(uint32_t);
+//ADD_FROM_CAST_OP(uint64_t);
+//ADD_FROM_CAST_OP(int8_t);
+//ADD_FROM_CAST_OP(int16_t);
 ADD_FROM_CAST_OP(int32_t);
-ADD_FROM_CAST_OP(int64_t);
-ADD_FROM_CAST_OP(bool);
+//ADD_FROM_CAST_OP(int64_t);
+//ADD_FROM_CAST_OP(bool);
 ADD_FROM_CAST_OP(float);
-ADD_FROM_CAST_OP(double);
+//ADD_FROM_CAST_OP(double);
 
 ONNX_CPU_OPERATOR_VERSIONED_TYPED_KERNEL(
     Cast,
@@ -318,47 +318,47 @@ Status Cast<MLFloat16>::Compute(OpKernelContext* context) const {
   Tensor* Y = context->Output(0, TensorShape(shape));
   Status st;
   switch (to_) {
-    case TensorProto_DataType_BOOL:
-      st = CastFloat16Data<MLFloat16, bool>(X, Y, shape, context);
-      break;
-    case TensorProto_DataType_INT16:
-      st = CastFloat16Data<MLFloat16, int16_t>(X, Y, shape, context);
-      break;
+    //case TensorProto_DataType_BOOL:
+    //  st = CastFloat16Data<MLFloat16, bool>(X, Y, shape, context);
+    //  break;
+    //case TensorProto_DataType_INT16:
+    //  st = CastFloat16Data<MLFloat16, int16_t>(X, Y, shape, context);
+    //  break;
     case TensorProto_DataType_INT32:
       st = CastFloat16Data<MLFloat16, int32_t>(X, Y, shape, context);
       break;
-    case TensorProto_DataType_INT64:
-      st = CastFloat16Data<MLFloat16, int64_t>(X, Y, shape, context);
-      break;
-    case TensorProto_DataType_UINT8:
-      st = CastFloat16Data<MLFloat16, uint8_t>(X, Y, shape, context);
-      break;
-    case TensorProto_DataType_UINT16:
-      st = CastFloat16Data<MLFloat16, uint16_t>(X, Y, shape, context);
-      break;
-    case TensorProto_DataType_UINT32:
-      st = CastFloat16Data<MLFloat16, uint32_t>(X, Y, shape, context);
-      break;
-    case TensorProto_DataType_UINT64:
-      st = CastFloat16Data<MLFloat16, uint64_t>(X, Y, shape, context);
-      break;
+    //case TensorProto_DataType_INT64:
+    //  st = CastFloat16Data<MLFloat16, int64_t>(X, Y, shape, context);
+    //  break;
+    //case TensorProto_DataType_UINT8:
+    //  st = CastFloat16Data<MLFloat16, uint8_t>(X, Y, shape, context);
+    //  break;
+    //case TensorProto_DataType_UINT16:
+    //  st = CastFloat16Data<MLFloat16, uint16_t>(X, Y, shape, context);
+    //  break;
+    //case TensorProto_DataType_UINT32:
+    //  st = CastFloat16Data<MLFloat16, uint32_t>(X, Y, shape, context);
+    //  break;
+    //case TensorProto_DataType_UINT64:
+    //  st = CastFloat16Data<MLFloat16, uint64_t>(X, Y, shape, context);
+    //  break;
     case TensorProto_DataType_FLOAT:
       CastData<MLFloat16, float>(X, Y, shape);
       break;
-    case TensorProto_DataType_FLOAT16: {
-      auto X_type = X->DataType();
-      const void* source = X->DataRaw(X_type);
-      void* target = Y->MutableDataRaw(X_type);
-      // if source and target pointers are not equal, we need to copy the data.
-      if (target != source) {
-        memcpy(target, source, shape.Size() * X_type->Size());
-      }
-      st = Status::OK();
-      break;
-    }
-    case TensorProto_DataType_DOUBLE:
-      st = CastFloat16Data<MLFloat16, double>(X, Y, shape, context);
-      break;
+    //case TensorProto_DataType_FLOAT16: {
+    //  auto X_type = X->DataType();
+    //  const void* source = X->DataRaw(X_type);
+    //  void* target = Y->MutableDataRaw(X_type);
+    //  // if source and target pointers are not equal, we need to copy the data.
+    //  if (target != source) {
+    //    memcpy(target, source, shape.Size() * X_type->Size());
+    //  }
+    //  st = Status::OK();
+    //  break;
+    //}
+    //case TensorProto_DataType_DOUBLE:
+    //  st = CastFloat16Data<MLFloat16, double>(X, Y, shape, context);
+    //  break;
     case TensorProto_DataType_INT8:
       st = CastFloat16Data<MLFloat16, int8_t>(X, Y, shape, context);
       break;
@@ -388,33 +388,33 @@ Status Cast<std::string>::Compute(OpKernelContext* context) const {
   Tensor* Y = context->Output(0, TensorShape(shape));
   Status st;
   switch (to_) {
-    case TensorProto_DataType_INT16:
-      st = CastFromStringData<int16_t>(X, Y, shape);
-      break;
+    //case TensorProto_DataType_INT16:
+    //  st = CastFromStringData<int16_t>(X, Y, shape);
+    //  break;
     case TensorProto_DataType_INT32:
       st = CastFromStringData<int32_t>(X, Y, shape);
       break;
-    case TensorProto_DataType_INT64:
-      st = CastFromStringData<int64_t>(X, Y, shape);
-      break;
-    case TensorProto_DataType_UINT8:
-      st = CastFromStringData<uint8_t>(X, Y, shape);
-      break;
-    case TensorProto_DataType_UINT16:
-      st = CastFromStringData<uint16_t>(X, Y, shape);
-      break;
-    case TensorProto_DataType_UINT32:
-      st = CastFromStringData<uint32_t>(X, Y, shape);
-      break;
-    case TensorProto_DataType_UINT64:
-      st = CastFromStringData<uint64_t>(X, Y, shape);
-      break;
+    //case TensorProto_DataType_INT64:
+    //  st = CastFromStringData<int64_t>(X, Y, shape);
+    //  break;
+    //case TensorProto_DataType_UINT8:
+    //  st = CastFromStringData<uint8_t>(X, Y, shape);
+    //  break;
+    //case TensorProto_DataType_UINT16:
+    //  st = CastFromStringData<uint16_t>(X, Y, shape);
+    //  break;
+    //case TensorProto_DataType_UINT32:
+    //  st = CastFromStringData<uint32_t>(X, Y, shape);
+    //  break;
+    //case TensorProto_DataType_UINT64:
+    //  st = CastFromStringData<uint64_t>(X, Y, shape);
+    //  break;
     case TensorProto_DataType_FLOAT:
       st = CastFromStringData<float>(X, Y, shape);
       break;
-    case TensorProto_DataType_DOUBLE:
-      st = CastFromStringData<double>(X, Y, shape);
-      break;
+    //case TensorProto_DataType_DOUBLE:
+    //  st = CastFromStringData<double>(X, Y, shape);
+    //  break;
     case TensorProto_DataType_INT8:
       st = CastFromStringData<int8_t>(X, Y, shape);
       break;

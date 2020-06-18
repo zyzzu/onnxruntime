@@ -126,10 +126,10 @@ Status Gather::Compute(OpKernelContext* context) const {
     return GatherCopyData<int32_t>(p.indices_tensor, src_base, dst_base, is_string_type, element_bytes,
                                    block_size, M, N, data_batch_bytes, gathered_batch_bytes, input_data_shape, p.axis, tp);
   }
-  if (p.indices_tensor->IsDataType<int64_t>()) {
-    return GatherCopyData<int64_t>(p.indices_tensor, src_base, dst_base, is_string_type, element_bytes,
-                                   block_size, M, N, data_batch_bytes, gathered_batch_bytes, input_data_shape, p.axis, tp);
-  }
+  //if (p.indices_tensor->IsDataType<int64_t>()) {
+  //  return GatherCopyData<int64_t>(p.indices_tensor, src_base, dst_base, is_string_type, element_bytes,
+  //                                 block_size, M, N, data_batch_bytes, gathered_batch_bytes, input_data_shape, p.axis, tp);
+  //}
 
   return ORT_MAKE_STATUS(ONNXRUNTIME, NOT_IMPLEMENTED, "Type for Tind not supported yet in Gather.");
 }

@@ -242,10 +242,10 @@ Status Multinomial::Compute(OpKernelContext* ctx) const {
       status = MultinomialCompute<int32_t>(ctx, X, batch_size, num_classes, num_samples_, generator_, *Y);
       break;
     }
-    case TensorProto::INT64: {
-      status = MultinomialCompute<int64_t>(ctx, X, batch_size, num_classes, num_samples_, generator_, *Y);
-      break;
-    }
+    //case TensorProto::INT64: {
+    //  status = MultinomialCompute<int64_t>(ctx, X, batch_size, num_classes, num_samples_, generator_, *Y);
+    //  break;
+    //}
     default:
       status = ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Invalid data type of ", output_dtype_);
   }
@@ -283,14 +283,14 @@ static Status RandomNormalCompute(float mean, float scale,
           generator, std::normal_distribution<float>{mean, scale}, Y);
       break;
     }
-    case TensorProto::FLOAT16: {
-      ORT_NOT_IMPLEMENTED("FLOAT16 is not supported");
-    }
-    case TensorProto::DOUBLE: {
-      GenerateData<double, std::normal_distribution<double>>(
-          generator, std::normal_distribution<double>{mean, scale}, Y);
-      break;
-    }
+    //case TensorProto::FLOAT16: {
+    //  ORT_NOT_IMPLEMENTED("FLOAT16 is not supported");
+    //}
+    //case TensorProto::DOUBLE: {
+    //  GenerateData<double, std::normal_distribution<double>>(
+    //      generator, std::normal_distribution<double>{mean, scale}, Y);
+    //  break;
+    //}
     default:
       ORT_THROW("Invalid data type of ", dtype);
   }
@@ -308,14 +308,14 @@ static Status RandomUniformCompute(float low, float high,
           generator, std::uniform_real_distribution<float>{low, high}, Y);
       break;
     }
-    case TensorProto::FLOAT16: {
-      ORT_NOT_IMPLEMENTED("FLOAT16 is not supported");
-    }
-    case TensorProto::DOUBLE: {
-      GenerateData<double, std::uniform_real_distribution<double>>(
-          generator, std::uniform_real_distribution<double>{low, high}, Y);
-      break;
-    }
+    //case TensorProto::FLOAT16: {
+    //  ORT_NOT_IMPLEMENTED("FLOAT16 is not supported");
+    //}
+    //case TensorProto::DOUBLE: {
+    //  GenerateData<double, std::uniform_real_distribution<double>>(
+    //      generator, std::uniform_real_distribution<double>{low, high}, Y);
+    //  break;
+    //}
     default:
       ORT_THROW("Invalid data type of ", dtype);
   }

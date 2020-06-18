@@ -90,15 +90,16 @@ Status Sign::Compute(OpKernelContext* ctx) const {
 
   auto dtype = input->GetElementType();
   switch (dtype) {
-    case ONNX_NAMESPACE::TensorProto_DataType_BFLOAT16:
-      SignBFloat16(input, output);
-      break;
-    case ONNX_NAMESPACE::TensorProto_DataType_FLOAT16:
-      SignMLFloat16(input, output);
-      break;
+    //case ONNX_NAMESPACE::TensorProto_DataType_BFLOAT16:
+    //  SignBFloat16(input, output);
+    //  break;
+    //case ONNX_NAMESPACE::TensorProto_DataType_FLOAT16:
+    //  SignMLFloat16(input, output);
+    //  break;
     default:
-      utils::MLTypeCallDispatcher<CallSignImpl, float, double, int8_t, uint8_t,
-                                  int16_t, uint16_t, int32_t, uint32_t, int64_t, uint64_t>
+      utils::MLTypeCallDispatcher<CallSignImpl, float, /*double, int8_t, uint8_t,
+                                  int16_t, uint16_t, */
+                                  int32_t /*, uint32_t, int64_t, uint64_t*/>
           t_disp(dtype);
       t_disp.Invoke(input, output);
       break;

@@ -10,7 +10,6 @@
 namespace onnxruntime {
 
 class ConstantOfShapeBase {
-
  protected:
   ConstantOfShapeBase(const OpKernelInfo& info);
 
@@ -29,22 +28,22 @@ class ConstantOfShapeBase {
 
   void SetValue(size_t size, void* value) {
     switch (size) {
-      case sizeof(int8_t):
-        s_value_.int8_ = *(reinterpret_cast<int8_t*>(value));
-        p_value_ = reinterpret_cast<void*>(&(s_value_.int8_));
-        break;
-      case sizeof(int16_t):
-        s_value_.int16_ = *(reinterpret_cast<int16_t*>(value));
-        p_value_ = reinterpret_cast<void*>(&(s_value_.int16_));
-        break;
+      //case sizeof(int8_t):
+      //  s_value_.int8_ = *(reinterpret_cast<int8_t*>(value));
+      //  p_value_ = reinterpret_cast<void*>(&(s_value_.int8_));
+      //  break;
+      //case sizeof(int16_t):
+      //  s_value_.int16_ = *(reinterpret_cast<int16_t*>(value));
+      //  p_value_ = reinterpret_cast<void*>(&(s_value_.int16_));
+      //  break;
       case sizeof(int32_t):
         s_value_.int32_ = *(reinterpret_cast<int32_t*>(value));
         p_value_ = reinterpret_cast<void*>(&(s_value_.int32_));
         break;
-      case sizeof(int64_t):
-        s_value_.int64_ = *(reinterpret_cast<int64_t*>(value));
-        p_value_ = reinterpret_cast<void*>(&(s_value_.int64_));
-        break;
+      //case sizeof(int64_t):
+      //  s_value_.int64_ = *(reinterpret_cast<int64_t*>(value));
+      //  p_value_ = reinterpret_cast<void*>(&(s_value_.int64_));
+      //  break;
       default:
         ORT_THROW("Unsupported value attribute datatype with sizeof=: ", size);
         break;
@@ -56,7 +55,7 @@ class ConstantOfShapeBase {
 
 class ConstantOfShape final : public ConstantOfShapeBase, public OpKernel {
  public:
-  explicit ConstantOfShape(const OpKernelInfo& info) : ConstantOfShapeBase(info), OpKernel(info) {};
+  explicit ConstantOfShape(const OpKernelInfo& info) : ConstantOfShapeBase(info), OpKernel(info){};
 
   Status Compute(OpKernelContext* ctx) const override;
 };

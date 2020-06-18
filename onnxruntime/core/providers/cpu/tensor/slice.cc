@@ -359,15 +359,15 @@ Status SliceBase::Compute(OpKernelContext* ctx) const {
       case sizeof(uint32_t):
         status = SliceImpl<uint32_t>(ctx, input_tensor, output_dims, p_flattened_output_dims, starts, steps);
         break;
-      case sizeof(uint64_t):
-        status = SliceImpl<uint64_t>(ctx, input_tensor, output_dims, p_flattened_output_dims, starts, steps);
-        break;
-      case sizeof(uint16_t):
-        status = SliceImpl<uint16_t>(ctx, input_tensor, output_dims, p_flattened_output_dims, starts, steps);
-        break;
-      case sizeof(uint8_t):
-        status = SliceImpl<uint8_t>(ctx, input_tensor, output_dims, p_flattened_output_dims, starts, steps);
-        break;
+      //case sizeof(uint64_t):
+      //  status = SliceImpl<uint64_t>(ctx, input_tensor, output_dims, p_flattened_output_dims, starts, steps);
+      //  break;
+      //case sizeof(uint16_t):
+      //  status = SliceImpl<uint16_t>(ctx, input_tensor, output_dims, p_flattened_output_dims, starts, steps);
+      //  break;
+      //case sizeof(uint8_t):
+      //  status = SliceImpl<uint8_t>(ctx, input_tensor, output_dims, p_flattened_output_dims, starts, steps);
+      //  break;
       default:
         ORT_THROW("Unsupported input data type of ", input_tensor.DataType());
     }

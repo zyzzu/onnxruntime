@@ -338,15 +338,15 @@ Status DispatchOnBase(OpKernelContext* context, const Tensor& X, const Tensor& Y
     case on::TensorProto_DataType_INT32:
       PowImpl<B, int32_t>(context, X, Y);
       break;
-    case on::TensorProto_DataType_INT64:
-      PowImpl<B, int64_t>(context, X, Y);
-      break;
+    //case on::TensorProto_DataType_INT64:
+    //  PowImpl<B, int64_t>(context, X, Y);
+    //  break;
     case on::TensorProto_DataType_FLOAT:
       PowImpl<B, float>(context, X, Y);
       break;
-    case on::TensorProto_DataType_DOUBLE:
-      PowImpl<B, double>(context, X, Y);
-      break;
+    //case on::TensorProto_DataType_DOUBLE:
+    //  PowImpl<B, double>(context, X, Y);
+    //  break;
     default:
       s = ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT, "Unsupported Y type: ",
                           DataTypeImpl::ToString(Y.DataType()));
@@ -370,15 +370,15 @@ Pow::Compute(OpKernelContext* context) const {
     case on::TensorProto_DataType_INT32:
       s = DispatchOnBase<int32_t>(context, X, Y);
       break;
-    case on::TensorProto_DataType_INT64:
-      s = DispatchOnBase<int64_t>(context, X, Y);
-      break;
+    //case on::TensorProto_DataType_INT64:
+    //  s = DispatchOnBase<int64_t>(context, X, Y);
+    //  break;
     case on::TensorProto_DataType_FLOAT:
       s = DispatchOnBase<float>(context, X, Y);
       break;
-    case on::TensorProto_DataType_DOUBLE:
-      s = DispatchOnBase<double>(context, X, Y);
-      break;
+    //case on::TensorProto_DataType_DOUBLE:
+    //  s = DispatchOnBase<double>(context, X, Y);
+    //  break;
     default:
       s = ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT, "Unsupported X type: ",
                           DataTypeImpl::ToString(X.DataType()));
@@ -482,7 +482,7 @@ struct Min_8::ComputeImpl {
 };
 
 Status Min_8::Compute(OpKernelContext* context) const {
-  utils::MLTypeCallDispatcherRet<Status, ComputeImpl, float, double, MLFloat16, int32_t, uint32_t, int64_t, uint64_t>
+  utils::MLTypeCallDispatcherRet<Status, ComputeImpl, float, /*double, MLFloat16, */ int32_t /*, uint32_t, int64_t, uint64_t*/>
       t_disp(context->Input<Tensor>(0)->GetElementType());
   return t_disp.Invoke(this, context);
 }
@@ -517,7 +517,7 @@ struct Max_8::ComputeImpl {
 };
 
 Status Max_8::Compute(OpKernelContext* context) const {
-  utils::MLTypeCallDispatcherRet<Status, ComputeImpl, float, double, MLFloat16, int32_t, uint32_t, int64_t, uint64_t>
+  utils::MLTypeCallDispatcherRet<Status, ComputeImpl, float, /*double, MLFloat16, */ int32_t /*, uint32_t, int64_t, uint64_t*/>
       t_disp(context->Input<Tensor>(0)->GetElementType());
   return t_disp.Invoke(this, context);
 }
@@ -1271,17 +1271,18 @@ Status Mod::Compute(OpKernelContext* context) const {
       ORT_ENFORCE(fmod_, "fmod attribute must be true for float, float16 and double types");
       BroadCastFMod<float>(X, Y, context);
       break;
-    case on::TensorProto_DataType_DOUBLE:
-      ORT_ENFORCE(fmod_, "fmod attribute must be true for float, float16 and double types");
-      BroadCastFMod<double>(X, Y, context);
-      break;
-    case on::TensorProto_DataType_FLOAT16:
-      ORT_ENFORCE(fmod_, "fmod attribute must be true for float, float16 and double types");
-      BroadCastMFloat16FMod(X, Y, context);
-      break;
+    //case on::TensorProto_DataType_DOUBLE:
+    //  ORT_ENFORCE(fmod_, "fmod attribute must be true for float, float16 and double types");
+    //  BroadCastFMod<double>(X, Y, context);
+    //  break;
+    //case on::TensorProto_DataType_FLOAT16:
+    //  ORT_ENFORCE(fmod_, "fmod attribute must be true for float, float16 and double types");
+    //  BroadCastMFloat16FMod(X, Y, context);
+    //  break;
     default:
-      utils::MLTypeCallDispatcher<mod_internal::CallModImpl, uint8_t, int8_t, uint16_t, int16_t,
-                                  uint32_t, int32_t, uint64_t, int64_t>
+      utils::MLTypeCallDispatcher<mod_internal::CallModImpl, /*uint8_t, int8_t, uint16_t, int16_t,
+                                  uint32_t, */
+                                  int32_t /*, uint64_t, int64_t*/>
           t_disp(dt_type);
       t_disp.Invoke(fmod_, X, Y, context);
       break;

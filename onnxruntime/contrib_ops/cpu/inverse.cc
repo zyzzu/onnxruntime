@@ -77,7 +77,7 @@ Status Inverse::Compute(OpKernelContext* ctx) const {
   }
 
   std::function<void(ptrdiff_t)> fn = [elem_type, input, output, rows, cols](ptrdiff_t batch_num) {
-    utils::MLTypeCallDispatcher<ComputeImpl, float, double, MLFloat16> t_disp(elem_type);
+    utils::MLTypeCallDispatcher<ComputeImpl, float /*, double, MLFloat16*/> t_disp(elem_type);
     t_disp.Invoke(input, output, batch_num, rows, cols);
   };
 
