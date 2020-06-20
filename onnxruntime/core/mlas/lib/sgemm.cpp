@@ -273,8 +273,8 @@ MlasSgemmCopyPackB(
     float* D,
     const float* B,
     size_t ldb,
-    size_t CountX,
-    size_t CountY
+    size_t CountN,
+    size_t CountK
     )
 /*++
 
@@ -295,9 +295,9 @@ Arguments:
 
     ldb - Supplies the number of elements per row of the source matrix.
 
-    CountX - Supplies the number of columns of the source matrix to copy.
+    CountN - Supplies the number of columns of the source matrix to copy.
 
-    CountY - Supplies the number of rows of the source matrix to copy.
+    CountK - Supplies the number of rows of the source matrix to copy.
 
 Return Value:
 
@@ -305,48 +305,99 @@ Return Value:
 
 --*/
 {
+#if defined(MLAS_TARGET_AMD64_IX86)
     //
-    // Copy data from matrix B into the destination buffer 64 columns at a
-    // time.
-    //
-    // N.B. This loop coalesces several batches of reads from the source buffer
-    // to improve cache locality especially when the stride of the source matrix
-    // is large.
+    // Copy data from matrix B one row at a time.
     //
 
-    while (CountX >= 64) {
+    const size_t StrideD = 16 * CountK;
 
+    for (size_t k = CountK; k > 0; k--) {
+
+        size_t n = CountN;
         const float* b = B;
-        size_t y = CountY;
-        size_t ldd = 16 * CountY;
+        float* d = D;
 
-        do {
+        while (n >= 64) {
 
-            MlasSgemmCopyPackB16x1(&D[ldd * 0], &b[0]);
-            MlasSgemmCopyPackB16x1(&D[ldd * 1], &b[16]);
-            MlasSgemmCopyPackB16x1(&D[ldd * 2], &b[32]);
-            MlasSgemmCopyPackB16x1(&D[ldd * 3], &b[48]);
+            MlasSgemmCopyPackB16x1(&d[StrideD * 0], &b[0]);
+            MlasSgemmCopyPackB16x1(&d[StrideD * 1], &b[16]);
+            MlasSgemmCopyPackB16x1(&d[StrideD * 2], &b[32]);
+            MlasSgemmCopyPackB16x1(&d[StrideD * 3], &b[48]);
 
-            D += 16;
-            b += ldb;
-            y--;
+            d += StrideD * 4;
+            b += 64;
+            n -= 64;
+        }
 
-        } while (y > 0);
+        while (n >= 16) {
 
-        D += ldd * 3;
-        B += 64;
-        CountX -= 64;
+            MlasSgemmCopyPackB16x1(&d[0], &b[0]);
+
+            d += StrideD;
+            b += 16;
+            n -= 16;
+        }
+
+        if (n > 0) {
+
+            MLAS_FLOAT32X4 ZeroFloat32x4 = MlasZeroFloat32x4();
+
+            MlasStoreAlignedFloat32x4(&d[0], ZeroFloat32x4);
+            MlasStoreAlignedFloat32x4(&d[4], ZeroFloat32x4);
+            MlasStoreAlignedFloat32x4(&d[8], ZeroFloat32x4);
+            MlasStoreAlignedFloat32x4(&d[12], ZeroFloat32x4);
+
+            if ((n & 8) != 0) {
+
+                MLAS_FLOAT32X4 t0 = MlasLoadFloat32x4(&b[0]);
+                MLAS_FLOAT32X4 t1 = MlasLoadFloat32x4(&b[4]);
+
+                MlasStoreAlignedFloat32x4(&d[0], t0);
+                MlasStoreAlignedFloat32x4(&d[4], t1);
+
+                d += 8;
+                b += 8;
+            }
+
+            if ((n & 4) != 0) {
+
+                MlasStoreAlignedFloat32x4(d, MlasLoadFloat32x4(b));
+
+                d += 4;
+                b += 4;
+            }
+
+            if ((n & 2) != 0) {
+
+                float t0 = b[0];
+                float t1 = b[1];
+
+                d[0] = t0;
+                d[1] = t1;
+
+                d += 2;
+                b += 2;
+            }
+
+            if ((n & 1) != 0) {
+                d[0] = b[0];
+            }
+        }
+
+        D += 16;
+        B += ldb;
     }
-
+#else
     //
     // Copy data from matrix B into the destination buffer 16 columns at a
     // time.
     //
 
-    while (CountX >= 16) {
+    while (CountN >= 16) {
 
         const float* b = B;
-        size_t y = CountY;
+        size_t k = CountK;
 
         do {
 
@@ -354,12 +405,12 @@ Return Value:
 
             D += 16;
             b += ldb;
-            y--;
+            k--;
 
-        } while (y > 0);
+        } while (k > 0);
 
         B += 16;
-        CountX -= 16;
+        CountN -= 16;
     }
 
     //
@@ -367,7 +418,7 @@ Return Value:
     // wide.
     //
 
-    if (CountX > 0) {
+    if (CountN > 0) {
 
         MLAS_FLOAT32X4 ZeroFloat32x4 = MlasZeroFloat32x4();
 
@@ -375,7 +426,7 @@ Return Value:
         float32x4x4_t ZeroFloat32x4x4 = { ZeroFloat32x4, ZeroFloat32x4, ZeroFloat32x4, ZeroFloat32x4 };
 #endif
 
-        size_t y = CountY;
+        size_t k = CountK;
 
         do {
 
@@ -391,7 +442,7 @@ Return Value:
             MlasStoreAlignedFloat32x4(d + 12, ZeroFloat32x4);
 #endif
 
-            if ((CountX & 8) != 0) {
+            if ((CountN & 8) != 0) {
 
                 MLAS_FLOAT32X4 t0 = MlasLoadFloat32x4(b);
                 MLAS_FLOAT32X4 t1 = MlasLoadFloat32x4(b + 4);
@@ -403,7 +454,7 @@ Return Value:
                 b += 8;
             }
 
-            if ((CountX & 4) != 0) {
+            if ((CountN & 4) != 0) {
 
                 MlasStoreAlignedFloat32x4(d, MlasLoadFloat32x4(b));
 
@@ -411,7 +462,7 @@ Return Value:
                 b += 4;
             }
 
-            if ((CountX & 2) != 0) {
+            if ((CountN & 2) != 0) {
 
                 float t0 = b[0];
                 float t1 = b[1];
@@ -423,16 +474,17 @@ Return Value:
                 b += 2;
             }
 
-            if ((CountX & 1) != 0) {
+            if ((CountN & 1) != 0) {
                 d[0] = b[0];
             }
 
             D += 16;
             B += ldb;
-            y--;
+            k--;
 
-        } while (y > 0);
+        } while (k > 0);
     }
+#endif
 }
 
 template<unsigned N>
