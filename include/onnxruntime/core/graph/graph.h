@@ -23,6 +23,11 @@
 #include "core/graph/function.h"
 #include "gsl/gsl"
 
+namespace flexbuffers {
+class Builder;
+class Reference;
+}  // namespace flexbuffers
+
 namespace onnxruntime {
 class Graph;
 struct IndexedSubGraph;
@@ -529,7 +534,7 @@ class Graph {
   }
 
   /** Return true if "node_arg" is a input or an initializer. Otherwise, returns false. */
-  bool IsInputsIncludingInitializers(const NodeArg* node_arg) const noexcept{
+  bool IsInputsIncludingInitializers(const NodeArg* node_arg) const noexcept {
     return std::find(graph_inputs_including_initializers_.begin(), graph_inputs_including_initializers_.end(), node_arg) != graph_inputs_including_initializers_.end();
   }
 
@@ -545,7 +550,7 @@ class Graph {
   @remarks Contains no nullptr values.*/
   const std::vector<const NodeArg*>& GetOutputs() const noexcept { return graph_outputs_; }
 
-  bool IsOutput(const NodeArg* node_arg) const noexcept{
+  bool IsOutput(const NodeArg* node_arg) const noexcept {
     return std::find(graph_outputs_.begin(), graph_outputs_.end(), node_arg) != graph_outputs_.end();
   }
 
@@ -904,6 +909,12 @@ class Graph {
 
   virtual ~Graph();
 
+  // EXPERIMENTAL
+  // Create a flexbuffer from the Graph
+  Status Serialize(flexbuffers::Builder& builder) const;
+  static Status Deserialize(const gsl::span<const uint8_t>& bytes, const logging::Logger& logger,
+                            std::unique_ptr<Graph>& graph);
+
  private:
   ORT_DISALLOW_COPY_ASSIGNMENT_AND_MOVE(Graph);
 
@@ -911,7 +922,10 @@ class Graph {
   // Graph::LoadGraph All other access should be via the public API.
   friend class Model;
 
-  Graph() = delete;
+  // create empty instance to re-create from serialized data
+  // as the deserialize is more likely to be error prone we're preferring returning a Status from that than throwing
+  Graph(const logging::Logger& logger);
+  Status Deserialize(const flexbuffers::Reference& fbr);
 
   // Constructor: Given a <GraphProto> loaded from model file, construct
   // a <Graph> object. Used by Model to create a Graph instance.
@@ -924,7 +938,7 @@ class Graph {
         const std::unordered_map<std::string, const ONNX_NAMESPACE::FunctionProto*>& model_functions);
 
   // internal use by the Graph class only
-  Graph(const Model& owning_model,
+  Graph(const Model* owning_model,
         ONNX_NAMESPACE::GraphProto* graph_proto,
         const std::unordered_map<std::string, int>& domain_to_version,
         Version ir_version,
@@ -1085,7 +1099,7 @@ class Graph {
     return results;
   }
 
-  const Model& owning_model_;
+  const Model* owning_model_ = nullptr;
 
   // GraphProto to store name, version, initializer.
   // When serializing <*this> Graph to a GraphProto, the nodes and
@@ -1093,6 +1107,9 @@ class Graph {
   // it's consistent with <*this> graph.
   // This pointer is owned by parent model.
   ONNX_NAMESPACE::GraphProto* graph_proto_;
+
+  // GraphProto that provides storage for the ONNX proto types deserialized from a flexbuffer/flatbuffer
+  ONNX_NAMESPACE::GraphProto deserialized_proto_data_;
 
   InitializedTensorSet name_to_initial_tensor_;
 

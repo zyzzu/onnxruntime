@@ -49,7 +49,7 @@ function(AddTest)
   else()
     target_link_libraries(${_UT_TARGET} PRIVATE ${_UT_LIBS} GTest::gtest GTest::gmock ${onnxruntime_EXTERNAL_LIBRARIES})
   endif()
-  onnxruntime_add_include_to_target(${_UT_TARGET} date_interface)
+  onnxruntime_add_include_to_target(${_UT_TARGET} date_interface flatbuffers)
   target_include_directories(${_UT_TARGET} PRIVATE ${TEST_INC_DIR})
   if (onnxruntime_USE_CUDA)
     target_include_directories(${_UT_TARGET} PRIVATE ${CUDA_INCLUDE_DIRS} ${onnxruntime_CUDNN_HOME}/include)
@@ -440,51 +440,54 @@ if(NOT TARGET onnxruntime)
   list(APPEND all_tests ${onnxruntime_shared_lib_test_SRC})
 endif()
 set(all_dependencies ${onnxruntime_test_providers_dependencies} )
+#list(APPEND all_dependencies flatbuffers)
 
-  if (onnxruntime_ENABLE_TRAINING)
-    list(APPEND all_tests ${onnxruntime_test_training_src})
-  endif()
+if (onnxruntime_ENABLE_TRAINING)
+  list(APPEND all_tests ${onnxruntime_test_training_src})
+endif()
 
-  if (onnxruntime_USE_TVM)
-    list(APPEND all_tests ${onnxruntime_test_tvm_src})
-  endif()
-  if (onnxruntime_USE_OPENVINO)
-    list(APPEND all_tests ${onnxruntime_test_openvino_src})
-  endif()
-  # we can only have one 'main', so remove them all and add back the providers test_main as it sets
-  # up everything we need for all tests
-  file(GLOB_RECURSE test_mains CONFIGURE_DEPENDS
-    "${TEST_SRC_DIR}/*/test_main.cc"
-    )
-  list(REMOVE_ITEM all_tests ${test_mains})
-  list(APPEND all_tests "${TEST_SRC_DIR}/providers/test_main.cc")
+if (onnxruntime_USE_TVM)
+  list(APPEND all_tests ${onnxruntime_test_tvm_src})
+endif()
 
-  # this is only added to onnxruntime_test_framework_libs above, but we use onnxruntime_test_providers_libs for the onnxruntime_test_all target.
-  # for now, add it here. better is probably to have onnxruntime_test_providers_libs use the full onnxruntime_test_framework_libs
-  # list given it's built on top of that library and needs all the same dependencies.
-  if(WIN32)
-    list(APPEND onnxruntime_test_providers_libs Advapi32)
-  endif()
+if (onnxruntime_USE_OPENVINO)
+  list(APPEND all_tests ${onnxruntime_test_openvino_src})
+endif()
 
-  AddTest(
-    TARGET onnxruntime_test_all
-    SOURCES ${all_tests}
-    LIBS ${onnxruntime_test_providers_libs} ${onnxruntime_test_common_libs}
-    DEPENDS ${all_dependencies}
+# we can only have one 'main', so remove them all and add back the providers test_main as it sets
+# up everything we need for all tests
+file(GLOB_RECURSE test_mains CONFIGURE_DEPENDS
+  "${TEST_SRC_DIR}/*/test_main.cc"
   )
+list(REMOVE_ITEM all_tests ${test_mains})
+list(APPEND all_tests "${TEST_SRC_DIR}/providers/test_main.cc")
 
-  # the default logger tests conflict with the need to have an overall default logger
-  # so skip in this type of
-  target_compile_definitions(onnxruntime_test_all PUBLIC -DSKIP_DEFAULT_LOGGER_TESTS)
-  if (onnxruntime_USE_FEATURIZERS)
-    target_include_directories(onnxruntime_test_all PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/external/FeaturizersLibrary/src)
-  endif()
+# this is only added to onnxruntime_test_framework_libs above, but we use onnxruntime_test_providers_libs for the onnxruntime_test_all target.
+# for now, add it here. better is probably to have onnxruntime_test_providers_libs use the full onnxruntime_test_framework_libs
+# list given it's built on top of that library and needs all the same dependencies.
+if(WIN32)
+  list(APPEND onnxruntime_test_providers_libs Advapi32)
+endif()
 
-  if (onnxruntime_ENABLE_LANGUAGE_INTEROP_OPS)
-    target_link_libraries(onnxruntime_test_all PRIVATE onnxruntime_language_interop onnxruntime_pyop)
-  endif()
+AddTest(
+  TARGET onnxruntime_test_all
+  SOURCES ${all_tests}
+  LIBS ${onnxruntime_test_providers_libs} ${onnxruntime_test_common_libs}
+  DEPENDS ${all_dependencies}
+)
 
-  set(test_data_target onnxruntime_test_all)
+# the default logger tests conflict with the need to have an overall default logger
+# so skip in this type of
+target_compile_definitions(onnxruntime_test_all PUBLIC -DSKIP_DEFAULT_LOGGER_TESTS)
+if (onnxruntime_USE_FEATURIZERS)
+  target_include_directories(onnxruntime_test_all PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/external/FeaturizersLibrary/src)
+endif()
+
+if (onnxruntime_ENABLE_LANGUAGE_INTEROP_OPS)
+  target_link_libraries(onnxruntime_test_all PRIVATE onnxruntime_language_interop onnxruntime_pyop)
+endif()
+
+set(test_data_target onnxruntime_test_all)
 
 
 #

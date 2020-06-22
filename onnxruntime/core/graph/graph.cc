@@ -27,6 +27,9 @@
 
 #include "onnx/checker.h"
 
+#include "safeint/SafeInt.hpp"
+#include "flatbuffers/flexbuffers.h"
+
 using namespace ONNX_NAMESPACE;
 using namespace ONNX_NAMESPACE::Utils;
 using namespace ONNX_NAMESPACE::checker;
@@ -178,8 +181,8 @@ bool NodeArg::HasTensorOrScalarShape() const {
   const auto type_case = type->value_case();
   switch (type_case) {
     case TypeProto::kTensorType:
-    case TypeProto::kSparseTensorType: 
-      // Standard tensor has a valid shape field while 
+    case TypeProto::kSparseTensorType:
+      // Standard tensor has a valid shape field while
       // scalar's shape is empty. Thus, we don't need to
       // check shape here.
       return true;
@@ -757,10 +760,10 @@ Graph::Graph(const Model& owning_model,
              IOnnxRuntimeOpSchemaCollectionPtr schema_registry,
              const logging::Logger& logger,
              const std::unordered_map<std::string, const ONNX_NAMESPACE::FunctionProto*>& model_functions)
-    : Graph(owning_model, graph_proto, domain_to_version, ir_version, schema_registry, nullptr, nullptr, logger,
+    : Graph(&owning_model, graph_proto, domain_to_version, ir_version, schema_registry, nullptr, nullptr, logger,
             model_functions) {}
 
-Graph::Graph(const Model& owning_model,
+Graph::Graph(const Model* owning_model,
              GraphProto* graph_proto, const std::unordered_map<std::string, int>& domain_to_version, Version ir_version,
              IOnnxRuntimeOpSchemaCollectionPtr schema_registry, Graph* parent_graph, const Node* parent_node,
              const logging::Logger& logger,
@@ -1314,7 +1317,6 @@ void Graph::ReverseDFSFrom(const std::vector<const Node*>& from,
                            const std::function<void(const Node*)>& enter,
                            const std::function<void(const Node*)>& leave,
                            const std::function<bool(const Node*, const Node*)>& comp) const {
-
   ReverseDFSFrom(from, enter, leave, comp, {});
 }
 
@@ -2268,7 +2270,11 @@ void Graph::SetDescription(const std::string& description) {
 }
 
 const Path& Graph::ModelPath() const {
-  return owning_model_.ModelPath();
+  // this should never happen. we only need ModelPath to load external data for a TensorProto,
+  // and external data shouldn't apply to a deserialized Graph instance (only time owning_model_ should be nullptr)
+  // as the serialized version should contain everything directly.
+  ORT_ENFORCE(owning_model_, "Calling ModelPath on a Graph instance loaded from deserialization.");
+  return owning_model_->ModelPath();
 }
 
 void Graph::AddInitializedTensor(const TensorProto& tensor) {
@@ -2398,8 +2404,8 @@ const std::vector<const NodeArg*>& Graph::GetValueInfo() const noexcept {
   return value_info_;
 }
 
-void Graph::AddValueInfo(const NodeArg* new_value_info){
-  for(const auto* info : value_info_){
+void Graph::AddValueInfo(const NodeArg* new_value_info) {
+  for (const auto* info : value_info_) {
     ORT_ENFORCE(info->Name() != new_value_info->Name(), "Error: trying to add an existing value info.");
   }
   value_info_.push_back(new_value_info);
@@ -3098,4 +3104,111 @@ std::ostream& operator<<(std::ostream& out, const Graph& graph) {
   return out;
 }
 
+/**********************
+
+Experimental serialization.
+
+For now it's using types from the onnx protobuf definitions. We could cut those type definitions out but that
+would involve conditional compilation with the deserialized build of ORT without the onnx pb dependency
+storing data differently (simple struct representing with the same info would work) in the NodeArg and Graph instances, 
+and the implementations of various accessor functions in those and related classes to support both storage types.
+
+Currently onnx-ml.pb is ~55KiB uncompressed so unknown if the engineering cost of taking that approach is work it.
+
+***********************/
+
+Status Graph::Serialize(flexbuffers::Builder& builder) const {
+  // TODO: Using 'map' for a lot of things in POC.
+  // Supposedly vectors are better https://google.github.io/flatbuffers/flexbuffers.html
+
+  // initializers
+  auto add_initializers = [this, &builder]() {
+    if (name_to_initial_tensor_.empty()) {
+      return;
+    }
+
+    size_t buffer_size = 0;
+    std::vector<size_t> sizes;
+    sizes.reserve(name_to_initial_tensor_.size());
+
+    std::for_each(name_to_initial_tensor_.cbegin(), name_to_initial_tensor_.cend(),
+                  [&sizes, &buffer_size](const InitializedTensorSet::value_type& entry) {
+                    auto size = entry.second->ByteSizeLong();
+                    sizes.push_back(size);
+                    if (size > buffer_size) {
+                      buffer_size = size;
+                    }
+                  });
+
+    std::vector<uint8_t> buffer(buffer_size);
+
+    size_t idx = 0;
+    for (const auto& pair : name_to_initial_tensor_) {
+      pair.second->SerializeToArray(buffer.data(), SafeInt<int>(sizes[idx]));
+      builder.Blob(buffer.data(), sizes[idx]);
+
+      ++idx;
+    }
+  };
+
+  auto add_nodes = [this, &builder]() {
+  };
+
+  // root element. use a map for now
+  builder.Map([&]() {
+    // TODO: Would need some sort of serialization versioning if we go with flexbuffers over flatbuffers
+    // and should store the version number here
+    builder.Vector("initializers", add_initializers);
+    builder.Map("nodes", add_nodes);
+  });
+
+  return Status::OK();
+}
+
+Status Graph::Deserialize(const gsl::span<const uint8_t>& bytes, const logging::Logger& logger,
+                          std::unique_ptr<Graph>& graph) {
+  // TODO: In theory we could create the Graph instance just pointing to offsets in this buffer to avoid copying
+  // from it, but in practice that may be a massive development cost.
+  auto serialized_data = flexbuffers::GetRoot(bytes.data(), bytes.size());
+
+  // can't use make_unique as we're calling a private ctor
+  graph.reset(new Graph(logger));
+
+  auto status = graph->Deserialize(serialized_data);
+  return status;
+}
+
+Status Graph::Deserialize(const flexbuffers::Reference& fbr) {
+  auto root = fbr.AsMap();
+
+  // TODO: These all return new objects not references. Need to check if there are any copies involved. Could just
+  // contain references to the actual data.
+  /*
+  auto initializers = root["initializers"].AsMap();
+  const auto names = initializers.Keys();
+  const auto values = initializers.Values();
+
+  for (size_t cur = 0, end = names.size(); cur < end; ++cur) {
+    TensorProto* value = deserialized_proto_data_.add_initializer();
+
+    // TODO: String conversion here is potentially expensive
+    value->ParseFromString(values[cur].ToString());
+    name_to_initial_tensor_[names[cur].ToString()] = value;
+  }
+  */
+  auto initializers = root["initializers"].AsVector();
+  for (size_t cur = 0, end = initializers.size(); cur < end; ++cur) {
+    TensorProto* value = deserialized_proto_data_.add_initializer();
+    auto b = initializers[cur].AsBlob();
+    value->ParseFromArray(b.data(), SafeInt<int>(b.size()));
+    name_to_initial_tensor_[value->name()] = value;
+  }
+
+  return Status::OK();
+}
+
+Graph::Graph(const logging::Logger& logger)
+    : is_loaded_from_model_file_(true),
+      logger_(logger) {
+}
 }  // namespace onnxruntime

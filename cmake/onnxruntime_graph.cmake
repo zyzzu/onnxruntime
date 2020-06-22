@@ -54,8 +54,8 @@ if (onnxruntime_ENABLE_TRAINING)
 endif()
 
 add_library(onnxruntime_graph ${onnxruntime_graph_lib_src})
-add_dependencies(onnxruntime_graph onnx_proto)
-onnxruntime_add_include_to_target(onnxruntime_graph onnxruntime_common onnx onnx_proto protobuf::libprotobuf)
+add_dependencies(onnxruntime_graph onnx_proto flatbuffers)
+onnxruntime_add_include_to_target(onnxruntime_graph onnxruntime_common onnx onnx_proto protobuf::libprotobuf flatbuffers)
 
 target_include_directories(onnxruntime_graph PRIVATE ${ONNXRUNTIME_ROOT})
 
