@@ -31,7 +31,7 @@ class CudnnRNN {
 
   ~CudnnRNN() {
     if (cudnn_rnn_desc_ != nullptr) {
-      cudnnDestroyRNNDescriptor_v6(cudnn_rnn_desc_);
+      cudnnDestroyRNNDescriptor(cudnn_rnn_desc_);
       cudnn_rnn_desc_ = nullptr;
     }
   }
@@ -42,7 +42,7 @@ class CudnnRNN {
     if (!cudnn_rnn_desc_)
       CUDNN_RETURN_IF_ERROR(cudnnCreateRNNDescriptor(&cudnn_rnn_desc_));
 
-    CUDNN_RETURN_IF_ERROR(cudnnSetRNNDescriptor(cudnnHandle,
+    CUDNN_RETURN_IF_ERROR(cudnnSetRNNDescriptor_v6(cudnnHandle,
                                                 cudnn_rnn_desc_,
                                                 gsl::narrow_cast<int>(hidden_size),
                                                 num_layers,
