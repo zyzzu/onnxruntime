@@ -31,7 +31,7 @@ class CudnnRNN {
 
   ~CudnnRNN() {
     if (cudnn_rnn_desc_ != nullptr) {
-      cudnnDestroyRNNDescriptor(cudnn_rnn_desc_);
+      cudnnDestroyRNNDescriptor_v6(cudnn_rnn_desc_);
       cudnn_rnn_desc_ = nullptr;
     }
   }
