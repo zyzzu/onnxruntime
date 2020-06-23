@@ -233,6 +233,8 @@ struct KernelCreateInfo {
   KernelCreateInfo(KernelCreateInfo&& other) noexcept
       : kernel_def(std::move(other.kernel_def)),
         kernel_create_func(std::move(other.kernel_create_func)) {}
+
+  KernelCreateInfo() = default;
 };
 
 using KernelCreateMap = std::multimap<std::string, KernelCreateInfo>;
@@ -387,6 +389,12 @@ using BuildKernelCreateInfoFn = KernelCreateInfo (*)();
 template <typename T, typename... Types>
 inline std::vector<MLDataType> BuildKernelDefConstraints() {
   return {DataTypeImpl::GetTensorType<T>(), DataTypeImpl::GetTensorType<Types>()...};
+}
+
+template <>
+inline KernelCreateInfo BuildKernelCreateInfo<void>() {
+  KernelCreateInfo info;
+  return info;
 }
 
 }  // namespace onnxruntime

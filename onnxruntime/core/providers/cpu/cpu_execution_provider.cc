@@ -444,10 +444,42 @@ class ONNX_OPERATOR_TYPED_KERNEL_CLASS_NAME(kCpuExecutionProvider, kOnnxDomain, 
 class ONNX_OPERATOR_TYPED_KERNEL_CLASS_NAME(kCpuExecutionProvider, kOnnxDomain, 12, double_float, Dropout);
 class ONNX_OPERATOR_TYPED_KERNEL_CLASS_NAME(kCpuExecutionProvider, kOnnxDomain, 12, double_double, Dropout);
 
+// TODO: compile time check of start/end vs. enabled version. if selected return real type. if not return dummy type
+// that we can ignore when registering.
+// ??? Can we programmatically select a subset of ops at compile time as well or do we need #defines for that
+// Could maybe generate a bunch of #define values based on op name. Can use value from #define in similar enable_if
+// structure
+
+#define OPSET 12
+
+template <typename T, int start, int end, typename T2 = void>
+struct registration_type;
+
+template <typename T, int start, int end>
+struct registration_type<T, start, end, typename std::enable_if<start <= OPSET && end >= OPSET, T>::type> {
+  typedef T type;
+};
+
+template <typename T, int start, int end>
+struct registration_type<T, start, end> {
+  typedef void type;
+};
+
+#define TEST_VERSIONED_REGISTRATION(start, end, T) \
+  registration_type<T, start, end>::type
+
+#define TEST_REGISTRATION(start, T) \
+  registration_type<T, start, 9999>::type
+
 Status RegisterOnnxOperatorKernels(KernelRegistry& kernel_registry) {
+  // TODO: Make this an array of a struct with a type so we can filter on void
   static const BuildKernelCreateInfoFn function_table[] = {
-      BuildKernelCreateInfo<ONNX_OPERATOR_VERSIONED_KERNEL_CLASS_NAME(kCpuExecutionProvider, kOnnxDomain, 6, 10,
-                                                                      Clip)>,
+      BuildKernelCreateInfo<
+          TEST_VERSIONED_REGISTRATION(6, 10, ONNX_OPERATOR_VERSIONED_KERNEL_CLASS_NAME(kCpuExecutionProvider, kOnnxDomain, 6, 10, Clip))>,
+      BuildKernelCreateInfo<TEST_REGISTRATION(1, ONNX_OPERATOR_KERNEL_CLASS_NAME(kCpuExecutionProvider, kOnnxDomain, 1, RandomNormal))>,
+
+      //BuildKernelCreateInfo<ONNX_OPERATOR_VERSIONED_KERNEL_CLASS_NAME(kCpuExecutionProvider, kOnnxDomain, 6, 10,
+      //                                                                Clip)>,
       BuildKernelCreateInfo<ONNX_OPERATOR_KERNEL_CLASS_NAME(kCpuExecutionProvider, kOnnxDomain, 6, Elu)>,
       BuildKernelCreateInfo<ONNX_OPERATOR_KERNEL_CLASS_NAME(kCpuExecutionProvider, kOnnxDomain, 6, HardSigmoid)>,
       BuildKernelCreateInfo<ONNX_OPERATOR_KERNEL_CLASS_NAME(kCpuExecutionProvider, kOnnxDomain, 6, LeakyRelu)>,
@@ -459,7 +491,7 @@ Status RegisterOnnxOperatorKernels(KernelRegistry& kernel_registry) {
       BuildKernelCreateInfo<ONNX_OPERATOR_KERNEL_CLASS_NAME(kCpuExecutionProvider, kOnnxDomain, 6, Tanh)>,
       BuildKernelCreateInfo<ONNX_OPERATOR_VERSIONED_KERNEL_CLASS_NAME(kCpuExecutionProvider, kOnnxDomain, 7, 9,
                                                                       PRelu)>,
-      BuildKernelCreateInfo<ONNX_OPERATOR_KERNEL_CLASS_NAME(kCpuExecutionProvider, kOnnxDomain, 1, RandomNormal)>,
+      // BuildKernelCreateInfo<ONNX_OPERATOR_KERNEL_CLASS_NAME(kCpuExecutionProvider, kOnnxDomain, 1, RandomNormal)>,
       BuildKernelCreateInfo<ONNX_OPERATOR_KERNEL_CLASS_NAME(kCpuExecutionProvider, kOnnxDomain, 1, RandomUniform)>,
       BuildKernelCreateInfo<ONNX_OPERATOR_KERNEL_CLASS_NAME(kCpuExecutionProvider, kOnnxDomain, 1, RandomNormalLike)>,
       BuildKernelCreateInfo<ONNX_OPERATOR_KERNEL_CLASS_NAME(kCpuExecutionProvider, kOnnxDomain, 1, RandomUniformLike)>,
@@ -1100,7 +1132,12 @@ Status RegisterOnnxOperatorKernels(KernelRegistry& kernel_registry) {
   };
 
   for (auto& function_table_entry : function_table) {
-    ORT_RETURN_IF_ERROR(kernel_registry.Register(function_table_entry()));
+    KernelCreateInfo info = function_table_entry();
+    if (info.kernel_def != nullptr) {  // we have a default KernelCreateInfo instance if type is void due to filtering on opset
+      ORT_RETURN_IF_ERROR(kernel_registry.Register(std::move(info)));
+    } else {
+      std::cout << "Found default KernelCreateInfo" << std::endl;
+    }
   }
   return Status::OK();
 }
@@ -1236,7 +1273,12 @@ Status RegisterOnnxMLOperatorKernels(KernelRegistry& kernel_registry) {
   };
 
   for (auto& function_table_entry : function_table) {
-    ORT_RETURN_IF_ERROR(kernel_registry.Register(function_table_entry()));
+    KernelCreateInfo info = function_table_entry();
+    if (info.kernel_def != nullptr) {  // we have a default KernelCreateInfo instance if type is void due to filtering on opset
+      ORT_RETURN_IF_ERROR(kernel_registry.Register(std::move(info)));
+    } else {
+      std::cout << "Found default KernelCreateInfo" << std::endl;
+    }
   }
   return Status::OK();
 }
