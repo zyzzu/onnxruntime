@@ -10,9 +10,9 @@ namespace contrib {
 
 template <typename T>
 Status ComputeMaskIndex(const T* mask,        // input mask, NULL when no mask input.
-                      int* mask_index,      // output mask index
-                      int batch_size,       // batch size
-                      int sequence_length)  // sequence length
+                        int* mask_index,      // output mask index
+                        int batch_size,       // batch size
+                        int sequence_length)  // sequence length
 {
   if (nullptr == mask) {
     for (int i = 0; i < batch_size; i++) {

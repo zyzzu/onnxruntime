@@ -67,10 +67,10 @@ TEST(MaskIndexTest, MaskIndexTest_batch4_int32) {
   int sequence_length = 2;
 
   std::vector<int32_t> mask_data = {
-      0, 0,  // All 0
-      1, 1,  // All 1
-      1, 0,  // Right padding
-      0, 1}; // Left padding
+      0, 0,   // All 0
+      1, 1,   // All 1
+      1, 0,   // Right padding
+      0, 1};  // Left padding
 
   std::vector<int32_t> mask_index_data = {
       0, 2, 1, 2,
@@ -87,10 +87,10 @@ TEST(MaskIndexTest, MaskIndexTest_batch4_int64) {
   int sequence_length = 2;
 
   std::vector<int64_t> mask_data = {
-      0, 0,  // All 0
-      1, 1,  // All 1
-      1, 0,  // Right padding
-      0, 1}; // Left padding
+      0, 0,   // All 0
+      1, 1,   // All 1
+      1, 0,   // Right padding
+      0, 1};  // Left padding
 
   std::vector<int32_t> mask_index_data = {
       0, 2, 1, 2,
@@ -132,7 +132,7 @@ TEST(MaskIndexTest, MaskIndexTest_invalid_mask) {
   };
 
   std::vector<int32_t> mask_index_data = {
-      3, 0};      // Expected result for cuda.
+      3, 0};  // Expected result for cuda.
 
   RunTest(mask_data,
           mask_index_data,

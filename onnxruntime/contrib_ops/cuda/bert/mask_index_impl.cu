@@ -54,7 +54,7 @@ __global__ void MaskIndexKernelSmall(int sequence_length, const T* mask, int* ma
 
   if (threadIdx.x < sequence_length) {
     const T val = mask[batch_index * sequence_length + threadIdx.x];
-    if (val > static_cast<T>(0)) // mask could be 0 or 1
+    if (val > static_cast<T>(0))  // mask could be 0 or 1
     {
       min_position = threadIdx.x;
       max_position = threadIdx.x;
@@ -95,11 +95,11 @@ __global__ void MaskIndexKernel(int sequence_length, const T* mask, int* mask_in
   const int offset = blockIdx.x * sequence_length;
 
   for (int i = threadIdx.x; i < sequence_length; i += TPB) {
-      const T val = mask[offset + i];
-      if (val > static_cast<T>(0)) { // mask could be 0 or 1
-        min_position = min(min_position, i);
-        max_position = max(max_position, i);
-      }
+    const T val = mask[offset + i];
+    if (val > static_cast<T>(0)) {  // mask could be 0 or 1
+      min_position = min(min_position, i);
+      max_position = max(max_position, i);
+    }
   }
 
   const int min_valid = BlockReduce(temp_storage_min).Reduce(min_position, cub::Min());
@@ -117,8 +117,7 @@ bool LaunchMaskIndexKernel(
     const T* mask,
     int* mask_index,
     int batch_size,
-    int sequence_length)
-{
+    int sequence_length) {
   // Assume input mask total elements n = batch_size x sequence_length.
   if (sequence_length <= 32) {
     MaskIndexKernelSmall<T, 32><<<batch_size, 32, 0, stream>>>(sequence_length, mask, mask_index);
@@ -138,9 +137,9 @@ bool LaunchMaskIndexKernel(
 }
 
 #define SPECIALIZED_IMPL(T) \
-  template bool LaunchMaskIndexKernel<T>(cudaStream_t stream, const T * input_mask, int* mask_index, int batch_size, int sequence_length);
+  template bool LaunchMaskIndexKernel<T>(cudaStream_t stream, const T* input_mask, int* mask_index, int batch_size, int sequence_length);
 
-SPECIALIZED_IMPL(int32_t) // Needed by EmbedLayerNormalization.
+SPECIALIZED_IMPL(int32_t)  // Needed by EmbedLayerNormalization.
 SPECIALIZED_IMPL(int64_t)
 SPECIALIZED_IMPL(float)
 

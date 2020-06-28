@@ -31,8 +31,6 @@ namespace onnxruntime {
 namespace contrib {
 namespace cuda {
 
-
-
 template <typename T, unsigned TPB>
 __global__ void EmbedLayerNormKernel(
     int hidden_size, const int* input_ids, const int* segment_ids, const T* beta, const T* gamma,
@@ -113,13 +111,11 @@ bool LaunchEmbedLayerNormKernel(
     const size_t element_size) {
   const cudaStream_t stream = nullptr;  // default stream
 
-
-
   if (element_size == 2) {
     return EmbedSkipLayerNorm<half>(
         stream, hidden_size, batch_size, sequence_length, input_ids, segment_ids,
         reinterpret_cast<const half*>(beta), reinterpret_cast<const half*>(gamma),
-        reinterpret_cast<const half*>(word_embedding), reinterpret_cast<const half*>(position_embedding), 
+        reinterpret_cast<const half*>(word_embedding), reinterpret_cast<const half*>(position_embedding),
         reinterpret_cast<const half*>(segment_embedding), __float2half_rn(epsilon),
         reinterpret_cast<half*>(output));
   } else {
