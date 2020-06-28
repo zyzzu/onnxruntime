@@ -121,6 +121,30 @@ static TypeProto TypeProtoFromTensorProto(const TensorProto& tensor) {
   return t;
 }
 
+class ProtobufSerializer {
+ public:
+  ProtobufSerializer(flexbuffers::Builder& builder)
+      : builder_(builder) {
+    buffer_.resize(1024 * 1024);
+  }
+
+  void Serialize(const MessageLite& item) {
+    auto size = item.ByteSizeLong();
+    if (size > buffer_.size()) {
+      // round to next 1MB boundary
+      auto new_size = (size + (1024 * 1024 - 1)) & ~(1024 * 1024 - 1);
+      buffer_.resize(new_size);
+    }
+
+    item.SerializeToArray(buffer_.data(), SafeInt<int>(size));
+    builder_.Blob(buffer_.data(), size);
+  }
+
+ private:
+  flexbuffers::Builder& builder_;
+  std::vector<uint8_t> buffer_;
+};
+
 NodeArg::NodeArg(const std::string& name, const TypeProto* p_node_arg_type) {
   node_arg_info_.set_name(name);
   // If the name is empty, it means the arg does not exist.
@@ -130,6 +154,22 @@ NodeArg::NodeArg(const std::string& name, const TypeProto* p_node_arg_type) {
     RemoveInvalidValues(*node_arg_info_.mutable_type());
     type_ = DataTypeUtils::ToType(node_arg_info_.type());
   } else {
+    type_ = nullptr;
+  }
+}
+
+void NodeArg::Serialize(ProtobufSerializer& protobuf_serializer) const {
+  protobuf_serializer.Serialize(node_arg_info_);
+}
+
+NodeArg::NodeArg(const flexbuffers::Reference& fbr) {
+  auto b = fbr.AsBlob();
+  node_arg_info_.ParseFromArray(b.data(), SafeInt<int>(b.size()));
+
+  exists_ = !node_arg_info_.name().empty();
+  if (node_arg_info_.has_type())
+    type_ = DataTypeUtils::ToType(node_arg_info_.type());
+  else {
     type_ = nullptr;
   }
 }
@@ -453,7 +493,7 @@ void Node::SetExecutionProviderType(ProviderType execution_provider_type) {
   execution_provider_type_ = execution_provider_type;
 }
 
-void Node::ToProto(NodeProto& proto, bool update_subgraphs) const {
+void Node::ToProto(NodeProto& proto, bool update_subgraphs, bool serializing) const {
   proto.set_name(name_);
   proto.set_op_type(op_type_);
 
@@ -466,11 +506,16 @@ void Node::ToProto(NodeProto& proto, bool update_subgraphs) const {
   // Set attributes.
   proto.clear_attribute();
   for (const auto& attribute : attributes_) {
-    const gsl::not_null<AttributeProto*> attr{proto.add_attribute()};
-    *attr = attribute.second;  // copy
-    if (update_subgraphs && attr->has_g()) {
-      attr->clear_g();
-      *attr->mutable_g() = attr_to_subgraph_map_.find(attribute.first)->second->ToGraphProto();
+    bool is_subgraph = attribute.second.has_g();
+    if (serializing && is_subgraph) {
+      // we will serialize the Graph instance separately so don't include it in the NodeProto storage
+    } else {
+      const gsl::not_null<AttributeProto*> attr{proto.add_attribute()};
+      *attr = attribute.second;  // copy
+      if (update_subgraphs && is_subgraph) {
+        attr->clear_g();
+        *attr->mutable_g() = attr_to_subgraph_map_.find(attribute.first)->second->ToGraphProto();
+      }
     }
   }
 
@@ -732,6 +777,73 @@ void Node::ReplaceDefs(const std::map<const onnxruntime::NodeArg*, onnxruntime::
       for (auto& def : *defs)
         if (def == pair.first)
           def = pair.second;
+}
+
+void Node::Serialize(flexbuffers::Builder& builder, ProtobufSerializer& protobuf_serializer) const {
+  // most fields are covered by a serialized NodeProto
+  NodeProto proto;
+  ToProto(proto, false, true);
+  protobuf_serializer.Serialize(proto);
+
+  // Rest of Definitions
+
+  // input arg count
+  builder.Vector([this, &builder]() {
+    // TODO: Could skip this if all values are 1
+    for (const auto& count : definitions_.input_arg_count) {
+      builder.Int(count);
+    }
+  });
+
+  // implicit inputs
+  builder.Vector([this, &builder]() {
+    for (const auto& implicit_input : definitions_.implicit_input_defs) {
+      builder.String(implicit_input->Name());
+    }
+  });
+
+  // Relationships
+  // edges
+
+  // TODO: Subgraph handling
+}
+
+Node::Node(const flexbuffers::Reference& fbr, Graph& graph)
+    : graph_(&graph) {
+  auto b = fbr.AsBlob();
+  NodeProto proto;
+  proto.ParseFromArray(b.data(), SafeInt<int>(b.size()));
+
+  name_ = proto.name();
+  op_type_ = proto.op_type();
+
+  if (proto.has_domain())
+    domain_ = proto.domain();
+
+  if (proto.has_doc_string())
+    description_ = proto.doc_string();
+
+  for (const auto& entry : proto.attribute()) {
+    AddAttribute(entry.name(), entry);
+  }
+
+  // Set inputs' definitions.
+  for (const auto& input : proto.input()) {
+    definitions_.input_defs.push_back(graph.GetNodeArg(input));
+  }
+
+  // Set outputs' definitions.
+  for (const auto& output : proto.output()) {
+    definitions_.output_defs.push_back(graph.GetNodeArg(output));
+  }
+
+  /*
+  implicit inputs and anything else in definitions
+  edges
+  relationships
+  optional: EP type (start by partitioning locally first though with Resolve enabled).
+  subraphs
+  */
 }
 
 // Constructor: Given a <GraphProto> loaded from model file, construct
@@ -3121,37 +3233,37 @@ Status Graph::Serialize(flexbuffers::Builder& builder) const {
   // TODO: Using 'map' for a lot of things in POC.
   // Supposedly vectors are better https://google.github.io/flatbuffers/flexbuffers.html
 
+  auto protobuf_serializer = ProtobufSerializer(builder);
+
   // initializers
-  auto add_initializers = [this, &builder]() {
-    if (name_to_initial_tensor_.empty()) {
-      return;
-    }
-
-    size_t buffer_size = 0;
-    std::vector<size_t> sizes;
-    sizes.reserve(name_to_initial_tensor_.size());
-
-    std::for_each(name_to_initial_tensor_.cbegin(), name_to_initial_tensor_.cend(),
-                  [&sizes, &buffer_size](const InitializedTensorSet::value_type& entry) {
-                    auto size = entry.second->ByteSizeLong();
-                    sizes.push_back(size);
-                    if (size > buffer_size) {
-                      buffer_size = size;
-                    }
-                  });
-
-    std::vector<uint8_t> buffer(buffer_size);
-
-    size_t idx = 0;
+  auto add_initializers = [this, &builder, &protobuf_serializer]() {
     for (const auto& pair : name_to_initial_tensor_) {
-      pair.second->SerializeToArray(buffer.data(), SafeInt<int>(sizes[idx]));
-      builder.Blob(buffer.data(), sizes[idx]);
+      protobuf_serializer.Serialize(*pair.second);
+    }
+  };
 
-      ++idx;
+  auto add_node_args = [this, &builder, &protobuf_serializer] {
+    for (const auto& name_to_node_arg : node_args_) {
+      name_to_node_arg.second->Serialize(protobuf_serializer);
     }
   };
 
   auto add_nodes = [this, &builder]() {
+
+  };
+
+  // TODO: If we create a map of name to index in the serialized data for all the NodeArg's we could just store
+  // index numbers in a lot of places instead of names.
+
+  auto add_graph_inputs = [this, &builder]() {
+    std::for_each(graph_inputs_including_initializers_.cbegin(),
+                  graph_inputs_including_initializers_.cend(),
+                  [&builder](const NodeArg* entry) { builder.String(entry->Name()); });
+  };
+
+  auto add_graph_outputs = [this, &builder]() {
+    std::for_each(graph_outputs_.cbegin(), graph_outputs_.cend(),
+                  [&builder](const NodeArg* entry) { builder.String(entry->Name()); });
   };
 
   // root element. use a map for now
@@ -3159,7 +3271,13 @@ Status Graph::Serialize(flexbuffers::Builder& builder) const {
     // TODO: Would need some sort of serialization versioning if we go with flexbuffers over flatbuffers
     // and should store the version number here
     builder.Vector("initializers", add_initializers);
-    builder.Map("nodes", add_nodes);
+    builder.Vector("node_args", add_node_args);
+    builder.Vector("nodes", add_nodes);
+    builder.Vector("graph_inputs", add_graph_inputs);  // separate into inc/exc initializers and overridable initializers when loading
+    builder.Vector("graph_outputs", add_graph_outputs);
+    builder.Int("ir_version", ir_version_);
+
+    // TODO: Functions
   });
 
   return Status::OK();
@@ -3202,6 +3320,13 @@ Status Graph::Deserialize(const flexbuffers::Reference& fbr) {
     auto b = initializers[cur].AsBlob();
     value->ParseFromArray(b.data(), SafeInt<int>(b.size()));
     name_to_initial_tensor_[value->name()] = value;
+  }
+
+  auto node_args = root["node_args"].AsVector();
+  for (size_t cur = 0, end = node_args.size(); cur < end; ++cur) {
+    // private ctor so can't use make_unique
+    std::unique_ptr<NodeArg> n(new NodeArg(node_args[cur]));
+    node_args_[n->Name()] = std::move(n);
   }
 
   return Status::OK();

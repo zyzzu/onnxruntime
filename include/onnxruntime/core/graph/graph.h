@@ -314,7 +314,7 @@ class Node {
                           If graph optimization has been run this is most likely required
                           to ensure the complete Graph is valid.
   */
-  void ToProto(ONNX_NAMESPACE::NodeProto& proto, bool update_subgraphs = false) const;
+  void ToProto(ONNX_NAMESPACE::NodeProto& proto, bool update_subgraphs = false, bool serializing = false) const;
 
   /** Call the provided function for all explicit inputs, implicit inputs, and outputs of this Node.
       If the NodeArg is an explicit or implicit input, is_input will be true when func is called.
@@ -397,6 +397,10 @@ class Node {
   friend class Graph;
 
   Node(NodeIndex index, Graph& graph) : index_(index), graph_(&graph) {}
+
+  // de/serialization
+  void Serialize(flexbuffers::Builder& builder, ProtobufSerializer& protobuf_serializer) const;
+  Node(const flexbuffers::Reference& fbr, Graph& graph);
 
   void Init(const std::string& name,
             const std::string& op_type,

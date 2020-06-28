@@ -183,6 +183,10 @@ class Model {
                              const IOnnxRuntimeOpSchemaRegistryList* local_registries,
                              const logging::Logger& logger);
 
+  Status Serialize(flexbuffers::Builder& builder) const;
+  static Status Deserialize(const gsl::span<const uint8_t>& bytes, const logging::Logger& logger,
+                            std::unique_ptr<Model>& model);
+
  private:
   // Model data.
   ONNX_NAMESPACE::ModelProto model_proto_;

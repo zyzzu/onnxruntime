@@ -150,6 +150,9 @@ class InferenceSession {
                    const void* model_data,
                    int model_data_len);
 
+  // construct instance with session_options and session_env first, then call Deserialize
+  Status Deserialize(const gsl::span<const uint8_t>& flexbuffer_serialized_bytes);
+
   virtual ~InferenceSession();
 
   /**
@@ -341,6 +344,12 @@ class InferenceSession {
     @return the name of the profile file.
     */
   std::string EndProfiling();
+
+  /**
+    * Serialize the model and necessary pieces of session state to be able to reload the model with no
+    * dependency on ONNX
+    */
+  Status Serialize(flexbuffers::Builder& builder) const;
 
  protected:
   /**

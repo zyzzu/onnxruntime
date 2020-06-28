@@ -33,7 +33,8 @@ Status KernelRegistryManager::CreateKernel(const onnxruntime::Node& node,
   {
     for (auto& registry : custom_kernel_registries_) {
       status = registry->TryCreateKernel(node, execution_provider, session_state.GetConstantInitializedTensors(),
-                                         session_state.GetOrtValueNameIdxMap(), session_state.GetFuncMgr(), session_state.GetDataTransferMgr(), op_kernel);
+                                         session_state.GetOrtValueNameIdxMap(), session_state.GetFuncMgr(),
+                                         session_state.GetDataTransferMgr(), op_kernel);
       if (status.IsOK()) {
         return status;
       }
@@ -88,31 +89,74 @@ bool KernelRegistryManager::HasImplementationOf(const KernelRegistryManager& r, 
 
 Status KernelRegistryManager::SearchKernelRegistry(const onnxruntime::Node& node,
                                                    /*out*/ const KernelCreateInfo** kernel_create_info) const {
+  bool ignored_is_custom;
+  size_t ignored_index;
+  return SearchKernelRegistryImpl(node, kernel_create_info, ignored_is_custom, ignored_index);
+}
+
+Status KernelRegistryManager::GetKernelSerializationInfo(const onnxruntime::Node& node,
+                                                         const KernelCreateInfo& kernel_create_info,
+                                                         bool& is_custom, size_t& index) const {
+  const KernelCreateInfo* kci = nullptr;
+  ORT_RETURN_IF_ERROR(SearchKernelRegistryImpl(node, &kci, is_custom, index));
+
+  if (kci != &kernel_create_info) {
+    // this shouldn't be possible unless there's an internal issue
+    return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL,
+                           "Mismatch between KernelCreateInfo in Node and value found via registry lookup.");
+  }
+
+  // TODO: Should we allow custom registries? For now disallow as we'd also need an index number for the custom
+  // registry and some way to validate they're added in the same order. Can also cut out all the custom op code
+  // from the build if we don't
+  ORT_ENFORCE(is_custom == false, "Kernels from custom registries are not supported currently.");
+
+  return Status::OK();
+}
+
+Status KernelRegistryManager::SearchKernelRegistryImpl(const onnxruntime::Node& node,
+                                                       /*out*/
+                                                       const KernelCreateInfo** kernel_create_info,
+                                                       bool& is_custom,
+                                                       size_t& index) const {
   const std::string& ptype = node.GetExecutionProviderType();
   if (ptype.empty()) {
     return Status(ONNXRUNTIME, FAIL, "The node is not placed on any Execution Provider");
   }
+
   Status status;
   {
     for (auto& registry : custom_kernel_registries_) {
-      status = registry->TryFindKernel(node, std::string(), kernel_create_info);
-      if (status.IsOK()) return status;
+      status = registry->TryFindKernel(node, std::string(), kernel_create_info, index);
+      if (status.IsOK()) {
+        is_custom = true;
+        return status;
+      }
     }
   }
 
   KernelRegistry* p = nullptr;
   auto iter = provider_type_to_registry_.find(ptype);
-  if (iter != provider_type_to_registry_.end()) p = iter->second.get();
+  if (iter != provider_type_to_registry_.end()) {
+    p = iter->second.get();
+  }
+
   if (p != nullptr) {
-    status = p->TryFindKernel(node, std::string(), kernel_create_info);
-    if (status.IsOK()) return status;
+    status = p->TryFindKernel(node, std::string(), kernel_create_info, index);
+    if (status.IsOK()) {
+      is_custom = false;
+      return status;
+    }
   }
 
   std::ostringstream errormsg;
   errormsg << "Failed to find kernel for " << node.OpType();
   if (node.Op() != nullptr) errormsg << "(" << node.Op()->since_version() << ")";
   if (!node.Name().empty()) errormsg << " (node " << node.Name() << ").";
-  if (!status.IsOK()) errormsg << status.ErrorMessage();
+  if (!status.IsOK()) {
+    errormsg << status.ErrorMessage();
+  }
+
   return Status(ONNXRUNTIME, NOT_IMPLEMENTED, errormsg.str());
 }
 

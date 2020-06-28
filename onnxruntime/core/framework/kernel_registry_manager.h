@@ -53,6 +53,10 @@ class KernelRegistryManager {
   Status SearchKernelRegistry(const onnxruntime::Node& node,
                               /*out*/ const KernelCreateInfo** kernel_create_info) const;
 
+  Status GetKernelSerializationInfo(const onnxruntime::Node& node,
+                                    const KernelCreateInfo& kernel_create_info,
+                                    bool& is_custom, size_t& index) const;
+
   /**
    * Whether this node can be run on this provider
    */
@@ -77,6 +81,11 @@ class KernelRegistryManager {
   ORT_DISALLOW_COPY_ASSIGNMENT_AND_MOVE(KernelRegistryManager);
 
  private:
+  Status KernelRegistryManager::SearchKernelRegistryImpl(const onnxruntime::Node& node,
+                                                         const KernelCreateInfo** kernel_create_info,
+                                                         bool& is_custom,
+                                                         size_t& index) const;
+
   // key is provider type. Each kernel registry in this collection only belongs to one specific provider
   std::unordered_map<std::string, std::shared_ptr<KernelRegistry>> provider_type_to_registry_;
   // Each kernel registry may contain kernels from many different providers.

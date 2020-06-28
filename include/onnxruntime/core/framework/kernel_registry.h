@@ -31,12 +31,14 @@ class KernelRegistry {
 
   // Check if an execution provider can create kernel for a node and return the kernel if so
   Status TryFindKernel(const onnxruntime::Node& node,
-                       onnxruntime::ProviderType exec_provider, const KernelCreateInfo** out) const;
+                       onnxruntime::ProviderType exec_provider, const KernelCreateInfo** out,
+                       size_t& index) const;
 
   static bool HasImplementationOf(const KernelRegistry& r, const onnxruntime::Node& node,
-                           onnxruntime::ProviderType exec_provider) {
+                                  onnxruntime::ProviderType exec_provider) {
     const KernelCreateInfo* info;
-    Status st = r.TryFindKernel(node, exec_provider, &info);
+    size_t ignored;
+    Status st = r.TryFindKernel(node, exec_provider, &info, ignored);
     return st.IsOK();
   }
 

@@ -88,8 +88,36 @@ class KernelDef {
 
   bool IsConflict(const KernelDef& other) const;
 
+  size_t GetHash() const noexcept { return hash_; }
+
+  bool operator==(const KernelDef& rhs) const noexcept {
+    // TODO: If we ever change CalculateHash::hash_version we would need to handle that somehow.
+    return hash_ == rhs.hash_;
+  }
+
  private:
   friend class KernelDefBuilder;
+
+  void CalculateHash() {
+    // use name, start/end, domain, provider and the type constraints.
+    // we wouldn't have two kernels that only differed by the inplace or alias info or memory types.
+    // currently nothing sets exec_queue_id either
+    HashCombine(hash_, op_name_);
+    HashCombine(hash_, op_since_version_start_);
+    HashCombine(hash_, op_since_version_end_);
+    HashCombine(hash_, op_domain_);
+    HashCombine(hash_, provider_type_);
+    for (const auto& key_value : type_constraints_) {
+      HashCombine(hash_, key_value.first);
+      for (const auto& data_type : key_value.second) {
+        HashCombine(hash_, DataTypeImpl::ToString(data_type));
+      }
+    }
+
+    // reserve the low 3 bits for the hash version in case we need to change what's included
+    static const uint8_t hash_version = 0;
+    hash_ = hash_ << 3 | hash_version;
+  }
 
   // The operator name supported by <*this> kernel..
   std::string op_name_;
@@ -128,6 +156,8 @@ class KernelDef {
   OrtMemType default_inputs_mem_type_{OrtMemTypeDefault};
   // Default memory type for all outputs
   OrtMemType default_outputs_mem_type_{OrtMemTypeDefault};
+
+  size_t hash_ = 0;
 };
 
 class KernelDefBuilder {

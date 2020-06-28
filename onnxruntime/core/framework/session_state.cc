@@ -65,13 +65,36 @@ Status SessionState::SetGraph(const Graph& graph) {
       idx = ort_value_name_idx_map_.Add(output->Name());
       VLOGS(logger, 1) << "Added graph output with name: " << output->Name() << " to OrtValueIndex with index: " << idx;
     }
+    *
   }
 
   LOGS(logger, INFO) << "Done saving OrtValue mappings.";
   return Status::OK();
 }
 
-Status SessionState::CreateKernels(const KernelRegistryManager& custom_registry_manager) {
+Status SessionState::PopulateKernelCreateInfo(const Graph& graph, KernelRegistryManager& kernel_registry_manager) {
+  for (auto& node : graph.Nodes()) {
+    const auto& node_provider = node.GetExecutionProviderType();
+    // save kernel create info for the node so we don't have to keep looking it up
+    const KernelCreateInfo* kci = nullptr;
+    ORT_RETURN_IF_ERROR(kernel_registry_manager.SearchKernelRegistry(node, &kci));
+    kernel_create_info_map_[node.Index()] = kci;
+
+    auto subgraph_info = subgraph_session_states_.find(node.Index());
+    if (subgraph_info != subgraph_session_states_.cend()) {
+      for (const auto& name_to_subgraph_session_state : subgraph_info->second) {
+        const std::string& attr_name = name_to_subgraph_session_state.first;
+        SessionState& subgraph_session_state = *name_to_subgraph_session_state.second;
+        const Graph& subgraph = *node.GetGraphAttribute(attr_name);
+        ORT_RETURN_IF_ERROR(subgraph_session_state.PopulateKernelCreateInfo(subgraph, kernel_registry_manager));
+      }
+    }
+  }
+
+  return Status::OK();
+}
+
+Status SessionState::CreateKernels(const KernelRegistryManager& kernel_registry_manager) {
   const GraphNodes& nodes = graph_viewer_->Nodes();
   if (!nodes.empty()) {
     size_t max_nodeid = 0;
@@ -86,12 +109,13 @@ Status SessionState::CreateKernels(const KernelRegistryManager& custom_registry_
       onnxruntime::ProviderType exec_provider_name = node.GetExecutionProviderType();
 
       const IExecutionProvider* exec_provider = nullptr;
-      if (exec_provider_name.empty() || (exec_provider = execution_providers_.get().Get(exec_provider_name)) == nullptr) {
+      if (exec_provider_name.empty() ||
+          (exec_provider = execution_providers_.get().Get(exec_provider_name)) == nullptr) {
         return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Could not create kernel for node: ", node.Name(),
                                " as there's no execution provider allocated.");
       }
 
-      common::Status status = custom_registry_manager.CreateKernel(node, *exec_provider, *this, op_kernel);
+      common::Status status = kernel_registry_manager.CreateKernel(node, *exec_provider, *this, op_kernel);
       if (!status.IsOK()) {
         return common::Status(
             status.Category(), status.Code(),
@@ -199,16 +223,16 @@ Status ResolveDimParams(const GraphViewer& graph,
     if (it == feeds.end()) {
       return Status(ONNXRUNTIME, FAIL,
                     "Graph input " + input->Name() +
-                    " is not found in the feed list, unable to resolve the value for dynamic shape.");
+                        " is not found in the feed list, unable to resolve the value for dynamic shape.");
     }
     if (it->second.NumDimensions() == 0 && !shape) {
-      // This is a scalar, which has nothing to do with symbolic shapes. 
+      // This is a scalar, which has nothing to do with symbolic shapes.
       continue;
     }
     if (!shape || shape->dim_size() != static_cast<int>(it->second.NumDimensions())) {
       return Status(ONNXRUNTIME, FAIL, "Graph input " + input->Name() +
-                    "'s shape is not present or its shape doesn't match feed's shape."
-                    "Unable to resolve the value for dynamic shape");
+                                           "'s shape is not present or its shape doesn't match feed's shape."
+                                           "Unable to resolve the value for dynamic shape");
     }
     for (int k = 0, end = shape->dim_size(); k < end; ++k) {
       if (shape->dim()[k].has_dim_param()) {

@@ -291,6 +291,20 @@ InferenceSession::InferenceSession(const SessionOptions& session_options, const 
   ConstructorCommon(session_options, session_env);
 }
 
+Status InferenceSession::Deserialize(const gsl::span<const uint8_t>& flexbuffer_serialized_bytes) {
+  // need to go from unique_ptr to shared_ptr when moving into model_
+  std::unique_ptr<Model> tmp_model;
+  ORT_RETURN_IF_ERROR(Model::Deserialize(flexbuffer_serialized_bytes, *session_logger_, tmp_model));
+  model_ = std::move(tmp_model);
+  model_loaded_ = true;
+
+  // deserialize session info to create kernels
+  session_
+  // create kernels
+
+  // mark as initialized
+}
+
 InferenceSession::~InferenceSession() {
   if (session_options_.enable_profiling) {
     try {
@@ -822,27 +836,34 @@ static bool ModelHasFP16Inputs(const Graph& graph) {
 common::Status InferenceSession::Initialize() {
   Status status = Status::OK();
   TimePoint tp;
-  if (session_profiler_.IsEnabled()) {
-    tp = session_profiler_.StartTime();
-  }
+
+  std::lock_guard<onnxruntime::OrtMutex> l(session_mutex_);
 
   try {
     LOGS(*session_logger_, INFO) << "Initializing session.";
-    std::lock_guard<onnxruntime::OrtMutex> l(session_mutex_);
+
+    if (session_profiler_.IsEnabled()) {
+      tp = session_profiler_.StartTime();
+    }
+
     const Env& env = Env::Default();
     env.GetTelemetryProvider().LogSessionCreationStart();
+
     if (!is_model_loaded_) {
       LOGS(*session_logger_, ERROR) << "Model was not loaded";
       return common::Status(common::ONNXRUNTIME, common::FAIL, "Model was not loaded.");
     }
+
     if (is_inited_) {  // already initialized
       LOGS(*session_logger_, INFO) << "Session has already been initialized.";
       return common::Status::OK();
     }
+
 #ifdef ONNXRUNTIME_ENABLE_INSTRUMENT
     TraceLoggingWriteStart(session_activity, "OrtInferenceSessionActivity");
     session_activity_started_ = true;
 #endif
+
     // Register default CPUExecutionProvider if user didn't provide it through the Register() calls
     if (!execution_providers_.Get(onnxruntime::kCpuExecutionProvider)) {
       LOGS(*session_logger_, INFO) << "Adding default CPU execution provider.";
@@ -890,6 +911,9 @@ common::Status InferenceSession::Initialize() {
 
     // now that all the transforms are done, call Resolve on the main graph. this will recurse into the subgraphs.
     ORT_RETURN_IF_ERROR_SESSIONID_(graph.Resolve());
+
+    // apply any transformations to the main graph and any subgraphs
+    ORT_RETURN_IF_ERROR_SESSIONID_(session_state_->PopulateKernelCreateInfo(graph, kernel_registry_manager_));
 
     if (!session_options_.optimized_model_filepath.empty()) {
       // Serialize optimized ONNX model.
@@ -943,135 +967,6 @@ common::Status InferenceSession::Initialize() {
 
   return status;
 }
-
-//common::Status InferenceSession::Initialize(void* serialized_graph) {
-//  Status status = Status::OK();
-//  TimePoint tp;
-//  if (session_profiler_.IsEnabled()) {
-//    tp = session_profiler_.StartTime();
-//  }
-//
-//  try {
-//    LOGS(*session_logger_, INFO) << "Initializing session with serialized graph.";
-//    std::lock_guard<onnxruntime::OrtMutex> l(session_mutex_);
-//    const Env& env = Env::Default();
-//    env.GetTelemetryProvider().LogSessionCreationStart();
-//    if (!is_model_loaded_) {
-//      LOGS(*session_logger_, ERROR) << "Model was not loaded";
-//      return common::Status(common::ONNXRUNTIME, common::FAIL, "Model was not loaded.");
-//    }
-//    if (is_inited_) {  // already initialized
-//      LOGS(*session_logger_, INFO) << "Session has already been initialized.";
-//      return common::Status::OK();
-//    }
-//#ifdef ONNXRUNTIME_ENABLE_INSTRUMENT
-//    TraceLoggingWriteStart(session_activity, "OrtInferenceSessionActivity");
-//    session_activity_started_ = true;
-//#endif
-//    // Register default CPUExecutionProvider if user didn't provide it through the Register() calls
-//    if (!execution_providers_.Get(onnxruntime::kCpuExecutionProvider)) {
-//      LOGS(*session_logger_, INFO) << "Adding default CPU execution provider.";
-//      CPUExecutionProviderInfo epi{session_options_.enable_cpu_mem_arena};
-//      auto p_cpu_exec_provider = onnxruntime::make_unique<CPUExecutionProvider>(epi);
-//      ORT_RETURN_IF_ERROR_SESSIONID_(RegisterExecutionProvider(std::move(p_cpu_exec_provider)));
-//    }
-//
-//    if (session_options_.execution_mode == ExecutionMode::ORT_PARALLEL &&
-//        execution_providers_.Get(onnxruntime::kCudaExecutionProvider)) {
-//      LOGS(*session_logger_, ERROR) << "Parallel execution mode doesn't support "
-//                                       "CUDA Execution Provider currently.";
-//      return common::Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT,
-//                            "Parallel execution mode doesn't support "
-//                            "CUDA Execution Provider currently.");
-//    }
-//
-//    // add L3 transformers here if enabled
-//    //
-//    // FIXME AddPredefinedTransformers(graph_transformation_mgr_, session_options_.graph_optimization_level,
-//    //                          transformers_to_enable_);
-//
-//    onnxruntime::Graph& graph = model_->MainGraph();
-//
-//    // Collect the kernel registries from execution provider instances;
-//    // There are 2 kinds of kernel registries with priority from high to low as below,
-//    // 1. Custom execution provider type specific kernel registries.
-//    // 2. common execution provider type specific kernel registries.
-//    // Kernel registries are shared across sessions.
-//    // The 1st ones should have already been registered via session-level API into KernelRegistryManager.
-//    //
-//    // Register 2nd registries into KernelRegistryManager.
-//    ORT_RETURN_IF_ERROR_SESSIONID_(kernel_registry_manager_.RegisterKernels(execution_providers_));
-//
-//    SessionStateInitializer session_initializer(session_options_.enable_mem_pattern, model_location_, graph,
-//                                                *session_state_, execution_providers_, kernel_registry_manager_);
-//
-//    // create SessionState for subgraphs as it's needed by the transformers
-//    ORT_RETURN_IF_ERROR_SESSIONID_(CreateSubgraphSessionState(graph, *session_state_));
-//
-//    // TODO: We don't want to have to call Graph::Resolve, which means any enabled transformers must keep the graph
-//    // in a valid state, and TransformGraph needs a way to run without calling Graph::Resolve
-//    //
-//    //// apply any transformations to the main graph and any subgraphs
-//    //ORT_RETURN_IF_ERROR_SESSIONID_(TransformGraph(graph, graph_transformation_mgr_,
-//    //                                              execution_providers_, kernel_registry_manager_,
-//    //                                              insert_cast_transformer_,
-//    //                                              *session_state_));
-//    //
-//    //// now that all the transforms are done, call Resolve on the main graph. this will recurse into the subgraphs.
-//    // ORT_RETURN_IF_ERROR_SESSIONID_(graph.Resolve());
-//
-//    //if (!session_options_.optimized_model_filepath.empty()) {
-//    //  // Serialize optimized ONNX model.
-//    //  ORT_RETURN_IF_ERROR_SESSIONID_(Model::Save(*model_, session_options_.optimized_model_filepath));
-//    //  if (session_options_.graph_optimization_level >= TransformerLevel::Level3) {
-//    //    LOGS(*session_logger_, WARNING) << "Serializing Optimized ONNX model with Graph Optimization"
-//    //                                       " level greater than ORT_ENABLE_EXTENDED. The generated"
-//    //                                       " model may contain hardware and execution provider specific"
-//    //                                       " optimizations, and should only be used in the same environment"
-//    //                                       " the model was optimized for.";
-//    //  }
-//    //}
-//
-//    ORT_RETURN_IF_ERROR_SESSIONID_(session_initializer.CreatePlan(nullptr, nullptr, session_options_.execution_mode));
-//
-//    // handle any subgraphs
-//    ORT_RETURN_IF_ERROR_SESSIONID_(InitializeSubgraphSessions(graph, *session_state_));
-//    session_state_->ResolveMemoryPatternFlag();
-//    is_inited_ = true;
-//
-//    // and log telemetry
-//    bool model_has_fp16_inputs = ModelHasFP16Inputs(graph);
-//    env.GetTelemetryProvider().LogSessionCreation(
-//        session_id_, model_->IrVersion(), model_->ProducerName(), model_->ProducerVersion(), model_->Domain(),
-//        model_->MainGraph().DomainToVersionMap(), model_->MainGraph().Name(), model_->MetaData(),
-//        telemetry_.event_name_, execution_providers_.GetIds(), model_has_fp16_inputs);
-//    LOGS(*session_logger_, INFO) << "Session successfully initialized.";
-//  } catch (const NotImplementedException& ex) {
-//    status = ORT_MAKE_STATUS(ONNXRUNTIME, NOT_IMPLEMENTED, "Exception during initialization: ", ex.what());
-//    LOGS(*session_logger_, ERROR) << status.ErrorMessage();
-//  } catch (const std::exception& ex) {
-//    status = ORT_MAKE_STATUS(ONNXRUNTIME, RUNTIME_EXCEPTION, "Exception during initialization: ", ex.what());
-//    LOGS(*session_logger_, ERROR) << status.ErrorMessage();
-//  } catch (...) {
-//    status = ORT_MAKE_STATUS(ONNXRUNTIME, RUNTIME_EXCEPTION, "Encountered unknown exception in Initialize()");
-//    LOGS(*session_logger_, ERROR) << status.ErrorMessage();
-//  }
-//
-//  if (session_profiler_.IsEnabled()) {
-//    session_profiler_.EndTimeAndRecordEvent(profiling::SESSION_EVENT, "session_initialization", tp);
-//  }
-//
-//  if (status.IsOK()) {
-//    for (auto& xp : execution_providers_) {
-//      auto end_status = xp->OnSessionInitializationEnd();
-//      if (status.IsOK()) {
-//        status = end_status;
-//      }
-//    }
-//  }
-//
-//  return status;
-//}
 
 int InferenceSession::GetCurrentNumRuns() const {
   return current_num_runs_.load();
@@ -1468,6 +1363,10 @@ std::string InferenceSession::EndProfiling() {
   LOGS(*session_logger_, ERROR) << "Could not write a profile because no model was loaded.";
   return std::string();
 }
+
+Status InferenceSession::Serialize(flexbuffers::Builder& builder) const {}
+Status InferenceSession::Deserialize(const gsl::span<const uint8_t>& bytes, const logging::Logger& logger,
+                                     std::unique_ptr<InferenceSession>& session);
 
 // assumes model has already been loaded before
 common::Status InferenceSession::DoPostLoadProcessing(onnxruntime::Model& model) {

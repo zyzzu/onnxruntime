@@ -1374,6 +1374,12 @@ TEST_F(GraphTest, SerializeToFlexBuffer) {
 
   flexbuffers::Builder slb(512, flexbuffers::BUILDER_FLAG_SHARE_KEYS_AND_STRINGS);
   ASSERT_STATUS_OK(graph.Serialize(slb));
+
+  //
+  // TODO:
+  // Need to serialze the kernel create info from session state...
+  //
+
   slb.Finish();
 
   const std::vector<uint8_t>& bytes = slb.GetBuffer();
@@ -1398,6 +1404,18 @@ TEST_F(GraphTest, SerializeToFlexBuffer) {
     std::string right_data;
     left.SerializeToString(&left_data);
     right.SerializeToString(&right_data);
+    ASSERT_EQ(left_data, right_data);
+  }
+
+  // check all node args are fine
+  for (const auto& input : graph.GetInputsIncludingInitializers()) {
+    const auto& left = *graph.GetNodeArg(input->Name());
+    const auto* right = graph2->GetNodeArg(input->Name());
+    ASSERT_TRUE(right != nullptr);
+    std::string left_data;
+    std::string right_data;
+    left.ToProto().SerializeToString(&left_data);
+    right->ToProto().SerializeToString(&right_data);
     ASSERT_EQ(left_data, right_data);
   }
 }

@@ -233,8 +233,11 @@ Status KernelRegistry::TryCreateKernel(const onnxruntime::Node& node,
                                        const FuncManager& funcs_mgr,
                                        const DataTransferManager& data_transfer_mgr,
                                        /*out*/ std::unique_ptr<OpKernel>& op_kernel) const {
-  const KernelCreateInfo* kernel_create_info;
-  ORT_RETURN_IF_ERROR(TryFindKernel(node, execution_provider.Type(), &kernel_create_info));
+  const KernelCreateInfo* kernel_create_info = node.GetKernelCreateInfo();
+  ORT_ENFORCE(kernel_create_info, "InferenceSession should have saved the KernelCreateInfo prior to this running.");
+
+  // const KernelCreateInfo* kernel_create_info;
+  //ORT_RETURN_IF_ERROR(TryFindKernel(node, execution_provider.Type(), &kernel_create_info));
 
   OpKernelInfo kernel_info(node,
                            *kernel_create_info->kernel_def,
@@ -261,20 +264,25 @@ static std::string ToString(const std::vector<std::string>& error_strs) {
 // otherwise, kernel_def.provider must equal to node.provider. exec_provider is ignored.
 
 Status KernelRegistry::TryFindKernel(const onnxruntime::Node& node,
-                                     onnxruntime::ProviderType exec_provider, const KernelCreateInfo** out) const {
+                                     onnxruntime::ProviderType exec_provider,
+                                     const KernelCreateInfo** out,
+                                     size_t& index) const {
   const auto& node_provider = node.GetExecutionProviderType();
   const auto& expected_provider = (node_provider.empty() ? exec_provider : node_provider);
 
   auto range = kernel_creator_fn_map_.equal_range(GetMapKey(node.OpType(), node.Domain(), expected_provider));
   std::vector<std::string> verify_kernel_def_error_strs;
-  for (auto i = range.first; i != range.second; ++i) {
+  index = 0;
+  for (auto i = range.first; i != range.second; ++i, ++index) {
     std::string error_str;
     if (VerifyKernelDef(node, *i->second.kernel_def, error_str)) {
       *out = &i->second;
       return Status::OK();
     }
+
     verify_kernel_def_error_strs.push_back(error_str);
   }
+
   *out = nullptr;
   if (!verify_kernel_def_error_strs.empty()) {
     std::ostringstream oss;
@@ -284,6 +292,7 @@ Status KernelRegistry::TryFindKernel(const onnxruntime::Node& node,
         << " Encountered following errors: (" << ToString(verify_kernel_def_error_strs) << ")";
     return Status(ONNXRUNTIME, FAIL, oss.str());
   }
+
   return Status(ONNXRUNTIME, FAIL, "Kernel not found");
 }
 

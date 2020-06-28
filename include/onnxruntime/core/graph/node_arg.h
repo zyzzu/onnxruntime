@@ -5,7 +5,12 @@
 
 #include "core/graph/onnx_protobuf.h"
 
+namespace flexbuffers {
+class Reference;
+}  // namespace flexbuffers
+
 namespace onnxruntime {
+class ProtobufSerializer;
 
 // Node argument definition, for both input and output,
 // including arg name, arg type (contains both type and shape).
@@ -81,7 +86,7 @@ class NodeArg {
   @param override_types If true, resolve the two inputs or two outputs type when different
   @returns Success unless there is existing type or shape info that can't be successfully updated. */
   common::Status UpdateTypeAndShape(const NodeArg& node_arg, bool strict, bool override_types, const logging::Logger& logger);
- 
+
   /** Gets this NodeArg as a ValueInfoProto. */
   const NodeArgInfo& ToProto() const noexcept { return node_arg_info_; }
 
@@ -92,6 +97,10 @@ class NodeArg {
  private:
   ORT_DISALLOW_COPY_AND_ASSIGNMENT(NodeArg);
   friend class Graph;
+
+  // deserialize ctor
+  NodeArg(const flexbuffers::Reference& fbr);
+  void Serialize(ProtobufSerializer& protobuf_serializer) const;
 
   void SetType(ONNX_NAMESPACE::DataType p_type);
   void SetType(const ONNX_NAMESPACE::TypeProto& type_proto);

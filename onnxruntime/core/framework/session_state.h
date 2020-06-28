@@ -83,6 +83,8 @@ class SessionState {
     return (node_id < session_kernels_.size()) ? session_kernels_[node_id] : nullptr;
   }
 
+  Status PopulateKernelCreateInfo(const Graph& graph, KernelRegistryManager& kernel_registry_manager);
+
   const ExecutionProviders& GetExecutionProviders() const noexcept { return execution_providers_; }
 
   const OrtValueNameIdxMap& GetOrtValueNameIdxMap() const noexcept { return ort_value_name_idx_map_; }
@@ -258,8 +260,11 @@ class SessionState {
       MemoryPatternGroup* output) const;
 #endif
 
-  // cache of the constructed kernels to avoid spending construction
-  // time per executor
+  // KernelCreateInfo for each node so we only lookup once, and can support re-creating the Graph from serialized
+  // state with no ONNX dependencies (lookup to find the correct kernel requires the onnx schema)
+  std::unordered_map<NodeIndex, const KernelCreateInfo*> kernel_create_info_map_;
+
+  // cache of the constructed kernels to avoid spending construction time per executor
   std::vector<OpKernel*> session_kernels_;
   std::unique_ptr<GraphViewer> graph_viewer_;
 
