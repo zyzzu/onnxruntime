@@ -5,7 +5,7 @@
 #include "embed_layer_norm_helper.h"
 #include "core/util/math_cpuonly.h"
 #include "core/platform/threadpool.h"
-
+#include "mask_index_helper.h"
 #include <atomic>
 
 namespace onnxruntime {
@@ -48,7 +48,7 @@ Status EmbedLayerNorm<T>::Compute(OpKernelContext* context) const {
   TensorShape output_shape({input_dims[0], input_dims[1], hidden_size});
   Tensor* output = context->Output(0, output_shape);
 
-  TensorShape mask_index_shape({input_dims[0]});
+  TensorShape mask_index_shape({2 * input_dims[0]});
   Tensor* mask_index = context->Output(1, mask_index_shape);
 
   int batch_size = static_cast<int>(input_dims[0]);
@@ -118,19 +118,7 @@ Status EmbedLayerNorm<T>::Compute(OpKernelContext* context) const {
     }
   }
 
-  // Calculate mask
-  if (nullptr != mask) {
-    const int32_t* mask_data = mask->template Data<int32_t>();
-    for (int b = 0; b < batch_size; b++) {
-      mask_index->template MutableData<int32_t>()[b] = static_cast<int32_t>(std::count_if(mask_data + (b * sequence_length),
-                                                                                          mask_data + (b * sequence_length) + sequence_length,
-                                                                                          [](int v) { return v == 1; }));
-    }
-  } else {
-    memset(mask_index->template MutableData<int32_t>(), 0, batch_size * sizeof(int32_t));
-  }
-
-  return Status::OK();
+  return ComputeMaskIndex<int32_t>(mask == nullptr ? nullptr : mask->template Data<int32_t>(), mask_index->template MutableData<int32_t>(), batch_size, sequence_length);
 }
 
 }  // namespace contrib
