@@ -239,8 +239,6 @@ class InferenceSession {
     */
   common::Status Initialize() ORT_MUST_USE_RESULT;
 
-  //common::Status Initialize(void* serialized_graph) ORT_MUST_USE_RESULT;
-
   common::Status Run(const RunOptions& run_options, const std::vector<std::string>& feed_names,
                      const std::vector<OrtValue>& feeds, const std::vector<std::string>& output_names,
                      std::vector<OrtValue>* p_fetches) ORT_MUST_USE_RESULT;
@@ -389,6 +387,8 @@ class InferenceSession {
 
   void ConstructorCommon(const SessionOptions& session_options,
                          const Environment& session_env);
+
+  common::Status InitializeImpl(const gsl::span<uint8_t>* serialized_bytes = nullptr) ORT_MUST_USE_RESULT;
 
   bool HasLocalSchema() const {
     return !custom_schema_registries_.empty();
