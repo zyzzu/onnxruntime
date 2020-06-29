@@ -260,6 +260,8 @@ def parse_arguments():
     parser.add_argument(
         "--use_dnnlibrary", action='store_true', help="Build with DNNLibrary.")
     parser.add_argument(
+        "--use_nnapi", action='store_true', help="Build with NNAPI support.")
+    parser.add_argument(
         "--use_rknpu", action='store_true', help="Build with RKNPU.")
     parser.add_argument(
         "--use_preinstalled_eigen", action='store_true',
@@ -294,6 +296,9 @@ def parse_arguments():
         "--disable_contrib_ops", action='store_true',
         help="Disable contrib ops (reduces binary size)")
     parser.add_argument(
+        "--disable_ml_ops", action='store_true',
+        help="Disable traditional ML ops (reduces binary size)")
+    parser.add_argument(
         "--skip_onnx_tests", action='store_true', help="Explicitly disable "
         "all onnx related tests. Note: Use --skip_tests to skip all tests.")
     parser.add_argument(
@@ -311,7 +316,7 @@ def parse_arguments():
     parser.add_argument(
         "--cmake_generator",
         choices=['Visual Studio 15 2017', 'Visual Studio 16 2019', 'Ninja'],
-        default='Visual Studio 15 2017',
+        default='Visual Studio 15 2017' if is_windows() else None,
         help="Specify the generator that CMake invokes. "
         "This is only supported on Windows")
     parser.add_argument(
@@ -346,6 +351,9 @@ def parse_arguments():
     parser.add_argument(
         "--armnn_relu", action='store_true',
         help="Use the Relu operator implementation from the ArmNN EP.")
+    parser.add_argument(
+        "--build_micro_benchmarks", action='store_true',
+        help="Build ONNXRuntime micro-benchmarks.")
     return parser.parse_args()
 
 
@@ -580,11 +588,13 @@ def generate_build_tree(cmake_path, source_dir, build_dir, cuda_home, cudnn_home
         "-Donnxruntime_USE_OPENVINO_BINARY=" + (
             "ON" if args.use_openvino else "OFF"),
         "-Donnxruntime_USE_NNAPI_DNNLIBRARY=" + ("ON" if args.use_dnnlibrary else "OFF"),
+        "-Donnxruntime_USE_NNAPI_BUILTIN=" + ("ON" if args.use_nnapi else "OFF"),
         "-Donnxruntime_USE_RKNPU=" + ("ON" if args.use_rknpu else "OFF"),
         "-Donnxruntime_USE_OPENMP=" + (
             "ON" if args.use_openmp and not (
                 args.use_dnnlibrary or args.use_mklml or args.use_ngraph or
-                args.android or (args.ios and is_macOS()) or args.use_rknpu)
+                args.android or (args.ios and is_macOS())
+                or args.use_rknpu or args.use_nnapi)
             else "OFF"),
         "-Donnxruntime_USE_TVM=" + ("ON" if args.use_tvm else "OFF"),
         "-Donnxruntime_USE_LLVM=" + ("ON" if args.use_llvm else "OFF"),
@@ -605,6 +615,8 @@ def generate_build_tree(cmake_path, source_dir, build_dir, cuda_home, cudnn_home
             "ON" if args.arm64 or args.arm else "OFF"),
         "-Donnxruntime_DISABLE_CONTRIB_OPS=" + (
             "ON" if args.disable_contrib_ops else "OFF"),
+        "-Donnxruntime_DISABLE_ML_OPS=" + (
+            "ON" if args.disable_ml_ops else "OFF"),
         "-Donnxruntime_MSVC_STATIC_RUNTIME=" + (
             "ON" if args.enable_msvc_static_runtime else "OFF"),
         # enable pyop if it is nightly build
@@ -635,7 +647,9 @@ def generate_build_tree(cmake_path, source_dir, build_dir, cuda_home, cudnn_home
         "-Donnxruntime_ENABLE_TRAINING=" + (
             "ON" if args.enable_training else "OFF"),
         "-Donnxruntime_USE_HOROVOD=" + (
-            "ON" if args.use_horovod else "OFF")
+            "ON" if args.use_horovod else "OFF"),
+        "-Donnxruntime_BUILD_BENCHMARKS=" + (
+            "ON" if args.build_micro_benchmarks else "OFF")
     ]
 
     if mpi_home and os.path.exists(mpi_home):
@@ -675,6 +689,12 @@ def generate_build_tree(cmake_path, source_dir, build_dir, cuda_home, cudnn_home
                        "-Deigen_SOURCE_PATH=" + args.eigen_path]
 
     if args.android:
+        if args.use_dnnlibrary and args.use_nnapi:
+            raise BuildError(
+                "Only one of --use_dnnlibrary and --use_nnapi " +
+                "can be enabled"
+            )
+
         cmake_args += [
             "-DCMAKE_TOOLCHAIN_FILE=" + args.android_ndk_path
             + "/build/cmake/android.toolchain.cmake",
@@ -682,8 +702,11 @@ def generate_build_tree(cmake_path, source_dir, build_dir, cuda_home, cudnn_home
             "-DANDROID_ABI=" + str(args.android_abi)
         ]
 
-    if is_macOS() and args.use_xcode:
-        cmake_args += ["-GXcode"]
+    if is_macOS():
+        if args.use_xcode:
+            cmake_args += ['-G', 'Xcode']
+        elif args.cmake_generator is not None:
+            cmake_args += ['-G', args.cmake_generator]
 
     if args.ios:
         if is_macOS():
@@ -1115,7 +1138,7 @@ def run_onnxruntime_tests(args, source_dir, ctest_path, build_dir, configs):
                 source_dir, 'onnx_test_runner', '/data/local/tmp/', cwd=cwd)
             adb_shell(
                 'cd /data/local/tmp && /data/local/tmp/onnxruntime_test_all')
-            if args.use_dnnlibrary:
+            if args.use_dnnlibrary or args.use_nnapi:
                 adb_shell(
                     'cd /data/local/tmp && /data/local/tmp/onnx_test_runner -e nnapi /data/local/tmp/test')  # noqa
             else:
@@ -1172,19 +1195,20 @@ def run_onnxruntime_tests(args, source_dir, ctest_path, build_dir, configs):
                 [sys.executable, 'onnxruntime_test_python.py'],
                 cwd=cwd, dll_path=dll_path)
 
+            if not args.disable_ml_ops:
+                run_subprocess([sys.executable, 'onnxruntime_test_python_mlops.py'], cwd=cwd, dll_path=dll_path)
+
             if args.enable_training and args.use_cuda:
                 # run basic frontend tests
                 run_training_python_frontend_tests(cwd=cwd)
 
             try:
                 import onnx  # noqa
-                # gen_test_models.py used by onnx_test requires scipy.
-                import scipy  # noqa
                 onnx_test = True
             except ImportError as error:
                 log.exception(error)
                 log.warning(
-                    "onnx or scipy is not installed. "
+                    "onnx is not installed. "
                     "The ONNX tests will be skipped.")
                 onnx_test = False
 
@@ -1192,6 +1216,12 @@ def run_onnxruntime_tests(args, source_dir, ctest_path, build_dir, configs):
                 run_subprocess(
                     [sys.executable, 'onnxruntime_test_python_backend.py'],
                     cwd=cwd, dll_path=dll_path)
+
+                if not args.disable_ml_ops:
+                    run_subprocess(
+                        [sys.executable, 'onnxruntime_test_python_backend_mlops.py'],
+                        cwd=cwd, dll_path=dll_path)
+
                 run_subprocess(
                     [sys.executable,
                      os.path.join(source_dir, 'onnxruntime', 'test', 'onnx',
@@ -1496,8 +1526,11 @@ def build_protoc_for_host(cmake_path, source_dir, build_dir, args):
         if not is_ninja:
             cmd_args += ['-T', 'host=x64']
         cmd_args += ['-G', args.cmake_generator]
-    elif is_macOS() and args.use_xcode:
-        cmd_args += ['-G', 'Xcode']
+    elif is_macOS():
+        if args.use_xcode:
+            cmd_args += ['-G', 'Xcode']
+        elif args.cmake_generator is not None:
+            cmd_args += ['-G', args.cmake_generator]
 
     run_subprocess(cmd_args, cwd=protoc_build_dir)
     # Build step
