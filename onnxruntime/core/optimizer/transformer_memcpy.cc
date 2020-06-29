@@ -170,15 +170,14 @@ bool TransformerMemcpyImpl::ModifyGraph(const KernelRegistryManager& kernel_regi
   return modified;
 }
 
-void TransformerMemcpyImpl::ProcessDefs(onnxruntime::Node& node, const KernelRegistryManager& /*kernel_registries*/, InitializedTensorSet& initializers_consumed) {
+void TransformerMemcpyImpl::ProcessDefs(onnxruntime::Node& node, const KernelRegistryManager& kernel_registries,
+                                        InitializedTensorSet& initializers_consumed) {
   auto node_provider_type = node.GetExecutionProviderType();
   if ((node_provider_type == provider_) || (node_provider_type == kCudaExecutionProvider && kTensorrtExecutionProvider == provider_)) {
     provider_nodes_.insert(&node);
     // note KernelCreateInfo might be nullptr for custom kernel
-    //const KernelCreateInfo* kci = nullptr;
-    //kernel_registries.SearchKernelRegistry(node, &kci);
-    const KernelCreateInfo* kci = node.GetKernelCreateInfo();
-    ORT_ENFORCE(kci, "InferenceSession should have saved the KernelCreateInfo prior to this running.");
+    const KernelCreateInfo* kci = nullptr;
+    kernel_registries.SearchKernelRegistry(node, &kci);
 
     bool is_implicit_input = false;
     auto process_inputs =

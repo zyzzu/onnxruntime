@@ -172,7 +172,8 @@ Status GraphPartitioner::Partition(Graph& graph, bool export_dll, FuncManager& f
         ORT_ENFORCE(node_compute_funcs.size() == nodes_need_compile.size(),
                     "Provider doesn't return correct number of compiled functions");
         for (size_t j = 0; j < nodes_need_compile.size(); j++)
-          ORT_RETURN_IF_ERROR(func_mgr.AddFuncInfo(nodes_need_compile[j]->Name(), node_compute_funcs[j].compute_func,
+          ORT_RETURN_IF_ERROR(func_mgr.AddFuncInfo(nodes_need_compile[j]->Name(),
+                                                   node_compute_funcs[j].compute_func,
                                                    node_compute_funcs[j].create_state_func,
                                                    node_compute_funcs[j].release_state_func));
       }
@@ -181,7 +182,10 @@ Status GraphPartitioner::Partition(Graph& graph, bool export_dll, FuncManager& f
         KernelDefBuilder builder;
         BuildFusedKernelDef(builder, *node);
         ORT_RETURN_IF_ERROR(fused_kernel_registry->Register(
-            builder, static_cast<KernelCreatePtrFn>([](const OpKernelInfo& info) -> OpKernel* { return new FunctionKernel(info); })));
+            builder,
+            static_cast<KernelCreatePtrFn>([](const OpKernelInfo& info) -> OpKernel* {
+              return new FunctionKernel(info);
+            })));
       }
     }
   }
@@ -225,7 +229,8 @@ Status GraphPartitioner::Partition(Graph& graph, bool export_dll, FuncManager& f
   }
 #endif
 
-  if (!fused_kernel_registry->IsEmpty()) kernel_registry_mgr_.RegisterKernelRegistry(fused_kernel_registry);
+  if (!fused_kernel_registry->IsEmpty())
+    kernel_registry_mgr_.RegisterKernelRegistry(fused_kernel_registry);
 
   return Status::OK();
 }

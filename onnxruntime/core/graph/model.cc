@@ -22,6 +22,8 @@
 #include "core/platform/env.h"
 #include "core/graph/schema_registry.h"
 
+#include "flatbuffers/flexbuffers.h"
+
 using namespace ONNX_NAMESPACE;
 using namespace onnxruntime;
 using namespace onnxruntime::common;

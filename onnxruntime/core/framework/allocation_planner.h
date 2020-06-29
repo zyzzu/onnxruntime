@@ -16,6 +16,7 @@ class TensorShapeProto;
 namespace onnxruntime {
 
 class ExecutionProviders;
+struct KernelCreateInfo;
 class KernelRegistryManager;
 class OrtValueNameIdxMap;
 
@@ -51,6 +52,7 @@ class SequentialPlanner {
   static Status CreatePlan(const Node* parent_node, const onnxruntime::GraphViewer& graph,
                            const std::vector<const NodeArg*>& outer_scope_node_args,
                            const ExecutionProviders& providers, const KernelRegistryManager& kernel_registry,
+                           const std::unordered_map<NodeIndex, const KernelCreateInfo*>& kernel_create_info_map,
                            const OrtValueNameIdxMap& ort_value_name_idx_map, const ISequentialPlannerContext& context,
                            std::unique_ptr<SequentialExecutionPlan>& plan);
 };

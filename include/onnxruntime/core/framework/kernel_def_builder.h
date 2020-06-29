@@ -88,7 +88,7 @@ class KernelDef {
 
   bool IsConflict(const KernelDef& other) const;
 
-  size_t GetHash() const noexcept { return hash_; }
+  uint64_t GetHash() const noexcept { return hash_; }
 
   bool operator==(const KernelDef& rhs) const noexcept {
     // TODO: If we ever change CalculateHash::hash_version we would need to handle that somehow.
@@ -98,6 +98,7 @@ class KernelDef {
  private:
   friend class KernelDefBuilder;
 
+  // call once the KernelDef has been built
   void CalculateHash() {
     // use name, start/end, domain, provider and the type constraints.
     // we wouldn't have two kernels that only differed by the inplace or alias info or memory types.
@@ -157,7 +158,7 @@ class KernelDef {
   // Default memory type for all outputs
   OrtMemType default_outputs_mem_type_{OrtMemTypeDefault};
 
-  size_t hash_ = 0;
+  uint64_t hash_ = 0;
 };
 
 class KernelDefBuilder {
@@ -303,6 +304,7 @@ class KernelDefBuilder {
      Return the kernel definition, passing ownership of the KernelDef to the caller
   */
   std::unique_ptr<KernelDef> Build() {
+    kernel_def_->CalculateHash();
     return std::move(kernel_def_);
   }
 

@@ -3283,16 +3283,13 @@ Status Graph::Serialize(flexbuffers::Builder& builder) const {
   return Status::OK();
 }
 
-Status Graph::Deserialize(const gsl::span<const uint8_t>& bytes, const logging::Logger& logger,
+Status Graph::Deserialize(const flexbuffers::Reference& fbr, const logging::Logger& logger,
                           std::unique_ptr<Graph>& graph) {
-  // TODO: In theory we could create the Graph instance just pointing to offsets in this buffer to avoid copying
-  // from it, but in practice that may be a massive development cost.
-  auto serialized_data = flexbuffers::GetRoot(bytes.data(), bytes.size());
-
   // can't use make_unique as we're calling a private ctor
   graph.reset(new Graph(logger));
 
-  auto status = graph->Deserialize(serialized_data);
+  auto status = graph->Deserialize(fbr);
+
   return status;
 }
 
@@ -3333,7 +3330,10 @@ Status Graph::Deserialize(const flexbuffers::Reference& fbr) {
 }
 
 Graph::Graph(const logging::Logger& logger)
-    : is_loaded_from_model_file_(true),
-      logger_(logger) {
+    : graph_proto_(nullptr),
+      parent_graph_(nullptr),
+      parent_node_(nullptr),
+      logger_(logger),
+      is_loaded_from_model_file_(true) {
 }
 }  // namespace onnxruntime

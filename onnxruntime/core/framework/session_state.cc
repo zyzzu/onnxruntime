@@ -3,15 +3,20 @@
 
 #include "core/framework/session_state.h"
 
+#include <queue>
 #include <sstream>
 
 #include "core/common/logging/logging.h"
 #include "core/common/safeint.h"
+#include "core/framework/allocator.h"
 #include "core/framework/node_index_info.h"
 #include "core/framework/op_kernel.h"
-#include "core/framework/utils.h"
 #include "core/framework/ort_value_pattern_planner.h"
-#include "core/framework/allocator.h"
+#include "core/framework/session_state_utils.h"
+#include "core/framework/utils.h"
+#include "core/providers/cpu/controlflow/utils.h"
+
+#include "flatbuffers/flexbuffers.h"
 
 using namespace ::onnxruntime::common;
 
@@ -116,22 +121,18 @@ void SessionState::CreateGraphInfo() {
   LOGS(logger_, VERBOSE) << "Done saving OrtValue mappings.";
 }
 
-Status SessionState::PopulateKernelCreateInfo(const Graph& graph, KernelRegistryManager& kernel_registry_manager) {
-  for (auto& node : graph.Nodes()) {
-    const auto& node_provider = node.GetExecutionProviderType();
+Status SessionState::PopulateKernelCreateInfo(KernelRegistryManager& kernel_registry_manager) {
+  for (auto& node : graph_.Nodes()) {
     // save kernel create info for the node so we don't have to keep looking it up
     const KernelCreateInfo* kci = nullptr;
     ORT_RETURN_IF_ERROR(kernel_registry_manager.SearchKernelRegistry(node, &kci));
     kernel_create_info_map_[node.Index()] = kci;
+  }
 
-    auto subgraph_info = subgraph_session_states_.find(node.Index());
-    if (subgraph_info != subgraph_session_states_.cend()) {
-      for (const auto& name_to_subgraph_session_state : subgraph_info->second) {
-        const std::string& attr_name = name_to_subgraph_session_state.first;
-        SessionState& subgraph_session_state = *name_to_subgraph_session_state.second;
-        const Graph& subgraph = *node.GetGraphAttribute(attr_name);
-        ORT_RETURN_IF_ERROR(subgraph_session_state.PopulateKernelCreateInfo(subgraph, kernel_registry_manager));
-      }
+  for (const auto& entry : subgraph_session_states_) {
+    for (const auto& name_to_subgraph_session_state : entry.second) {
+      SessionState& subgraph_session_state = *name_to_subgraph_session_state.second;
+      ORT_RETURN_IF_ERROR(subgraph_session_state.PopulateKernelCreateInfo(kernel_registry_manager));
     }
   }
 
@@ -141,6 +142,9 @@ Status SessionState::PopulateKernelCreateInfo(const Graph& graph, KernelRegistry
 Status SessionState::CreateKernels(const KernelRegistryManager& kernel_registry_manager) {
   const GraphNodes& nodes = graph_viewer_->Nodes();
   if (!nodes.empty()) {
+    ORT_ENFORCE(!kernel_create_info_map_.empty(),
+                "PopulateKernelCreateInfo or DeserializeKernelInfo should have been called");
+
     size_t max_nodeid = 0;
     for (auto& node : graph_viewer_->Nodes()) {
       max_nodeid = std::max(max_nodeid, node.Index());
@@ -149,33 +153,27 @@ Status SessionState::CreateKernels(const KernelRegistryManager& kernel_registry_
     session_kernels_.resize(max_nodeid + 1, nullptr);
     for (auto& node : graph_viewer_->Nodes()) {
       // construct and save the kernels
-      std::unique_ptr<OpKernel> op_kernel;
-      onnxruntime::ProviderType exec_provider_name = node.GetExecutionProviderType();
+      const KernelCreateInfo* kci = kernel_create_info_map_.at(node.Index());
+      // TODO: Should custom ops have KCI by now?
+      ORT_ENFORCE(kci, "Missing kernel create info for node ", node.Index());
 
+      onnxruntime::ProviderType exec_provider_name = node.GetExecutionProviderType();
       const IExecutionProvider* exec_provider = nullptr;
+
       if (exec_provider_name.empty() ||
-          (exec_provider = execution_providers_.get().Get(exec_provider_name)) == nullptr) {
+          (exec_provider = execution_providers_.Get(exec_provider_name)) == nullptr) {
         return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Could not create kernel for node: ", node.Name(),
                                " as there's no execution provider allocated.");
       }
 
-      common::Status status = kernel_registry_manager.CreateKernel(node, *exec_provider, *this, op_kernel);
-      if (!status.IsOK()) {
-        return common::Status(
-            status.Category(), status.Code(),
-            MakeString("Kernel creation failed for node: ", node.Name(), " with error: ", status.ErrorMessage()));
-      }
-      assert(session_kernels_[node.Index()] == nullptr);
+      auto op_kernel = kernel_registry_manager.CreateKernel(node, *exec_provider, *this, *kci);
+
       // assumes vector is already resize()'ed to the number of nodes in the graph
       session_kernels_[node.Index()] = op_kernel.release();
     }
   }
   node_index_info_ = onnxruntime::make_unique<NodeIndexInfo>(*graph_viewer_, ort_value_name_idx_map_);
   return Status::OK();
-}
-
-void SessionState::SetExecutionPlan(std::unique_ptr<SequentialExecutionPlan> p_seq_exec_plan) {
-  p_seq_exec_plan_ = std::move(p_seq_exec_plan);
 }
 
 const SequentialExecutionPlan* SessionState::GetExecutionPlan() const { return p_seq_exec_plan_.get(); }
@@ -567,6 +565,198 @@ const std::unordered_set<NodeIndex>* SessionState::GetToBeExecutedNodes(
   std::sort(sorted_idxs.begin(), sorted_idxs.end());
   auto it = to_be_executed_nodes_.find(sorted_idxs);
   return (it != to_be_executed_nodes_.end()) ? &it->second : nullptr;
+}
+
+Status SessionState::FinalizeSessionState(const std::basic_string<PATH_CHAR_TYPE>& graph_location,
+                                          KernelRegistryManager& kernel_registry_manager,
+                                          ExecutionMode execution_mode,
+                                          const flexbuffers::Reference* serialized_data) {
+  return FinalizeSessionStateImpl(graph_location, kernel_registry_manager, nullptr, execution_mode, serialized_data);
+}
+
+Status SessionState::FinalizeSessionStateImpl(const std::basic_string<PATH_CHAR_TYPE>& graph_location,
+                                              KernelRegistryManager& kernel_registry_manager,
+                                              _In_opt_ const Node* parent_node,
+                                              ExecutionMode execution_mode,
+                                              const flexbuffers::Reference* serialized_data) {
+  // recursively populate the kernel create info.
+  // it's simpler to do recursively when deserializing,
+  // so also do it recursively when calling PopulateKernelCreateInfo for consistency
+  if (parent_node == nullptr) {
+    if (serialized_data) {
+      DeserializeKernelCreateInfo(*serialized_data, kernel_registry_manager);
+    } else {
+      PopulateKernelCreateInfo(kernel_registry_manager);
+    }
+  }
+
+  CreateGraphInfo();
+
+  // ignore any outer scope args we don't know about. this can happen if a node contains multiple subgraphs.
+  std::vector<const NodeArg*> valid_outer_scope_node_args;
+  if (parent_node) {
+    auto outer_scope_node_args = parent_node->ImplicitInputDefs();
+    valid_outer_scope_node_args.reserve(outer_scope_node_args.size());
+
+    std::for_each(outer_scope_node_args.cbegin(), outer_scope_node_args.cend(),
+                  [this, &valid_outer_scope_node_args](const NodeArg* node_arg) {
+                    int idx;
+                    if (ort_value_name_idx_map_.GetIdx(node_arg->Name(), idx).IsOK()) {
+                      valid_outer_scope_node_args.push_back(node_arg);
+                    };
+                  });
+  }
+
+  SequentialPlannerContext context(execution_mode);
+  ORT_RETURN_IF_ERROR(SequentialPlanner::CreatePlan(parent_node, *graph_viewer_, valid_outer_scope_node_args,
+                                                    execution_providers_, kernel_registry_manager,
+                                                    kernel_create_info_map_, ort_value_name_idx_map_,
+                                                    context, p_seq_exec_plan_));
+
+  // LOGS(logger_, VERBOSE) << std::make_pair(p_seq_exec_plan_.get(), this);
+
+  std::unique_ptr<ITensorAllocator> tensor_allocator_(
+      ITensorAllocator::Create(enable_mem_pattern_, *p_seq_exec_plan_, *this, weights_buffers_));
+
+  // lambda to save initialized tensors into SessionState directly
+  ORT_RETURN_IF_ERROR(
+      session_state_utils::SaveInitializedTensors(
+          Env::Default(), graph_location, *graph_viewer_,
+          execution_providers_.GetDefaultCpuMemoryInfo(),
+          ort_value_name_idx_map_, *tensor_allocator_,
+          [this](int idx, const OrtValue& value, const OrtCallback& d, bool constant) -> Status {
+            return AddInitializedTensor(idx, value, &d, constant);
+          },
+          logger_, data_transfer_mgr_));
+
+  // remove weights from the graph now to save memory but in many cases it won't save memory, if the tensor was
+  // preallocated with the some other tensors in a single 'allocate' call, which is very common.
+  // TODO: make it better
+  CleanInitializedTensorsFromGraph();
+
+  ORT_RETURN_IF_ERROR(CreateKernels(kernel_registry_manager));
+  ORT_RETURN_IF_ERROR(
+      session_state_utils::SaveInputOutputNamesToNodeMapping(*graph_viewer_, *this, valid_outer_scope_node_args));
+
+  // Need to recurse into subgraph session state to finalize
+  // and add the execution info
+  for (const auto& node_to_subgraph_ss : subgraph_session_states_) {
+    Node& node = *graph_.GetNode(node_to_subgraph_ss.first);
+
+    // We only need subgraph session state for control flow nodes being handled by our CPU or CUDA execution provider.
+    // Remove it if it's not needed.
+    const auto ep = node.GetExecutionProviderType();
+    if (ep != kCpuExecutionProvider && ep != kCudaExecutionProvider) {
+      RemoveSubgraphSessionState(node_to_subgraph_ss.first);
+      continue;
+    }
+
+    for (const auto& attr_subgraph_pair : node.GetAttributeNameToMutableSubgraphMap()) {
+      auto& attr_name = attr_subgraph_pair.first;
+      auto entry = node_to_subgraph_ss.second.find(attr_name);
+      // InferenceSession::CreateSubgraphSessionState should ensure all these entries are created
+      ORT_ENFORCE(entry != node_to_subgraph_ss.second.cend(),
+                  "Missing session state for subgraph. Node:'", node.Name(),
+                  "' OpType:", node.OpType(), " Index:", node.Index(), " Attribute:", attr_name);
+
+      SessionState& subgraph_session_state = *entry->second;
+
+      // setup all the info for handling the feeds and fetches used in subgraph execution
+      auto* p_op_kernel = GetMutableKernel(node.Index());
+      ORT_ENFORCE(p_op_kernel);
+
+      auto& control_flow_kernel = dynamic_cast<controlflow::IControlFlowKernel&>(*p_op_kernel);
+      ORT_RETURN_IF_ERROR(control_flow_kernel.SetupSubgraphExecutionInfo(*this, attr_name, subgraph_session_state));
+
+      // recurse.
+      // we don't need to pass through any serialized data as we recursively populated the kernel create info
+      // when processing the main graph
+      // Currently all subgraphs are executed using the sequential EP due to potential deadlock with the current
+      // parallel executor implementation.
+      FinalizeSessionStateImpl(graph_location, kernel_registry_manager, &node, ExecutionMode::ORT_SEQUENTIAL, nullptr);
+    }
+  }
+
+  return Status::OK();
+}
+
+Status SessionState::SerializeKernelCreateInfo(flexbuffers::Builder& builder) const {
+  using Entry = std::pair<std::string, const SessionState*>;
+
+  // add kernel info for the MainGraph first, and for all subgraphs after that
+  builder.Map([this, &builder]() {
+    std::queue<Entry> queue;
+    queue.push({"MainGraph", this});
+
+    while (!queue.empty()) {
+      const Entry& entry = queue.front();
+      const SessionState& ss = *entry.second;
+      builder.TypedVector(entry.first.c_str(), [&builder, &ss]() {
+        for (const auto& kvp : ss.kernel_create_info_map_) {
+          builder.Int(kvp.first);  // node index
+          builder.Int(kvp.second->kernel_def->GetHash());
+
+          // TEMP check
+          assert(kvp.second->kernel_def->GetHash() != 0);
+        }
+      });
+
+      queue.pop();
+
+      // add any subgraphs
+      for (const auto& node_idx_to_subgraph_ss : subgraph_session_states_) {
+        const Node& node = *graph_.GetNode(node_idx_to_subgraph_ss.first);
+        for (const auto& name_to_subgraph_session_state : node_idx_to_subgraph_ss.second) {
+          const std::string& attr_name = name_to_subgraph_session_state.first;
+          SessionState& subgraph_session_state = *name_to_subgraph_session_state.second;
+          std::string key(std::to_string(node.Index()) + "_" + attr_name);
+          queue.push({key, &subgraph_session_state});
+        }
+      }
+    }
+  });
+
+  return Status::OK();
+}
+
+Status SessionState::DeserializeKernelCreateInfo(const flexbuffers::Reference& fbr,
+                                                 const KernelRegistryManager& kernel_registry_manager) {
+  const auto kernel_info_map = fbr.AsMap();
+  using Entry = std::pair<std::string, SessionState*>;
+
+  std::queue<Entry> queue;
+  queue.push({"MainGraph", this});
+
+  while (!queue.empty()) {
+    const auto& queue_entry = queue.front();
+    const std::string& key = queue_entry.first;
+    const auto& entries = kernel_info_map[key].AsTypedVector();
+
+    for (size_t cur = 0, end = entries.size(); cur < end;) {
+      size_t node_index = static_cast<size_t>(entries[cur++].AsUInt64());
+      auto hash = entries[cur++].AsUInt64();
+      // get node
+      const Node* node = graph_.GetNode(node_index);
+      ORT_ENFORCE(node != nullptr, "Can't find node with index ", node_index, " in graph.");
+
+      // search with hash
+      const KernelCreateInfo* kci = nullptr;
+      ORT_RETURN_IF_ERROR(kernel_registry_manager.SearchKernelRegistry(*node, hash, &kci));
+      kernel_create_info_map_[node->Index()] = kci;
+    };
+
+    for (const auto& entry : subgraph_session_states_) {
+      const Node& node = *graph_.GetNode(entry.first);
+      for (const auto& name_to_subgraph_session_state : entry.second) {
+        const std::string& attr_name = name_to_subgraph_session_state.first;
+        SessionState& subgraph_session_state = *name_to_subgraph_session_state.second;
+        std::string subgraph_key(std::to_string(node.Index()) + "_" + attr_name);
+        queue.push({subgraph_key, &subgraph_session_state});
+      }
+    }
+  }
+
+  return Status::OK();
 }
 
 }  // namespace onnxruntime

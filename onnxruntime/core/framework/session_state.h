@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation. All rights reserved.
+//// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
 #pragma once
@@ -7,26 +7,34 @@
 #include <map>
 #include <unordered_map>
 #include <vector>
+
 #include "gsl/gsl"
-#include "core/graph/onnx_protobuf.h"
+
 #include "core/common/common.h"
 #include "core/common/logging/logging.h"
 #include "core/common/profiler.h"
 #include "core/framework/allocation_planner.h"
+#include "core/framework/callback.h"
 #include "core/framework/data_transfer_manager.h"
 #include "core/framework/execution_providers.h"
 #include "core/framework/feeds_fetches_manager.h"
 #include "core/framework/framework_common.h"
+#include "core/framework/fuse_nodes_funcs.h"
 #include "core/framework/kernel_registry_manager.h"
 #include "core/framework/mem_pattern.h"
 #include "core/framework/ml_value.h"
-#include "core/framework/callback.h"
-#include "core/framework/ort_value_name_idx_map.h"
 #include "core/framework/node_index_info.h"
+#include "core/framework/ort_value_name_idx_map.h"
 #include "core/graph/graph_viewer.h"
-#include "core/framework/fuse_nodes_funcs.h"
-#include "core/platform/threadpool.h"
+#include "core/graph/onnx_protobuf.h"
 #include "core/platform/ort_mutex.h"
+#include "core/platform/path_lib.h"
+#include "core/platform/threadpool.h"
+
+namespace flexbuffers {
+class Builder;
+class Reference;
+}  // namespace flexbuffers
 
 namespace onnxruntime {
 
@@ -75,13 +83,6 @@ class SessionState {
     SetupAllocators();
   }
 
-  // Populate OrtValueNameIdxMap and create the graph viewer.
-  // Call once all graph modifications like transforms are completed.
-  void CreateGraphInfo();
-
-  // Call CreateKernels after CreateGraphInfo
-  Status CreateKernels(const KernelRegistryManager& custom_registry_manager);
-
   ~SessionState() {
     for (auto* p : session_kernels_) {
       delete p;
@@ -104,8 +105,6 @@ class SessionState {
   OpKernel* GetMutableKernel(size_t node_id) {
     return (node_id < session_kernels_.size()) ? session_kernels_[node_id] : nullptr;
   }
-
-  Status PopulateKernelCreateInfo(const Graph& graph, KernelRegistryManager& kernel_registry_manager);
 
   const ExecutionProviders& GetExecutionProviders() const noexcept { return execution_providers_; }
 
@@ -141,12 +140,6 @@ class SessionState {
    */
   const std::unordered_map<int, OrtValue>& GetConstantInitializedTensors() const;
 
-  /**
-  Cleans the initialized tensors that have been added to SessionState as OrtValue instances from the Graph instance 
-  where they are present as TensorProto instances and will not be used when executing the model.
-  */
-  void CleanInitializedTensorsFromGraph();
-
 #ifdef ENABLE_TRAINING
   /**
   Get some initialized tensors (weights).
@@ -168,7 +161,7 @@ class SessionState {
 #endif
 
   // execution plan
-  void SetExecutionPlan(std::unique_ptr<SequentialExecutionPlan> p_seq_exec_plan);
+  // void SetExecutionPlan(std::unique_ptr<SequentialExecutionPlan> p_seq_exec_plan);
   const SequentialExecutionPlan* GetExecutionPlan() const;
   /**
   Get the logger for this session.
@@ -226,6 +219,7 @@ class SessionState {
   };
 
   using NameNodeInfoMapType = std::unordered_map<std::string, std::vector<NodeInfo>>;
+
   common::Status AddInputNameToNodeInfoMapping(const std::string& input_name, const NodeInfo& node_info);
   common::Status GetInputNodeInfo(const std::string& input_name, std::vector<NodeInfo>& node_info_vec) const;
   const NameNodeInfoMapType& GetInputNodeInfoMap() const;
@@ -233,6 +227,20 @@ class SessionState {
   void AddOutputNameToNodeInfoMapping(const std::string& output_name, const NodeInfo& node_info);
   common::Status GetOutputNodeInfo(const std::string& output_name, std::vector<NodeInfo>& node_info_vec) const;
   const NameNodeInfoMapType& GetOutputNodeInfoMap() const;
+
+  // SessionState must be finalized before calling
+  const KernelCreateInfo* GetNodeKernelCreateInfo(NodeIndex node_index) const {
+    auto entry = kernel_create_info_map_.find(node_index);
+    // invalid node index or FinalizeSessionState should have been called. Either way it's an internal logic error
+    ORT_ENFORCE(entry != kernel_create_info_map_.cend());
+
+    // TODO: There's a comment saying KernelCreateInfo may not exist for a custom op. Need to understand why that is
+    // and how things would work if you serialized a Graph with custom ops as we rely on getting a hash value for
+    // the KernelDef in KernelCreateInfo
+    //
+    // Returning a pointer for now until that's understood
+    return entry->second;
+  }
 
   /// Add a SessionState instance for executing a subgraph in a Node
   /// @param index Index of Node containing subgraph
@@ -243,12 +251,6 @@ class SessionState {
 
   /// Return SessionState for the given Node index and attribute name if found.
   const SessionState* GetSubgraphSessionState(onnxruntime::NodeIndex index, const std::string& attribute_name) const;
-
-  SessionState* GetMutableSubgraphSessionState(onnxruntime::NodeIndex index, const std::string& attribute_name);
-
-  // Remove the SessionState for a node containing a subgraph.
-  // If the node isn't going to be executed by the CPU provider we don't need it.
-  void RemoveSubgraphSessionState(onnxruntime::NodeIndex index);
 
   concurrency::ThreadPool* GetThreadPool() const noexcept { return thread_pool_; }
   concurrency::ThreadPool* GetInterOpThreadPool() const noexcept { return inter_op_thread_pool_; }
@@ -261,16 +263,48 @@ class SessionState {
 
   const DataTransferManager& GetDataTransferMgr() const noexcept { return data_transfer_mgr_; }
 
-  std::vector<BufferUniquePtr>& GetMutableWeightsBuffers() noexcept { return weights_buffers_; }
   const NodeIndexInfo& GetNodeIndexInfo() const;
 
   void UpdateToBeExecutedNodes(const std::vector<int>& fetch_mlvalue_idxs);
   const std::unordered_set<NodeIndex>* GetToBeExecutedNodes(const std::vector<int>& fetch_mlvalue_idxs) const;
 
+  Status FinalizeSessionState(const std::basic_string<PATH_CHAR_TYPE>& graph_loc,
+                              KernelRegistryManager& kernel_registry_manager,
+                              ExecutionMode execution_mode = ORT_SEQUENTIAL,
+                              const flexbuffers::Reference* serialized_data = nullptr);
+
+  Status SerializeKernelCreateInfo(flexbuffers::Builder& builder) const;
+
  private:
   ORT_DISALLOW_COPY_ASSIGNMENT_AND_MOVE(SessionState);
 
   void SetupAllocators();
+
+  // Populate OrtValueNameIdxMap and create the graph viewer.
+  void CreateGraphInfo();
+
+  // create kernels using info in kernel_create_info_map_
+  Status CreateKernels(const KernelRegistryManager& custom_registry_manager);
+
+  // remove TensorProto versions of initializers from Graph instance
+  // (replaced byOrtValue instances in initialized_tensors_)
+  void CleanInitializedTensorsFromGraph();
+
+  SessionState* GetMutableSubgraphSessionState(onnxruntime::NodeIndex index, const std::string& attribute_name);
+
+  // Remove the SessionState for a node containing a subgraph.
+  // If the node isn't going to be executed by the CPU provider we don't need it.
+  void RemoveSubgraphSessionState(onnxruntime::NodeIndex index);
+
+  Status PopulateKernelCreateInfo(KernelRegistryManager& kernel_registry_manager);
+  Status DeserializeKernelCreateInfo(const flexbuffers::Reference& fbr,
+                                     const KernelRegistryManager& kernel_registry_manager);
+
+  Status FinalizeSessionStateImpl(const std::basic_string<PATH_CHAR_TYPE>& graph_loc,
+                                  KernelRegistryManager& kernel_registry_manager,
+                                  _In_opt_ const Node* parent_node,
+                                  ExecutionMode execution_mode,
+                                  const flexbuffers::Reference* serialized_data);
 
 #ifdef ENABLE_TRAINING
   Status GeneratePatternGroupCache(

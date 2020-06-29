@@ -48,14 +48,17 @@ class KernelRegistryManager {
                       const SessionState& session_state,
                       /*out*/ std::unique_ptr<OpKernel>& op_kernel) const ORT_MUST_USE_RESULT;
 
+  std::unique_ptr<OpKernel> CreateKernel(const onnxruntime::Node& node, const IExecutionProvider& execution_provider,
+                                         const SessionState& session_state,
+                                         const KernelCreateInfo& kernel_create_info) const ORT_MUST_USE_RESULT;
+
   // This function assumes the node is already assigned to an execution provider
   // Don't call this function before graph partition is done
   Status SearchKernelRegistry(const onnxruntime::Node& node,
                               /*out*/ const KernelCreateInfo** kernel_create_info) const;
 
-  Status GetKernelSerializationInfo(const onnxruntime::Node& node,
-                                    const KernelCreateInfo& kernel_create_info,
-                                    bool& is_custom, size_t& index) const;
+  Status SearchKernelRegistry(const onnxruntime::Node& node, uint64_t kernel_def_hash,
+                              /*out*/ const KernelCreateInfo** kernel_create_info) const;
 
   /**
    * Whether this node can be run on this provider
@@ -81,11 +84,6 @@ class KernelRegistryManager {
   ORT_DISALLOW_COPY_ASSIGNMENT_AND_MOVE(KernelRegistryManager);
 
  private:
-  Status KernelRegistryManager::SearchKernelRegistryImpl(const onnxruntime::Node& node,
-                                                         const KernelCreateInfo** kernel_create_info,
-                                                         bool& is_custom,
-                                                         size_t& index) const;
-
   // key is provider type. Each kernel registry in this collection only belongs to one specific provider
   std::unordered_map<std::string, std::shared_ptr<KernelRegistry>> provider_type_to_registry_;
   // Each kernel registry may contain kernels from many different providers.

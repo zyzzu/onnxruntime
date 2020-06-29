@@ -28,7 +28,6 @@
 #include "core/framework/ort_value_pattern_planner.h"
 #include "core/framework/mldata_type_utils.h"
 #include "core/framework/op_kernel_context_internal.h"
-#include "core/framework/finalize_session_state.h"
 #include "core/framework/TensorSeq.h"
 #include "core/framework/tensorprotoutils.h"
 #include "core/framework/tensor_type_and_shape.h"
@@ -50,6 +49,8 @@
 #include "core/session/inference_session_utils.h"
 #include "core/platform/ort_mutex.h"
 #include "core/platform/Barrier.h"
+
+#include "flatbuffers/flexbuffers.h"
 
 using namespace ONNX_NAMESPACE;
 
@@ -284,17 +285,32 @@ InferenceSession::InferenceSession(const SessionOptions& session_options, const 
 }
 
 Status InferenceSession::Deserialize(const gsl::span<const uint8_t>& flexbuffer_serialized_bytes) {
-  // need to go from unique_ptr to shared_ptr when moving into model_
-  std::unique_ptr<Model> tmp_model;
-  ORT_RETURN_IF_ERROR(Model::Deserialize(flexbuffer_serialized_bytes, *session_logger_, tmp_model));
-  model_ = std::move(tmp_model);
-  model_loaded_ = true;
+  auto root = flexbuffers::GetRoot(flexbuffer_serialized_bytes.data(), flexbuffer_serialized_bytes.size()).AsMap();
 
-  // Deserialize info into SessionState
+  {
+    std::lock_guard<onnxruntime::OrtMutex> l(session_mutex_);
 
-  // create kernels
+    if (is_model_loaded_) {  // already loaded
+      Status status(common::ONNXRUNTIME, common::MODEL_LOADED, "This session already contains a loaded model.");
+      LOGS(*session_logger_, ERROR) << status.ErrorMessage();
+      return status;
+    }
 
-  // mark as initialized
+    if (is_inited_) {
+      Status status(common::ONNXRUNTIME, common::MODEL_LOADED, "This session has already been initialized.");
+      LOGS(*session_logger_, ERROR) << status.ErrorMessage();
+      return status;
+    }
+
+    // need to go from unique_ptr to shared_ptr when moving into model_
+    std::unique_ptr<Model> tmp_model;
+    ORT_RETURN_IF_ERROR(Model::Deserialize(root["model"], *session_logger_, tmp_model));
+    model_ = std::move(tmp_model);
+    model_loaded_ = true;
+  }
+
+  // Initialize takes the session_mutex_ as well so we need to have released it prior to calling this
+  InitializeImpl(&root["session_state"]);
 
   return Status::OK();
 }
@@ -755,54 +771,6 @@ common::Status InferenceSession::CreateSubgraphSessionState(Graph& graph, Sessio
   return Status::OK();
 }
 
-/// iterate nodes in graph looking for ones with graph attribute/s
-/// @param graph The graph to iterate
-/// @param session_state The SessionState instance for 'graph'.
-/// @remarks We pass in graph and session_state so we can handled nested subgraphs in the future
-common::Status InferenceSession::InitializeSubgraphSessions(Graph& graph, SessionState& session_state) {
-  for (auto& node : graph.Nodes()) {
-    // We only need subgraph session state for control flow nodes being handled by our CPU or CUDA execution provider.
-    // Remove it if it's not needed.
-    if (node.ContainsSubgraph()) {
-      const auto ep = node.GetExecutionProviderType();
-      if (ep != kCpuExecutionProvider && ep != kCudaExecutionProvider) {
-        session_state.RemoveSubgraphSessionState(node.Index());
-        continue;
-      }
-    } else {
-      // not a control flow node
-      continue;
-    }
-
-    for (const auto& entry : node.GetAttributeNameToMutableSubgraphMap()) {
-      auto& name = entry.first;
-      Graph& subgraph = *entry.second;
-
-      SessionState* subgraph_session_state = session_state.GetMutableSubgraphSessionState(node.Index(), name);
-      ORT_ENFORCE(subgraph_session_state, "CreateSubgraphSessionState should have created an entry earlier.");
-
-      ORT_RETURN_IF_ERROR_SESSIONID_(FinalizeSessionState(*subgraph_session_state, model_location_,
-                                                          kernel_registry_manager_, &node,
-                                                          session_options_.execution_mode));
-
-      // LOGS(*session_logger_, VERBOSE) << std::make_pair(subgraph_info.session_state->GetExecutionPlan(),
-      //                                                   &*subgraph_info.session_state);
-
-      // setup all the info for handling the feeds and fetches used in subgraph execution
-      auto* p_op_kernel = session_state.GetMutableKernel(node.Index());
-      ORT_ENFORCE(p_op_kernel);
-      auto& control_flow_kernel = dynamic_cast<controlflow::IControlFlowKernel&>(*p_op_kernel);
-      ORT_RETURN_IF_ERROR_SESSIONID_(
-          control_flow_kernel.SetupSubgraphExecutionInfo(session_state, name, *subgraph_session_state));
-
-      // recurse
-      ORT_RETURN_IF_ERROR_SESSIONID_(InitializeSubgraphSessions(subgraph, *subgraph_session_state));
-    }
-  }
-
-  return Status::OK();
-}
-
 bool InferenceSession::IsInitialized() const {
   std::lock_guard<onnxruntime::OrtMutex> l(session_mutex_);
   return is_inited_;
@@ -852,7 +820,7 @@ common::Status InferenceSession::Initialize() {
   return InitializeImpl();
 }
 
-common::Status InferenceSession::InitializeImpl(const gsl::span<uint8_t>* serialized_bytes) {
+common::Status InferenceSession::InitializeImpl(const flexbuffers::Reference* serialized_data) {
   Status status = Status::OK();
   TimePoint tp;
   if (session_profiler_.IsEnabled()) {
@@ -912,11 +880,10 @@ common::Status InferenceSession::InitializeImpl(const gsl::span<uint8_t>* serial
 
     if (session_options_.execution_mode == ExecutionMode::ORT_PARALLEL &&
         execution_providers_.Get(onnxruntime::kCudaExecutionProvider)) {
-      LOGS(*session_logger_, ERROR) << "Parallel execution mode doesn't support "
-                                       "CUDA Execution Provider currently.";
-      return common::Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT,
-                            "Parallel execution mode doesn't support "
-                            "CUDA Execution Provider currently.");
+      status = common::Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT,
+                              "Parallel execution mode doesn't support CUDA Execution Provider currently.");
+      LOGS(*session_logger_, ERROR) << status.ErrorMessage();
+      return status;
     }
 
     // add predefined transformers
@@ -938,7 +905,7 @@ common::Status InferenceSession::InitializeImpl(const gsl::span<uint8_t>* serial
     // create SessionState for subgraphs as it's needed by the transformers
     ORT_RETURN_IF_ERROR_SESSIONID_(CreateSubgraphSessionState(graph, *session_state_));
 
-    if (serialized_bytes == nullptr) {
+    if (serialized_data == nullptr) {
       // Graph is fully partitioned and resolved and all transforms should have been done previously.
       // This is to minimize binary size so we don't have any ONNX dependencies (Graph::Resolve calls
       // ONNX type/shape inferencing)
@@ -953,10 +920,7 @@ common::Status InferenceSession::InitializeImpl(const gsl::span<uint8_t>* serial
       ORT_RETURN_IF_ERROR_SESSIONID_(graph.Resolve());
     }
 
-    // apply any transformations to the main graph and any subgraphs
-    ORT_RETURN_IF_ERROR_SESSIONID_(session_state_->PopulateKernelCreateInfo(graph, kernel_registry_manager_));
-
-    if (!serialized_bytes && !session_options_.optimized_model_filepath.empty()) {
+    if (!serialized_data && !session_options_.optimized_model_filepath.empty()) {
       // Serialize optimized ONNX model.
       ORT_RETURN_IF_ERROR_SESSIONID_(Model::Save(*model_, session_options_.optimized_model_filepath));
       if (session_options_.graph_optimization_level >= TransformerLevel::Level3) {
@@ -968,11 +932,10 @@ common::Status InferenceSession::InitializeImpl(const gsl::span<uint8_t>* serial
       }
     }
 
-    ORT_RETURN_IF_ERROR_SESSIONID_(FinalizeSessionState(*session_state_, model_location_, kernel_registry_manager_,
-                                                        nullptr, session_options_.execution_mode));
+    ORT_RETURN_IF_ERROR_SESSIONID_(
+        session_state_->FinalizeSessionState(model_location_, kernel_registry_manager_,
+                                             session_options_.execution_mode, serialized_data));
 
-    // handle any subgraphs
-    ORT_RETURN_IF_ERROR_SESSIONID_(InitializeSubgraphSessions(graph, *session_state_));
     session_state_->ResolveMemoryPatternFlag();
     is_inited_ = true;
 
@@ -1406,7 +1369,18 @@ std::string InferenceSession::EndProfiling() {
   return std::string();
 }
 
-Status InferenceSession::Serialize(flexbuffers::Builder& builder) const {}
+Status InferenceSession::Serialize(flexbuffers::Builder& builder) const {
+  // save model (which will include the graph)
+  auto start = builder.StartMap("model");
+  ORT_RETURN_IF_ERROR(model_->Serialize(builder));
+  builder.EndMap(start);
+
+  // save KCI for now. TBD if we need anything else from SessionState
+  start = builder.StartMap("session_state");
+  ORT_RETURN_IF_ERROR(session_state_->SerializeKernelCreateInfo(builder));
+  builder.EndMap(start);
+}
+
 // assumes model has already been loaded before
 common::Status InferenceSession::DoPostLoadProcessing(onnxruntime::Model& model) {
   // TODO add other post load processing here

@@ -244,7 +244,7 @@ inline std::string ToWideString(const std::string& s) { return s; }
 
 // from http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n3876.pdf
 template <class T>
-inline void HashCombine(std::size_t& seed, const T& v) {
+inline void HashCombine(std::uint64_t& seed, const T& v) {
   std::hash<T> hasher;
   seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }

@@ -104,7 +104,9 @@ class PlannerImpl {
  public:
   PlannerImpl(const Node* parent_node, const onnxruntime::GraphViewer& graph_viewer,
               const std::vector<const NodeArg*>& outer_scope_node_args, const ExecutionProviders& providers,
-              const KernelRegistryManager& /*kernel_registry*/, const OrtValueNameIdxMap& ort_value_name_idx_map,
+              const KernelRegistryManager& kernel_registry,
+              const std::unordered_map<NodeIndex, const KernelCreateInfo*>& kernel_create_info_map,
+              const OrtValueNameIdxMap& ort_value_name_idx_map,
               const ISequentialPlannerContext& context, SequentialExecutionPlan& plan)
       : context_(context),
         plan_(plan),
@@ -112,7 +114,8 @@ class PlannerImpl {
         graph_viewer_(graph_viewer),
         outer_scope_node_args_(outer_scope_node_args),
         execution_providers_(providers),
-        //kernel_registry_(kernel_registry),
+        kernel_registry_(kernel_registry),
+        kernel_create_info_map_(kernel_create_info_map),
         ort_value_name_idx_map_(ort_value_name_idx_map) {}
 
   Status CreatePlan();
@@ -126,7 +129,8 @@ class PlannerImpl {
   const std::vector<const NodeArg*>& outer_scope_node_args_;
   const ExecutionProviders& execution_providers_;
 
-  //const KernelRegistryManager& kernel_registry_;
+  const KernelRegistryManager& kernel_registry_;
+  const std::unordered_map<NodeIndex, const KernelCreateInfo*>& kernel_create_info_map_;
   const OrtValueNameIdxMap& ort_value_name_idx_map_;
 
   // OrtValueInfo: Auxiliary information about an OrtValue used only during plan-generation:
@@ -206,9 +210,7 @@ class PlannerImpl {
   // Find if there exists some input tensor that we can use in-place for output_arg_num-th input in the node.
   bool FindReusableInput(const onnxruntime::Node& node, int output_arg_num, OrtValueIndex* reusable_input) {
     auto p_output_arg = node.OutputDefs()[output_arg_num];
-    //const KernelCreateInfo* ci;
-    //Status st = kernel_registry_.SearchKernelRegistry(node, &ci);
-    const KernelCreateInfo* ci = node.GetKernelCreateInfo();
+    const KernelCreateInfo* ci = kernel_create_info_map_.at(node.Index());
     ORT_ENFORCE(ci, "InferenceSession should have saved the KernelCreateInfo prior to this running.");
 
     if (/*!st.IsOK() || ci == nullptr ||*/ ci->kernel_def == nullptr) {
@@ -395,15 +397,14 @@ class PlannerImpl {
 
     for (SequentialExecutionPlan::NodeExecutionPlan& step : plan_.execution_plan) {
       auto pnode = graph_viewer_.GetNode(step.node_index);
-      if (pnode == nullptr) return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Can not find the node ", step.node_index);
+      if (pnode == nullptr) {
+        return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Can not find the node ", step.node_index);
+      }
 
       // Identify where each output of this node should be allocated.
-      // This is determined by the opkernel bound to the node.
-      //const KernelCreateInfo* kernel_create_info = nullptr;
-      //ORT_RETURN_IF_ERROR(kernel_registry_.SearchKernelRegistry(*pnode, &kernel_create_info));
-
-      const KernelCreateInfo* kernel_create_info = pnode->GetKernelCreateInfo();
-      ORT_ENFORCE(kernel_create_info, "InferenceSession should have saved the KernelCreateInfo prior to this running.");
+      // This is determined by the OpKernel bound to the node.
+      const KernelCreateInfo* kernel_create_info = kernel_create_info_map_.at(pnode->Index());
+      ORT_ENFORCE(kernel_create_info, "Missing KernelCreateInfo for ", pnode->Index());
 
       auto p_kernel_def = kernel_create_info->kernel_def.get();
       if (nullptr == p_kernel_def) {
@@ -491,14 +492,9 @@ class PlannerImpl {
     auto* p_provider = execution_providers_.Get(node);
     ORT_ENFORCE(p_provider);
 
-    //const KernelCreateInfo* kernel_create_info;
-    //auto st = kernel_registry_.SearchKernelRegistry(node, &kernel_create_info);
-    // ORT_ENFORCE(st.IsOK(), st.ErrorMessage());
+    const KernelCreateInfo* kernel_create_info = kernel_create_info_map_.at(node.Index());
 
-    const KernelCreateInfo* kernel_create_info = node.GetKernelCreateInfo();
-    ORT_ENFORCE(kernel_create_info, "InferenceSession should have saved the KernelCreateInfo prior to this running.");
-
-    ORT_ENFORCE(/*kernel_create_info != nullptr && */ kernel_create_info->kernel_def != nullptr);
+    ORT_ENFORCE(kernel_create_info != nullptr && kernel_create_info->kernel_def != nullptr);
     if (kernel_create_info->kernel_def->IsInputOnCpu(input_index))
       // weights are not output from any node, so it's OK to put its location on CPU provider
       return execution_providers_.GetDefaultCpuMemoryInfo();
@@ -760,17 +756,21 @@ Status PlannerImpl::CreatePlan() {
   return Status::OK();
 }
 
-Status SequentialPlanner::CreatePlan(const Node* parent_node, const onnxruntime::GraphViewer& graph_viewer,
-                                     const std::vector<const NodeArg*>& outer_scope_node_args,
-                                     const ExecutionProviders& providers, const KernelRegistryManager& kernel_registry,
-                                     const OrtValueNameIdxMap& ort_value_name_idx_map,
-                                     const ISequentialPlannerContext& context,
-                                     std::unique_ptr<SequentialExecutionPlan>& plan) {
+Status SequentialPlanner::CreatePlan(
+    const Node* parent_node,
+    const onnxruntime::GraphViewer& graph_viewer,
+    const std::vector<const NodeArg*>& outer_scope_node_args,
+    const ExecutionProviders& providers,
+    const KernelRegistryManager& kernel_registry,
+    const std::unordered_map<NodeIndex, const KernelCreateInfo*>& kernel_create_info_map,
+    const OrtValueNameIdxMap& ort_value_name_idx_map,
+    const ISequentialPlannerContext& context,
+    std::unique_ptr<SequentialExecutionPlan>& plan) {
   // allocate/reset here so we know it's clean
   plan = onnxruntime::make_unique<SequentialExecutionPlan>();
 
   PlannerImpl planner(parent_node, graph_viewer, outer_scope_node_args, providers, kernel_registry,
-                      ort_value_name_idx_map, context, *plan);
+                      kernel_create_info_map, ort_value_name_idx_map, context, *plan);
 
   return planner.CreatePlan();
 }

@@ -388,7 +388,7 @@ class InferenceSession {
   void ConstructorCommon(const SessionOptions& session_options,
                          const Environment& session_env);
 
-  common::Status InitializeImpl(const gsl::span<uint8_t>* serialized_bytes = nullptr) ORT_MUST_USE_RESULT;
+  common::Status InitializeImpl(const flexbuffers::Reference* serialized_data = nullptr) ORT_MUST_USE_RESULT;
 
   bool HasLocalSchema() const {
     return !custom_schema_registries_.empty();
@@ -414,8 +414,6 @@ class InferenceSession {
                                 SessionState& session_state) ORT_MUST_USE_RESULT;
 
   common::Status CreateSubgraphSessionState(Graph& graph, SessionState& session_state) ORT_MUST_USE_RESULT;
-
-  common::Status InitializeSubgraphSessions(Graph& graph, SessionState& session_state) ORT_MUST_USE_RESULT;
 
   virtual void AddPredefinedTransformers(GraphTransformerManager& transformer_manager,
                                          TransformerLevel graph_optimization_level,

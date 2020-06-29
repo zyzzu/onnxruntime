@@ -12,6 +12,11 @@
 #include "core/session/onnxruntime_c_api.h"
 #include "gsl/gsl"
 
+namespace flexbuffers {
+class Builder;
+class Reference;
+}  // namespace flexbuffers
+
 namespace onnxruntime {
 typedef std::unordered_map<std::string, std::string> ModelMetaData;
 using IOnnxRuntimeOpSchemaRegistryList = std::list<std::shared_ptr<IOnnxRuntimeOpSchemaCollection>>;
@@ -184,7 +189,7 @@ class Model {
                              const logging::Logger& logger);
 
   Status Serialize(flexbuffers::Builder& builder) const;
-  static Status Deserialize(const gsl::span<const uint8_t>& bytes, const logging::Logger& logger,
+  static Status Deserialize(const flexbuffers::Reference& fbr, const logging::Logger& logger,
                             std::unique_ptr<Model>& model);
 
  private:

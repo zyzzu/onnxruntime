@@ -916,7 +916,7 @@ class Graph {
   // EXPERIMENTAL
   // Create a flexbuffer from the Graph
   Status Serialize(flexbuffers::Builder& builder) const;
-  static Status Deserialize(const gsl::span<const uint8_t>& bytes, const logging::Logger& logger,
+  static Status Deserialize(const flexbuffers::Reference& fbr, const logging::Logger& logger,
                             std::unique_ptr<Graph>& graph);
 
  private:
