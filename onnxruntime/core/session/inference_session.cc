@@ -310,7 +310,8 @@ Status InferenceSession::Deserialize(const gsl::span<const uint8_t>& flexbuffer_
   }
 
   // Initialize takes the session_mutex_ as well so we need to have released it prior to calling this
-  InitializeImpl(&root["session_state"]);
+  auto session_state = root["session_state"];
+  InitializeImpl(&session_state);
 
   return Status::OK();
 }
@@ -1379,6 +1380,8 @@ Status InferenceSession::Serialize(flexbuffers::Builder& builder) const {
   start = builder.StartMap("session_state");
   ORT_RETURN_IF_ERROR(session_state_->SerializeKernelCreateInfo(builder));
   builder.EndMap(start);
+
+  return Status::OK();
 }
 
 // assumes model has already been loaded before

@@ -189,10 +189,13 @@ class Model {
                              const logging::Logger& logger);
 
   Status Serialize(flexbuffers::Builder& builder) const;
-  static Status Deserialize(const flexbuffers::Reference& fbr, const logging::Logger& logger,
+  static Status Deserialize(const flexbuffers::Reference& fbr,
+                            const logging::Logger& logger,
                             std::unique_ptr<Model>& model);
 
  private:
+  Model() = default;
+
   // Model data.
   ONNX_NAMESPACE::ModelProto model_proto_;
 

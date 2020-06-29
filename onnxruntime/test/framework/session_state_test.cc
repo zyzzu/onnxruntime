@@ -7,7 +7,6 @@
 #include "core/framework/graph_partitioner.h"
 #include "core/framework/op_kernel.h"
 #include "core/framework/session_state.h"
-#include "core/framework/finalize_session_state.h"
 #include "core/graph/graph_utils.h"
 #include "core/graph/graph_viewer.h"
 #include "core/graph/model.h"
@@ -85,8 +84,8 @@ TEST_P(SessionStateAddGetKernelTest, AddGetKernelTest) {
   ASSERT_STATUS_OK(kernel_registry->Register(KernelCreateInfo(
       std::move(kernel_def), [](const OpKernelInfo& info) -> OpKernel* { return new TestOpKernel(info); })));
   kernel_registry_manager.RegisterKernelRegistry(kernel_registry);
-  s.CreateGraphInfo();
-  ASSERT_STATUS_OK(s.CreateKernels(kernel_registry_manager));
+  ASSERT_STATUS_OK(s.FinalizeSessionState(ORT_TSTR(""), kernel_registry_manager));
+
   auto test_kernel = s.GetKernel(node.Index());
   std::cout << "orig: " << orig_num_outputs << " new: " << test_kernel->Node().OutputDefs().size() << std::endl;
   EXPECT_EQ(orig_num_outputs, test_kernel->Node().OutputDefs().size());
@@ -140,8 +139,7 @@ TEST_P(SessionStateTestP, TestInitializerProcessing) {
   status = partitioner.Partition(graph, session_state.ExportDll(), session_state.GetMutableFuncMgr());
   ASSERT_TRUE(status.IsOK()) << status;
 
-  session_state.CreateGraphInfo();
-  ASSERT_STATUS_OK(FinalizeSessionState(session_state, oss.str(), krm, nullptr, ExecutionMode::ORT_SEQUENTIAL));
+  ASSERT_STATUS_OK(session_state.FinalizeSessionState(oss.str(), krm, nullptr, ExecutionMode::ORT_SEQUENTIAL));
 
   const auto& initialized_tensors = session_state.GetInitializedTensors();
   const auto& const_initialized_tensors = session_state.GetConstantInitializedTensors();

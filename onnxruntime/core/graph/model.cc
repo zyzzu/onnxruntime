@@ -506,4 +506,47 @@ Status Model::Save(Model& model, int p_fd) {
   }
   return Status(ONNXRUNTIME, INVALID_PROTOBUF, "Protobuf serialization failed.");
 }
+
+Status Model::Serialize(flexbuffers::Builder& builder) const {
+  builder.Map("attributes", [&builder, this]() {
+    builder.Map([&builder, this]() {
+      builder.String("producer_version", model_proto_.producer_version());
+      builder.String("producer_name", model_proto_.producer_name());
+      builder.String("model_version", model_proto_.model_version());
+      builder.Int("ir_version", model_proto_.ir_version());
+      builder.String("domain", model_proto_.domain());
+      builder.String("doc_string", model_proto_.doc_string());
+
+      // todo: opset import
+    });
+  });
+
+  builder.Map("graph", [&builder, this]() { ORT_RETURN_IF_ERROR(graph_->Serialize(builder)); });
+
+  return Status::OK();
+}
+
+Status Model::Deserialize(const flexbuffers::Reference& fbr,
+                          const logging::Logger& logger,
+                          std::unique_ptr<Model>& model) {
+  model.reset(new Model());
+
+  auto m = fbr.AsMap();
+
+  auto attribs = m["attributes"].AsMap();
+  model->model_proto_.set_producer_version(attribs["producer_version"].ToString());
+  model->model_proto_.set_producer_name(attribs["producer_name"].ToString());
+  model->model_proto_.set_model_version(attribs["model_version"].AsInt64());
+  model->model_proto_.set_ir_version(attribs["ir_version"].AsInt64());
+  model->model_proto_.set_domain(attribs["domain"].ToString());
+  model->model_proto_.set_doc_string(attribs["doc_string"].ToString());
+
+  // todo: opset_import
+
+  auto graph = m["graph"];
+  ORT_RETURN_IF_ERROR(Graph::Deserialize(graph, logger, model->graph_));
+
+  return Status::OK();
+}
+
 }  // namespace onnxruntime
