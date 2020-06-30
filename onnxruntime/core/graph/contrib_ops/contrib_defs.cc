@@ -292,7 +292,8 @@ const char* contrib_ops_auto_pad_doc =
 void RegisterBertSchemas() {
   static const char* Attention_ver1_doc = R"DOC(
 Multi-Head Self Attention that can be either unidirectional (like GPT-2) or bidirectional (like BERT).
-The mask_index input is optional. When input has right-side padding, mask_index is one dimension with shape (batch_size),
+The mask_index input is optional. Besides raw attention mask with shape (batch_size, past_sequence_length + sequence_length),
+we also support other two formats: When input has right-side padding, mask_index is one dimension with shape (batch_size),
 where value of each element is the end position, or valid length of actual sequence excluding padding. When input has 
 left-side padding, mask_index has shape (2 * batch_size), where the values are the exclusive end positions followed by 
 the inclusive start positions. When unidirectional is 1, and each token only attend to previous tokens. For GPT-2, both past
@@ -312,7 +313,7 @@ and present state are optional. Present state could appear in output even when p
       .Input(0, "input", "3D input tensor with shape (batch_size, sequence_length, hidden_size), hidden_size = num_heads * head_size", "T")
       .Input(1, "weight", "2D input tensor with shape (hidden_size, 3 * hidden_size)", "T")
       .Input(2, "bias", "1D input tensor with shape (3 * hidden_size)", "T")
-      .Input(3, "mask_index", "Attention mask index with shape (batch_size) or (2 * batch_size).", "M", OpSchema::Optional)
+      .Input(3, "mask_index", "Attention mask with shape (batch_size, past_sequence_length + sequence_length), or index with shape (batch_size) or (2 * batch_size).", "M", OpSchema::Optional)
       .Input(4, "past", "past state for key and value with shape (2, batch_size, num_heads, past_sequence_length, head_size).", "T", OpSchema::Optional)
       .Output(0, "output", "3D output tensor with shape (batch_size, append_length, hidden_size)", "T")
       .Output(1, "present", "present state for key and value with shape (2, batch_size, num_heads, past_sequence_length + sequence_length, head_size)", "T", OpSchema::Optional)
@@ -446,34 +447,6 @@ and present state are optional. Present state could appear in output even when p
         return;
       });
 
-  ONNX_CONTRIB_OPERATOR_SCHEMA(MaskIndex)
-      .SetDomain(kMSDomain)
-      .SinceVersion(1)
-      .SetSupportLevel(OpSchema::SupportType::EXPERIMENTAL)
-      .SetDoc("Mask Index for Attention. It converts attention mask into the end positions and start positions of each sequence.")
-      .Input(0, "attention_mask", "2D attention mask with shape (batch_size, sequence_length)", "T")
-      .Output(0, "mask_index", "1D mask_index tensor with shape (2*batch_size)", "Ti")
-      .TypeConstraint("T", {"tensor(int32)", "tensor(int64)", "tensor(float)"}, "Constrain input integer tensors types")
-      .TypeConstraint("Ti", {"tensor(int32)"}, "Constrain output integer tensors types")
-      .TypeAndShapeInferenceFunction([](ONNX_NAMESPACE::InferenceContext& ctx) {
-        auto output_data_type = ctx.getOutputType(0)->mutable_tensor_type();
-        output_data_type->set_elem_type(::ONNX_NAMESPACE::TensorProto_DataType::TensorProto_DataType_INT32);
-
-        if (!hasInputShape(ctx, 0))
-          return;
-
-        auto& mask_shape = getInputShape(ctx, 0);
-        auto& mask_dims = mask_shape.dim();
-        if (mask_dims.size() != 2) {
-          fail_shape_inference("Inputs 0 shall be 2 dimensions");
-        }
-
-        ONNX_NAMESPACE::TensorShapeProto mask_index_shape;
-        mask_index_shape.add_dim();
-        mask_index_shape.mutable_dim(0)->set_dim_value(2 * mask_shape.dim(0).dim_value());
-        updateOutputShape(ctx, 0, mask_index_shape);
-      });
-
   static const char* EmbedLayerNormalization_ver1_doc = R"DOC(
 EmbedLayerNormalization is the fusion of embedding layer in BERT model, with optional mask processing.
 The embedding layer takes input_ids (word IDs) and segment_ids (sentence IDs) to look up word_embedding, position_embedding,
@@ -496,7 +469,7 @@ will be calculated.)DOC";
       .Input(6, "beta", "1D beta tensor for layer normalization  with shape (hidden_size)", "T")
       .Input(7, "mask", "2D attention mask with shape (batch_size, sequence_length)", "T1", OpSchema::Optional)
       .Output(0, "output", "3D output tensor with shape (batch_size, sequence_length, hidden_size)", "T")
-      .Output(1, "mask_index", "1D mask_index tensor with shape (2 * batch_size)", "T1")
+      .Output(1, "mask_index", "1D mask_index tensor with shape (batch_size)", "T1")
       .TypeConstraint("T1", {"tensor(int32)"}, "Constrain input and output integer tensors types")
       .TypeConstraint("T", {"tensor(float)", "tensor(float16)"}, "Constrain input and output float tensors types.")
       .TypeAndShapeInferenceFunction([](ONNX_NAMESPACE::InferenceContext& ctx) {
@@ -534,10 +507,9 @@ will be calculated.)DOC";
 
         updateOutputShape(ctx, 0, output_shape);
 
-        // mask_index shape is (2 * batch_size)
+        // mask_index shape is (batch_size)
         ONNX_NAMESPACE::TensorShapeProto mask_index_shape;
-        mask_index_shape.add_dim();
-        mask_index_shape.mutable_dim(0)->set_dim_value(2 * input_ids_shape.dim(0).dim_value());
+        *mask_index_shape.add_dim() = input_ids_dims[0];
         updateOutputShape(ctx, 1, mask_index_shape);
       });
 
