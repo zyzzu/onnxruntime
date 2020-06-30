@@ -41,6 +41,8 @@
 #include "gtest/gtest.h"
 #include "core/session/environment.h"
 
+#include "flatbuffers/flexbuffers.h"
+
 using namespace std;
 using namespace ONNX_NAMESPACE;
 using namespace onnxruntime::logging;
@@ -2362,6 +2364,104 @@ TEST(InferenceSessionTests, InvalidSessionEnvCombination) {
                     " threadpools, the env must be created with the the CreateEnvWithGlobalThreadPools API") !=
                 std::string::npos);
   }
+}
+
+TEST(InferenceSessionTests, SerializeToFlexBuffer) {
+  SessionOptions so;
+  so.session_logid = "SerializeToFlexBuffer";
+  InferenceSessionGetGraphWrapper session_object{so, GetEnvironment()};
+
+  ASSERT_STATUS_OK(session_object.Load(ORT_TSTR("testdata/ort_github_issue_4031.onnx")));
+  ASSERT_STATUS_OK(session_object.Initialize());
+
+  flexbuffers::Builder builder(512, flexbuffers::BUILDER_FLAG_SHARE_KEYS_AND_STRINGS);
+
+  session_object.Serialize(builder);
+
+  // load a graph that has initializers and subgraphs
+  //std::shared_ptr<Model> model;
+  //ASSERT_STATUS_OK(Model::Load(ORT_TSTR("testdata/ort_github_issue_4031.onnx"), model, nullptr, *logger_));
+  //ASSERT_STATUS_OK(model->MainGraph().Resolve());
+  //const auto& graph = model->MainGraph();
+
+  // simulate InferenceSession adding root map and calling model->Serialize under a map key of 'model'
+  //auto start = builder.StartMap();
+
+  //builder.Map("model", [&model, &builder]() {
+  //  ASSERT_STATUS_OK(model->Serialize(builder));
+  //});
+
+  //builder.EndMap(start);
+
+  builder.Finish();
+
+  const std::vector<uint8_t>& bytes = builder.GetBuffer();
+  auto bytes_span = gsl::make_span<std::vector<uint8_t>>(bytes);
+
+  InferenceSessionGetGraphWrapper session_object2{so, GetEnvironment()};
+  ASSERT_STATUS_OK(session_object2.Deserialize(bytes_span));
+
+  // InferenceSession will call the Model deserialize so replicate that
+  //auto root = flexbuffers::GetRoot(bytes_span.data(), bytes_span.size()).AsMap();
+  //auto serialized_model = root["model"];
+  //ASSERT_STATUS_OK(Model::Deserialize(serialized_model, *logger_, model2));
+  // const auto& graph2 = model2->MainGraph();
+
+  const auto& graph = session_object.GetGraph();
+  const auto& graph2 = session_object2.GetGraph();
+
+  const auto& i1 = graph.GetAllInitializedTensors();
+  const auto& i2 = graph2.GetAllInitializedTensors();
+  ASSERT_EQ(i1.size(), i2.size());
+
+  for (const auto& pair : i1) {
+    auto iter = i2.find(pair.first);
+    ASSERT_NE(iter, i2.cend());
+
+    const TensorProto& left = *pair.second;
+    const TensorProto& right = *iter->second;
+    std::string left_data;
+    std::string right_data;
+    left.SerializeToString(&left_data);
+    right.SerializeToString(&right_data);
+    ASSERT_EQ(left_data, right_data);
+  }
+
+  // check all node args are fine
+  for (const auto& input : graph.GetInputsIncludingInitializers()) {
+    const auto& left = *graph.GetNodeArg(input->Name());
+    const auto* right = graph2.GetNodeArg(input->Name());
+    ASSERT_TRUE(right != nullptr);
+    std::string left_data;
+    std::string right_data;
+    left.ToProto().SerializeToString(&left_data);
+    right->ToProto().SerializeToString(&right_data);
+    ASSERT_EQ(left_data, right_data);
+  }
+
+  // execute both to check results match
+  OrtValue ml_value;
+  CreateMLValue<float>(TestCPUExecutionProvider()->GetAllocator(0, OrtMemTypeDefault), {1}, {123.f},
+                       &ml_value);
+  NameMLValMap feeds;
+  feeds.insert(std::make_pair("state_var_in", ml_value));
+
+  // prepare outputs
+  std::vector<std::string> output_names{"state_var_out"};
+  std::vector<OrtValue> fetches;
+  std::vector<OrtValue> fetches2;
+
+  // Now run
+  ASSERT_STATUS_OK(session_object.Run(feeds, output_names, &fetches));
+  ASSERT_STATUS_OK(session_object2.Run(feeds, output_names, &fetches));
+
+  const auto& output = fetches[0].Get<Tensor>();
+  ASSERT_TRUE(output.Shape().Size() == 1);
+  ASSERT_TRUE(output.Data<float>()[0] == 125.f);
+
+  const auto& output2 = fetches2[0].Get<Tensor>();
+  ASSERT_TRUE(output2.Shape().Size() == 1);
+  ASSERT_TRUE(output2.Data<float>()[0] == 125.f);
 }
 
 }  // namespace test

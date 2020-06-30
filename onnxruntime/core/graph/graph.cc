@@ -3230,9 +3230,6 @@ Currently onnx-ml.pb is ~55KiB uncompressed so unknown if the engineering cost o
 ***********************/
 
 Status Graph::Serialize(flexbuffers::Builder& builder) const {
-  // TODO: Using 'map' for a lot of things in POC.
-  // Supposedly vectors are better https://google.github.io/flatbuffers/flexbuffers.html
-
   auto protobuf_serializer = ProtobufSerializer(builder);
 
   // initializers
@@ -3266,19 +3263,16 @@ Status Graph::Serialize(flexbuffers::Builder& builder) const {
                   [&builder](const NodeArg* entry) { builder.String(entry->Name()); });
   };
 
-  // root element. use a map for now
-  builder.Map([&]() {
-    // TODO: Would need some sort of serialization versioning if we go with flexbuffers over flatbuffers
-    // and should store the version number here
-    builder.Vector("initializers", add_initializers);
-    builder.Vector("node_args", add_node_args);
-    builder.Vector("nodes", add_nodes);
-    builder.Vector("graph_inputs", add_graph_inputs);  // separate into inc/exc initializers and overridable initializers when loading
-    builder.Vector("graph_outputs", add_graph_outputs);
-    builder.Int("ir_version", ir_version_);
+  // TODO: Would need some sort of serialization versioning if we go with flexbuffers over flatbuffers
+  // and should store the version number here
+  builder.Vector("initializers", add_initializers);
+  builder.Vector("node_args", add_node_args);
+  builder.Vector("nodes", add_nodes);
+  builder.Vector("graph_inputs", add_graph_inputs);  // separate into inc/exc initializers and overridable initializers when loading
+  builder.Vector("graph_outputs", add_graph_outputs);
+  builder.Int("ir_version", ir_version_);
 
-    // TODO: Functions
-  });
+  // TODO: Functions
 
   return Status::OK();
 }

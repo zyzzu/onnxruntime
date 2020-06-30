@@ -1371,15 +1371,27 @@ std::string InferenceSession::EndProfiling() {
 }
 
 Status InferenceSession::Serialize(flexbuffers::Builder& builder) const {
+  std::lock_guard<onnxruntime::OrtMutex> l(session_mutex_);
+
+  if (!is_inited_) {
+    Status status(ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Session must be initialized before being serialized."));
+    LOGS(*session_logger_, ERROR) << status.ErrorMessage();
+    return status;
+  }
+
+  auto root_start = builder.StartMap();  // root map
+
   // save model (which will include the graph)
-  auto start = builder.StartMap("model");
+  auto model_start = builder.StartMap("model");
   ORT_RETURN_IF_ERROR(model_->Serialize(builder));
-  builder.EndMap(start);
+  builder.EndMap(model_start);
 
   // save KCI for now. TBD if we need anything else from SessionState
-  start = builder.StartMap("session_state");
+  auto session_start = builder.StartMap("session_state");
   ORT_RETURN_IF_ERROR(session_state_->SerializeKernelCreateInfo(builder));
-  builder.EndMap(start);
+  builder.EndMap(session_start);
+
+  builder.EndMap(root_start);
 
   return Status::OK();
 }

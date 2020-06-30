@@ -9,8 +9,6 @@
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
 
-#include "flatbuffers/flexbuffers.h"
-
 #ifdef __GNUC__
 #define UNUSED __attribute__((unused))
 #else
@@ -1362,62 +1360,6 @@ TEST_F(GraphTest, SetInputsAndSetOutputs_NewInputAndOutput) {
   outputs = graph.GetOutputs();
   ASSERT_TRUE(std::find(outputs.begin(), outputs.end(), sum_with_z) != outputs.end())
       << "expected new output sum_with_z";
-}
-
-TEST_F(GraphTest, SerializeToFlexBuffer) {
-  std::shared_ptr<Model> model;
-  // load a graph that has initializers and subgraphs
-  ASSERT_STATUS_OK(Model::Load(ORT_TSTR("testdata/ort_github_issue_4031.onnx"), model, nullptr, *logger_));
-  ASSERT_STATUS_OK(model->MainGraph().Resolve());
-
-  const auto& graph = model->MainGraph();
-
-  flexbuffers::Builder slb(512, flexbuffers::BUILDER_FLAG_SHARE_KEYS_AND_STRINGS);
-  ASSERT_STATUS_OK(graph.Serialize(slb));
-
-  //
-  // TODO:
-  // Need to serialze the kernel create info from session state...
-  //
-
-  slb.Finish();
-
-  const std::vector<uint8_t>& bytes = slb.GetBuffer();
-  auto bytes_span = gsl::make_span<std::vector<uint8_t>>(bytes);
-
-  // TODO: Write bytes to file and read back with flexbuffers::GetRoot(const uint8_t *buffer, size_t size)
-
-  std::unique_ptr<Graph> graph2;
-  ASSERT_STATUS_OK(Graph::Deserialize(bytes_span, *logger_, graph2));
-
-  const auto& i1 = graph.GetAllInitializedTensors();
-  const auto& i2 = graph2->GetAllInitializedTensors();
-  ASSERT_EQ(i1.size(), i2.size());
-
-  for (const auto& pair : i1) {
-    auto iter = i2.find(pair.first);
-    ASSERT_NE(iter, i2.cend());
-
-    const TensorProto& left = *pair.second;
-    const TensorProto& right = *iter->second;
-    std::string left_data;
-    std::string right_data;
-    left.SerializeToString(&left_data);
-    right.SerializeToString(&right_data);
-    ASSERT_EQ(left_data, right_data);
-  }
-
-  // check all node args are fine
-  for (const auto& input : graph.GetInputsIncludingInitializers()) {
-    const auto& left = *graph.GetNodeArg(input->Name());
-    const auto* right = graph2->GetNodeArg(input->Name());
-    ASSERT_TRUE(right != nullptr);
-    std::string left_data;
-    std::string right_data;
-    left.ToProto().SerializeToString(&left_data);
-    right->ToProto().SerializeToString(&right_data);
-    ASSERT_EQ(left_data, right_data);
-  }
 }
 
 }  // namespace test

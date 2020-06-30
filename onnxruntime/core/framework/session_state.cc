@@ -584,9 +584,9 @@ Status SessionState::FinalizeSessionStateImpl(const std::basic_string<PATH_CHAR_
   // so also do it recursively when calling PopulateKernelCreateInfo for consistency
   if (parent_node == nullptr) {
     if (serialized_data) {
-      DeserializeKernelCreateInfo(*serialized_data, kernel_registry_manager);
+      ORT_RETURN_IF_ERROR(DeserializeKernelCreateInfo(*serialized_data, kernel_registry_manager));
     } else {
-      PopulateKernelCreateInfo(kernel_registry_manager);
+      ORT_RETURN_IF_ERROR(PopulateKernelCreateInfo(kernel_registry_manager));
     }
   }
 
@@ -673,7 +673,8 @@ Status SessionState::FinalizeSessionStateImpl(const std::basic_string<PATH_CHAR_
       // when processing the main graph
       // Currently all subgraphs are executed using the sequential EP due to potential deadlock with the current
       // parallel executor implementation.
-      FinalizeSessionStateImpl(graph_location, kernel_registry_manager, &node, ExecutionMode::ORT_SEQUENTIAL, nullptr);
+      ORT_RETURN_IF_ERROR(FinalizeSessionStateImpl(graph_location, kernel_registry_manager, &node,
+                                                   ExecutionMode::ORT_SEQUENTIAL, nullptr));
     }
   }
 

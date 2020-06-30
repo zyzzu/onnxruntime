@@ -509,19 +509,25 @@ Status Model::Save(Model& model, int p_fd) {
 
 Status Model::Serialize(flexbuffers::Builder& builder) const {
   builder.Map("attributes", [&builder, this]() {
-    builder.Map([&builder, this]() {
-      builder.String("producer_version", model_proto_.producer_version());
-      builder.String("producer_name", model_proto_.producer_name());
-      builder.String("model_version", model_proto_.model_version());
-      builder.Int("ir_version", model_proto_.ir_version());
-      builder.String("domain", model_proto_.domain());
-      builder.String("doc_string", model_proto_.doc_string());
+    builder.String("producer_version", model_proto_.producer_version());
+    builder.String("producer_name", model_proto_.producer_name());
+    builder.Int("model_version", model_proto_.model_version());
+    builder.Int("ir_version", model_proto_.ir_version());
+    builder.String("domain", model_proto_.domain());
+    builder.String("doc_string", model_proto_.doc_string());
 
-      // todo: opset import
+    builder.Vector("opset_import", [&builder, this]() {
+      for (const auto& entry : model_proto_.opset_import()) {
+        builder.String(entry.domain());
+        builder.Int(entry.version());
+      }
     });
   });
 
-  builder.Map("graph", [&builder, this]() { ORT_RETURN_IF_ERROR(graph_->Serialize(builder)); });
+  builder.Map("graph", [&builder, this]() {
+    ORT_RETURN_IF_ERROR(graph_->Serialize(builder));
+    return Status::OK();
+  });
 
   return Status::OK();
 }
@@ -541,7 +547,14 @@ Status Model::Deserialize(const flexbuffers::Reference& fbr,
   model->model_proto_.set_domain(attribs["domain"].ToString());
   model->model_proto_.set_doc_string(attribs["doc_string"].ToString());
 
-  // todo: opset_import
+  auto opset_imports = attribs["opset_import"].AsVector();
+  for (size_t cur = 0, end = opset_imports.size(); cur < end;) {
+    auto domain = opset_imports[cur++].ToString();
+    auto version = opset_imports[cur++].AsInt64();
+    auto* new_opset_import = model->model_proto_.add_opset_import();
+    new_opset_import->set_domain(domain);
+    new_opset_import->set_version(version);
+  }
 
   auto graph = m["graph"];
   ORT_RETURN_IF_ERROR(Graph::Deserialize(graph, logger, model->graph_));
