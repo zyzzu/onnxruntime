@@ -661,20 +661,20 @@ Status SessionState::FinalizeSessionStateImpl(const std::basic_string<PATH_CHAR_
 
       SessionState& subgraph_session_state = *entry->second;
 
+      // recurse.
+      // we don't need to pass through any serialized data as we recursively populated the kernel create info
+      // when processing the main graph
+      // Currently all subgraphs are executed using the sequential EP due to potential deadlock with the current
+      // parallel executor implementation.
+      ORT_RETURN_IF_ERROR(subgraph_session_state.FinalizeSessionStateImpl(
+          graph_location, kernel_registry_manager, &node, ExecutionMode::ORT_SEQUENTIAL, nullptr));
+
       // setup all the info for handling the feeds and fetches used in subgraph execution
       auto* p_op_kernel = GetMutableKernel(node.Index());
       ORT_ENFORCE(p_op_kernel);
 
       auto& control_flow_kernel = dynamic_cast<controlflow::IControlFlowKernel&>(*p_op_kernel);
       ORT_RETURN_IF_ERROR(control_flow_kernel.SetupSubgraphExecutionInfo(*this, attr_name, subgraph_session_state));
-
-      // recurse.
-      // we don't need to pass through any serialized data as we recursively populated the kernel create info
-      // when processing the main graph
-      // Currently all subgraphs are executed using the sequential EP due to potential deadlock with the current
-      // parallel executor implementation.
-      ORT_RETURN_IF_ERROR(FinalizeSessionStateImpl(graph_location, kernel_registry_manager, &node,
-                                                   ExecutionMode::ORT_SEQUENTIAL, nullptr));
     }
   }
 
@@ -685,37 +685,35 @@ Status SessionState::SerializeKernelCreateInfo(flexbuffers::Builder& builder) co
   using Entry = std::pair<std::string, const SessionState*>;
 
   // add kernel info for the MainGraph first, and for all subgraphs after that
-  builder.Map([this, &builder]() {
-    std::queue<Entry> queue;
-    queue.push({"MainGraph", this});
+  std::queue<Entry> queue;
+  queue.push({"MainGraph", this});
 
-    while (!queue.empty()) {
-      const Entry& entry = queue.front();
-      const SessionState& ss = *entry.second;
-      builder.TypedVector(entry.first.c_str(), [&builder, &ss]() {
-        for (const auto& kvp : ss.kernel_create_info_map_) {
-          builder.Int(kvp.first);  // node index
-          builder.Int(kvp.second->kernel_def->GetHash());
+  while (!queue.empty()) {
+    const Entry& entry = queue.front();
+    const SessionState& cur_session_state = *entry.second;
+    builder.TypedVector(entry.first.c_str(), [&builder, &cur_session_state]() {
+      for (const auto& kvp : cur_session_state.kernel_create_info_map_) {
+        builder.Int(kvp.first);  // node index
+        builder.Int(kvp.second->kernel_def->GetHash());
 
-          // TEMP check
-          assert(kvp.second->kernel_def->GetHash() != 0);
-        }
-      });
+        // TEMP check
+        assert(kvp.second->kernel_def->GetHash() != 0);
+      }
+    });
 
-      queue.pop();
+    queue.pop();
 
-      // add any subgraphs
-      for (const auto& node_idx_to_subgraph_ss : subgraph_session_states_) {
-        const Node& node = *graph_.GetNode(node_idx_to_subgraph_ss.first);
-        for (const auto& name_to_subgraph_session_state : node_idx_to_subgraph_ss.second) {
-          const std::string& attr_name = name_to_subgraph_session_state.first;
-          SessionState& subgraph_session_state = *name_to_subgraph_session_state.second;
-          std::string key(std::to_string(node.Index()) + "_" + attr_name);
-          queue.push({key, &subgraph_session_state});
-        }
+    // add any subgraphs
+    for (const auto& node_idx_to_subgraph_ss : cur_session_state.subgraph_session_states_) {
+      const Node& node = *cur_session_state.graph_.GetNode(node_idx_to_subgraph_ss.first);
+      for (const auto& name_to_subgraph_session_state : node_idx_to_subgraph_ss.second) {
+        const std::string& attr_name = name_to_subgraph_session_state.first;
+        SessionState& subgraph_session_state = *name_to_subgraph_session_state.second;
+        std::string key(std::to_string(node.Index()) + "_" + attr_name);
+        queue.push({key, &subgraph_session_state});
       }
     }
-  });
+  }
 
   return Status::OK();
 }
@@ -731,13 +729,14 @@ Status SessionState::DeserializeKernelCreateInfo(const flexbuffers::Reference& f
   while (!queue.empty()) {
     const auto& queue_entry = queue.front();
     const std::string& key = queue_entry.first;
+    const SessionState& cur_session_state = *queue_entry.second;
     const auto& entries = kernel_info_map[key].AsTypedVector();
 
     for (size_t cur = 0, end = entries.size(); cur < end;) {
       size_t node_index = static_cast<size_t>(entries[cur++].AsUInt64());
       auto hash = entries[cur++].AsUInt64();
-      // get node
-      const Node* node = graph_.GetNode(node_index);
+
+      const Node* node = cur_session_state.graph_.GetNode(node_index);
       ORT_ENFORCE(node != nullptr, "Can't find node with index ", node_index, " in graph.");
 
       // search with hash
@@ -746,8 +745,8 @@ Status SessionState::DeserializeKernelCreateInfo(const flexbuffers::Reference& f
       kernel_create_info_map_[node->Index()] = kci;
     };
 
-    for (const auto& entry : subgraph_session_states_) {
-      const Node& node = *graph_.GetNode(entry.first);
+    for (const auto& entry : cur_session_state.subgraph_session_states_) {
+      const Node& node = *cur_session_state.graph_.GetNode(entry.first);
       for (const auto& name_to_subgraph_session_state : entry.second) {
         const std::string& attr_name = name_to_subgraph_session_state.first;
         SessionState& subgraph_session_state = *name_to_subgraph_session_state.second;

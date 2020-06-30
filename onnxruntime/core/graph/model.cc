@@ -540,19 +540,19 @@ Status Model::Deserialize(const flexbuffers::Reference& fbr,
   auto m = fbr.AsMap();
 
   auto attribs = m["attributes"].AsMap();
-  model->model_proto_.set_producer_version(attribs["producer_version"].ToString());
-  model->model_proto_.set_producer_name(attribs["producer_name"].ToString());
+  model->model_proto_.set_producer_version(attribs["producer_version"].AsString().c_str());
+  model->model_proto_.set_producer_name(attribs["producer_name"].AsString().c_str());
   model->model_proto_.set_model_version(attribs["model_version"].AsInt64());
   model->model_proto_.set_ir_version(attribs["ir_version"].AsInt64());
-  model->model_proto_.set_domain(attribs["domain"].ToString());
-  model->model_proto_.set_doc_string(attribs["doc_string"].ToString());
+  model->model_proto_.set_domain(attribs["domain"].AsString().c_str());
+  model->model_proto_.set_doc_string(attribs["doc_string"].AsString().c_str());
 
   auto opset_imports = attribs["opset_import"].AsVector();
   for (size_t cur = 0, end = opset_imports.size(); cur < end;) {
-    auto domain = opset_imports[cur++].ToString();
+    auto domain = opset_imports[cur++].AsString();
     auto version = opset_imports[cur++].AsInt64();
     auto* new_opset_import = model->model_proto_.add_opset_import();
-    new_opset_import->set_domain(domain);
+    new_opset_import->set_domain(domain.c_str());
     new_opset_import->set_version(version);
   }
 

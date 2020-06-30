@@ -306,7 +306,7 @@ Status InferenceSession::Deserialize(const gsl::span<const uint8_t>& flexbuffer_
     std::unique_ptr<Model> tmp_model;
     ORT_RETURN_IF_ERROR(Model::Deserialize(root["model"], *session_logger_, tmp_model));
     model_ = std::move(tmp_model);
-    model_loaded_ = true;
+    is_model_loaded_ = true;
   }
 
   // Initialize takes the session_mutex_ as well so we need to have released it prior to calling this
@@ -907,10 +907,6 @@ common::Status InferenceSession::InitializeImpl(const flexbuffers::Reference* se
     ORT_RETURN_IF_ERROR_SESSIONID_(CreateSubgraphSessionState(graph, *session_state_));
 
     if (serialized_data == nullptr) {
-      // Graph is fully partitioned and resolved and all transforms should have been done previously.
-      // This is to minimize binary size so we don't have any ONNX dependencies (Graph::Resolve calls
-      // ONNX type/shape inferencing)
-    } else {
       // apply any transformations to the main graph and any subgraphs
       ORT_RETURN_IF_ERROR_SESSIONID_(TransformGraph(graph, graph_transformation_mgr_,
                                                     execution_providers_, kernel_registry_manager_,
@@ -919,6 +915,10 @@ common::Status InferenceSession::InitializeImpl(const flexbuffers::Reference* se
 
       // now that all the transforms are done, call Resolve on the main graph. this will recurse into the subgraphs.
       ORT_RETURN_IF_ERROR_SESSIONID_(graph.Resolve());
+    } else {
+      // Graph is fully partitioned and resolved and all transforms should have been done previously.
+      // This is to minimize binary size so we don't have any ONNX dependencies (Graph::Resolve calls
+      // ONNX type/shape inferencing)
     }
 
     if (!serialized_data && !session_options_.optimized_model_filepath.empty()) {

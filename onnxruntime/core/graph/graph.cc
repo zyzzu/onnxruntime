@@ -3290,21 +3290,6 @@ Status Graph::Deserialize(const flexbuffers::Reference& fbr, const logging::Logg
 Status Graph::Deserialize(const flexbuffers::Reference& fbr) {
   auto root = fbr.AsMap();
 
-  // TODO: These all return new objects not references. Need to check if there are any copies involved. Could just
-  // contain references to the actual data.
-  /*
-  auto initializers = root["initializers"].AsMap();
-  const auto names = initializers.Keys();
-  const auto values = initializers.Values();
-
-  for (size_t cur = 0, end = names.size(); cur < end; ++cur) {
-    TensorProto* value = deserialized_proto_data_.add_initializer();
-
-    // TODO: String conversion here is potentially expensive
-    value->ParseFromString(values[cur].ToString());
-    name_to_initial_tensor_[names[cur].ToString()] = value;
-  }
-  */
   auto initializers = root["initializers"].AsVector();
   for (size_t cur = 0, end = initializers.size(); cur < end; ++cur) {
     TensorProto* value = deserialized_proto_data_.add_initializer();
@@ -3319,6 +3304,32 @@ Status Graph::Deserialize(const flexbuffers::Reference& fbr) {
     std::unique_ptr<NodeArg> n(new NodeArg(node_args[cur]));
     node_args_[n->Name()] = std::move(n);
   }
+
+  /*
+  builder.Vector("nodes", add_nodes);
+  builder.Vector("graph_inputs", add_graph_inputs);  // separate into inc/exc initializers and overridable initializers when loading
+  builder.Vector("graph_outputs", add_graph_outputs);
+  builder.Int("ir_version", ir_version_);
+  */
+
+  auto nodes = root["nodes"].AsVector();
+  for (size_t cur = 0, end = nodes.size(); cur < end; ++cur) {
+    // deserialize
+  }
+
+  auto inputs = root["graph_inputs"].AsVector();
+  for (size_t cur = 0, end = inputs.size(); cur < end; ++cur) {
+    // deserialize
+    // add to inputs including initializers
+    // add to inputs excluding initializers if not initializer
+  }
+
+  auto outputs = root["graph_outputs"].AsVector();
+  for (size_t cur = 0, end = outputs.size(); cur < end; ++cur) {
+    // deserialize
+  }
+
+  ir_version_ = root["ir_version"].AsInt64();
 
   return Status::OK();
 }

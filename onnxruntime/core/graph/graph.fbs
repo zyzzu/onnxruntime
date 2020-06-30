@@ -1,25 +1,46 @@
   
-// ONNXRuntime Graph schema
+// ONNXRuntime Graph schema - WIP - not complete or finished. cut-and-paste of some things from onnx.fbs
+// Probably needs to start at the InferenceSession level instead of Graph to include the kernel create info
+
+include "onnx.fbs";
 
 namespace onnxruntime;
 
-enum Color:byte { Red = 0, Green, Blue = 2 }
+// enum Color:byte { Red = 0, Green, Blue = 2 }
 
-union Equipment { Weapon } // Optionally add more tables.
+// union Equipment { Weapon } // Optionally add more tables.
+
+
+table ValueInfoProto {
+  name:string;
+  type:onnx.TypeProto;
+  doc_string:string;
+}
 
 struct NodeArg {
-  type:string;
-
+  type:string; // onnx::DataType
+  node_arg_info:onnx.ValueInfoProto; // array denoted by []
   exists:bool;
 }
 
-struct Vec3 {
-  x:float;
-  y:float;
-  z:float;
+namespace onnxruntime.Node;
+
+struct Definitions {
+  input_defs:[onnxruntime.NodeArg];
+  input_arg_count:[int];
+  output_defs:[onnxruntime.NodeArg];
+  implicit_input_defs:[onnxruntime.NodeArg];
 }
 
-// can never remove fields from 'table'
+struct Relationships {
+  input_edges:[];
+  output_edges:[];
+  control_inputs:[string];
+}
+
+namespace onnxruntime;
+
+// can never remove fields from 'table'. may want to use struct instead
 table Node {
 
 }
@@ -27,7 +48,7 @@ table Node {
 table Graph {
   name:string;
   nodes:[onnx.NodeProto];
-  initializers:[onnx.TensorProto];
+  initializers:[onnxruntime.OrtValue];
   doc_string:string;
   input:[onnxruntime.NodeArg];
   output:[onnxruntime.NodeArg];
