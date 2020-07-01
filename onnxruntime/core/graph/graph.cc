@@ -158,10 +158,6 @@ NodeArg::NodeArg(const std::string& name, const TypeProto* p_node_arg_type) {
   }
 }
 
-void NodeArg::Serialize(ProtobufSerializer& protobuf_serializer) const {
-  protobuf_serializer.Serialize(node_arg_info_);
-}
-
 NodeArg::NodeArg(const flexbuffers::Reference& fbr) {
   auto b = fbr.AsBlob();
   node_arg_info_.ParseFromArray(b.data(), SafeInt<int>(b.size()));
@@ -508,7 +504,10 @@ void Node::ToProto(NodeProto& proto, bool update_subgraphs, bool serializing) co
   for (const auto& attribute : attributes_) {
     bool is_subgraph = attribute.second.has_g();
     if (serializing && is_subgraph) {
-      // we will serialize the Graph instance separately so don't include it in the NodeProto storage
+      // just need the attribute name and an empty GraphProto so we know there was a subgraph
+      const gsl::not_null<AttributeProto*> attr{proto.add_attribute()};
+      attr->set_name(attribute.second.name());
+      *attr->mutable_g() = GraphProto();
     } else {
       const gsl::not_null<AttributeProto*> attr{proto.add_attribute()};
       *attr = attribute.second;  // copy
@@ -588,6 +587,18 @@ void Node::CreateSubgraph(const std::string& attr_name) {
     attr_to_subgraph_map_.insert({std::string(attr_name), gsl::not_null<Graph*>{subgraph.get()}});
     subgraphs_.push_back(std::move(subgraph));
   }
+}
+
+Status Node::CreateSubgraph(const std::string& attr_name, const flexbuffers::Map& map, const logging::Logger& logger) {
+  auto serialized_graph = map[attr_name];
+
+  std::unique_ptr<Graph> subgraph;
+  ORT_RETURN_IF_ERROR(Graph::Deserialize(serialized_graph, graph_, this, logger, subgraph));
+
+  attr_to_subgraph_map_.insert({std::string(attr_name), gsl::not_null<Graph*>{subgraph.get()}});
+  subgraphs_.push_back(std::move(subgraph));
+
+  return Status::OK();
 }
 
 void Node::AddAttribute(const std::string& attr_name, const AttributeProto& value) {
@@ -779,71 +790,159 @@ void Node::ReplaceDefs(const std::map<const onnxruntime::NodeArg*, onnxruntime::
           def = pair.second;
 }
 
-void Node::Serialize(flexbuffers::Builder& builder, ProtobufSerializer& protobuf_serializer) const {
-  // most fields are covered by a serialized NodeProto
+Status Node::Serialize(flexbuffers::Builder& builder, ProtobufSerializer& protobuf_serializer) const {
+  auto map_start = builder.StartMap();
+  builder.Int("node_index", index_);
+  builder.String("execution_provider_type", execution_provider_type_);
+  builder.Int("node_type", static_cast<int32_t>(node_type_));
+
+  // most fields are covered by a serialized NodeProto. ToProto will save an empty GraphProto for subgraphs as we
+  // will de/serialize the subgraph into a Graph instance and don't need the GraphProto for it.
   NodeProto proto;
-  ToProto(proto, false, true);
+  ToProto(proto, /*update_subgraphs*/ false, /*serializing*/ true);
+  builder.Key("node_proto");
   protobuf_serializer.Serialize(proto);
 
-  // Rest of Definitions
+  if (func_body_ != nullptr) {
+    return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Serialization of function body is not currently supported");
+  }
 
-  // input arg count
-  builder.Vector([this, &builder]() {
+  // Serialize remainder of definitions_ that are not covered by NodeProto
+
+  builder.TypedVector("input_arg_count", [this, &builder]() {
     // TODO: Could skip this if all values are 1
     for (const auto& count : definitions_.input_arg_count) {
       builder.Int(count);
     }
   });
 
-  // implicit inputs
-  builder.Vector([this, &builder]() {
+  builder.TypedVector("implicit_inputs", [this, &builder]() {
     for (const auto& implicit_input : definitions_.implicit_input_defs) {
       builder.String(implicit_input->Name());
     }
   });
 
-  // Relationships
-  // edges
+  // serialize any subgraphs
+  auto subgraph_start = builder.StartMap("subgraphs");
+  for (auto& entry : attr_to_subgraph_map_) {
+    // save under attribute name. when deserializing process the attributes with GraphProto values and lookup this
+    // info to deserialize the Graph instance
+    builder.Key(entry.first);
+    ORT_RETURN_IF_ERROR(entry.second->Serialize(builder));
+  }
+  builder.EndMap(subgraph_start);
 
-  // TODO: Subgraph handling
+  builder.EndMap(map_start);
+
+  return Status::OK();
 }
 
-Node::Node(const flexbuffers::Reference& fbr, Graph& graph)
-    : graph_(&graph) {
-  auto b = fbr.AsBlob();
-  NodeProto proto;
-  proto.ParseFromArray(b.data(), SafeInt<int>(b.size()));
+Status Node::Deserialize(const flexbuffers::Reference& fbr, Graph& graph, const logging::Logger& logger,
+                         std::unique_ptr<Node>& node) {
+  auto map = fbr.AsMap();
 
-  name_ = proto.name();
-  op_type_ = proto.op_type();
+  size_t index = map["node_index"].AsInt64();
+  node.reset(new Node(index, graph));
+  return node->Deserialize(map, logger);
+}
 
-  if (proto.has_domain())
-    domain_ = proto.domain();
+Status Node::Deserialize(const flexbuffers::Map& map, const logging::Logger& logger) {
+  execution_provider_type_ = map["execution_provider_type"].ToString();
+  node_type_ = static_cast<Node::Type>(map["node_type"].AsInt32());
 
-  if (proto.has_doc_string())
-    description_ = proto.doc_string();
+  auto b = map["node_proto"].AsBlob();
+  {
+    NodeProto proto;
+    if (proto.ParseFromArray(b.data(), SafeInt<int>(b.size())) == false) {
+      return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "NodeProto::PraseFromArray failed.");
+    }
 
-  for (const auto& entry : proto.attribute()) {
-    AddAttribute(entry.name(), entry);
+    name_ = proto.name();
+    op_type_ = proto.op_type();
+
+    if (proto.has_domain()) {
+      domain_ = proto.domain();
+    }
+
+    if (proto.has_doc_string()) {
+      description_ = proto.doc_string();
+    }
+
+    for (const auto& entry : proto.attribute()) {
+      AddAttribute(entry.name(), entry);
+    }
+
+    // Set inputs' definitions.
+    for (const auto& input : proto.input()) {
+      definitions_.input_defs.push_back(graph_->GetNodeArg(input));
+    }
+
+    // Set outputs' definitions.
+    for (const auto& output : proto.output()) {
+      definitions_.output_defs.push_back(graph_->GetNodeArg(output));
+    }
   }
 
-  // Set inputs' definitions.
-  for (const auto& input : proto.input()) {
-    definitions_.input_defs.push_back(graph.GetNodeArg(input));
+  auto input_arg_counts = map["input_arg_count"].AsTypedVector();
+  for (size_t cur = 0, end = input_arg_counts.size(); cur < end; ++cur) {
+    definitions_.input_arg_count.push_back(input_arg_counts[cur].AsInt32());
   }
 
-  // Set outputs' definitions.
-  for (const auto& output : proto.output()) {
-    definitions_.output_defs.push_back(graph.GetNodeArg(output));
+  auto implicit_inputs = map["implicit_inputs"].AsTypedVector();
+  for (size_t cur = 0, end = implicit_inputs.size(); cur < end; ++cur) {
+    auto implicit_input_name = input_arg_counts[cur].ToString();
+    gsl::not_null<NodeArg*> implicit_input_nodearg = graph_->GetNodeArg(implicit_input_name);
+    definitions_.implicit_input_defs.push_back(implicit_input_nodearg);
   }
 
-  /*
-  implicit inputs and anything else in definitions
-  edges
-  relationships
-  optional: EP type (start by partitioning locally first though with Resolve enabled).
-  subraphs
-  */
+  // create subgraphs now
+  for (const auto& entry : attributes_) {
+    // handle subgraph
+    if (entry.second.has_g()) {
+      ORT_RETURN_IF_ERROR(CreateSubgraph(entry.first, map, logger));
+    }
+  }
+
+  return Status::OK();
+}
+
+void Node::SerializeEdges(flexbuffers::Builder& builder) const {
+  // edges
+  auto add_edges = [&builder](const EdgeSet& edges) {
+    for (const auto& edge : edges) {
+      builder.Int(edge.GetNode().Index());
+      builder.Int(edge.GetSrcArgIndex());
+      builder.Int(edge.GetDstArgIndex());
+    }
+  };
+
+  builder.TypedVector("input_edges", [this, &builder, &add_edges]() {
+    add_edges(relationships_.input_edges);
+  });
+
+  builder.TypedVector("output_edges", [this, &builder, &add_edges]() {
+    add_edges(relationships_.output_edges);
+  });
+
+  // skipping control edges. AFAIK nobody uses that. No usage of AddControlEdge found in the ORT repo
+}
+
+void Node::DeserializeEdges(const flexbuffers::Reference& fbr, const Graph& graph) {
+  auto map = fbr.AsMap();
+  auto input_edges = map["input_edges"].AsTypedVector();
+  auto output_edges = map["output_edges"].AsTypedVector();
+
+  auto add_edges = [&graph](flexbuffers::TypedVector& edges, EdgeSet& edge_set) {
+    for (size_t cur = 0, end = edges.size(); cur < end;) {
+      auto node_index = edges[cur++].AsInt64();
+      auto src_idx = edges[cur++].AsInt32();
+      auto dst_idx = edges[cur++].AsInt32();
+      edge_set.insert({*graph.GetNode(node_index), src_idx, dst_idx});
+    }
+  };
+
+  add_edges(input_edges, relationships_.input_edges);
+  add_edges(output_edges, relationships_.input_edges);
 }
 
 // Constructor: Given a <GraphProto> loaded from model file, construct
@@ -3241,12 +3340,27 @@ Status Graph::Serialize(flexbuffers::Builder& builder) const {
 
   auto add_node_args = [this, &builder, &protobuf_serializer] {
     for (const auto& name_to_node_arg : node_args_) {
-      name_to_node_arg.second->Serialize(protobuf_serializer);
+      protobuf_serializer.Serialize(name_to_node_arg.second->ToProto());
     }
   };
 
-  auto add_nodes = [this, &builder]() {
+  // create a Vector of Map entries
+  auto add_nodes = [this, &builder, &protobuf_serializer]() -> Status {
+    for (const auto& node : nodes_) {
+      if (node != nullptr) {
+        ORT_RETURN_IF_ERROR(node->Serialize(builder, protobuf_serializer));
+      }
+    }
 
+    return Status::OK();
+  };
+
+  auto add_node_edges = [this, &builder]() -> void {
+    for (const auto& node : nodes_) {
+      if (node != nullptr) {
+        node->SerializeEdges(builder);
+      }
+    }
   };
 
   // TODO: If we create a map of name to index in the serialized data for all the NodeArg's we could just store
@@ -3265,10 +3379,34 @@ Status Graph::Serialize(flexbuffers::Builder& builder) const {
 
   // TODO: Would need some sort of serialization versioning if we go with flexbuffers over flatbuffers
   // and should store the version number here
-  builder.Vector("initializers", add_initializers);
+  if (!name_to_initial_tensor_.empty()) {
+    builder.Vector("initializers", add_initializers);
+  }
+
   builder.Vector("node_args", add_node_args);
-  builder.Vector("nodes", add_nodes);
-  builder.Vector("graph_inputs", add_graph_inputs);  // separate into inc/exc initializers and overridable initializers when loading
+
+  if (!nodes_.empty()) {
+    auto nodes_start = builder.StartVector("nodes");
+    ORT_RETURN_IF_ERROR(add_nodes());
+    builder.EndVector(nodes_start, false, false);
+  }
+
+  // TODO: How to handle graph with no edges? Can we call add_node_edges and see if nothing was added and
+  // delete the key if that was the case???
+  bool has_edges = std::any_of(nodes_.begin(), nodes_.cend(),
+                               [](const std::unique_ptr<Node>& node) {
+                                 return node->GetInputEdgesCount() > 0 || node->GetOutputEdgesCount() > 0;
+                               });
+
+  if (has_edges) {
+    builder.Vector("node_edges", add_node_edges);
+  }
+
+  // Subgraph for If node takes all inputs from outer scope
+  if (!graph_inputs_including_initializers_.empty()) {
+    builder.Vector("graph_inputs", add_graph_inputs);  // separate into inc/exc initializers and overridable initializers when loading
+  }
+
   builder.Vector("graph_outputs", add_graph_outputs);
   builder.Int("ir_version", ir_version_);
 
@@ -3279,8 +3417,13 @@ Status Graph::Serialize(flexbuffers::Builder& builder) const {
 
 Status Graph::Deserialize(const flexbuffers::Reference& fbr, const logging::Logger& logger,
                           std::unique_ptr<Graph>& graph) {
+  return Graph::Deserialize(fbr, nullptr, nullptr, logger, graph);
+}
+
+Status Graph::Deserialize(const flexbuffers::Reference& fbr, Graph* parent_graph, const Node* parent_node,
+                          const logging::Logger& logger, std::unique_ptr<Graph>& graph) {
   // can't use make_unique as we're calling a private ctor
-  graph.reset(new Graph(logger));
+  graph.reset(new Graph(parent_graph, parent_node, logger));
 
   auto status = graph->Deserialize(fbr);
 
@@ -3305,28 +3448,41 @@ Status Graph::Deserialize(const flexbuffers::Reference& fbr) {
     node_args_[n->Name()] = std::move(n);
   }
 
-  /*
-  builder.Vector("nodes", add_nodes);
-  builder.Vector("graph_inputs", add_graph_inputs);  // separate into inc/exc initializers and overridable initializers when loading
-  builder.Vector("graph_outputs", add_graph_outputs);
-  builder.Int("ir_version", ir_version_);
-  */
-
   auto nodes = root["nodes"].AsVector();
+  nodes_.reserve(nodes.size());
   for (size_t cur = 0, end = nodes.size(); cur < end; ++cur) {
-    // deserialize
+    std::unique_ptr<Node> node;
+    ORT_RETURN_IF_ERROR(Node::Deserialize(nodes[cur], *this, logger_, node));
+    nodes_.push_back(std::move(node));
+  }
+
+  auto node_edges = root["node_edges"].AsVector();
+  ORT_ENFORCE(node_edges.size() == nodes_.size(), "Expected one entry in node_edges per node");
+  for (size_t cur = 0, end = node_edges.size(); cur < end; ++cur) {
+    nodes_[cur]->DeserializeEdges(node_edges[cur], *this);
   }
 
   auto inputs = root["graph_inputs"].AsVector();
-  for (size_t cur = 0, end = inputs.size(); cur < end; ++cur) {
-    // deserialize
-    // add to inputs including initializers
-    // add to inputs excluding initializers if not initializer
+  auto num_inputs = inputs.size();
+  graph_inputs_including_initializers_.reserve(num_inputs);
+  graph_inputs_excluding_initializers_.reserve(num_inputs);  // may be too big but shouldn't hurt
+
+  for (size_t cur = 0; cur < num_inputs; ++cur) {
+    auto input_name = inputs[cur].ToString();
+    gsl::not_null<NodeArg*> input_nodearg = GetNodeArg(input_name);
+    graph_inputs_including_initializers_.push_back(input_nodearg);
+
+    if (name_to_initial_tensor_.count(input_name) == 0) {
+      graph_inputs_excluding_initializers_.push_back(input_nodearg);
+    }
   }
 
   auto outputs = root["graph_outputs"].AsVector();
-  for (size_t cur = 0, end = outputs.size(); cur < end; ++cur) {
-    // deserialize
+  auto num_outputs = outputs.size();
+  graph_outputs_.reserve(num_outputs);
+  for (size_t cur = 0; cur < num_outputs; ++cur) {
+    auto output_name = outputs[cur].ToString();
+    gsl::not_null<NodeArg*> input_nodearg = GetNodeArg(output_name);
   }
 
   ir_version_ = root["ir_version"].AsInt64();
@@ -3334,11 +3490,11 @@ Status Graph::Deserialize(const flexbuffers::Reference& fbr) {
   return Status::OK();
 }
 
-Graph::Graph(const logging::Logger& logger)
+Graph::Graph(Graph* parent_graph, const Node* parent_node, const logging::Logger& logger)
     : graph_proto_(nullptr),
-      parent_graph_(nullptr),
-      parent_node_(nullptr),
+      parent_graph_(parent_graph),
+      parent_node_(parent_node),
       logger_(logger),
-      is_loaded_from_model_file_(true) {
+      is_loaded_from_model_file_(true) {  // true as the Graph isn't manually constructed from scratch
 }
 }  // namespace onnxruntime

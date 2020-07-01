@@ -524,10 +524,9 @@ Status Model::Serialize(flexbuffers::Builder& builder) const {
     });
   });
 
-  builder.Map("graph", [&builder, this]() {
-    ORT_RETURN_IF_ERROR(graph_->Serialize(builder));
-    return Status::OK();
-  });
+  auto graph_start = builder.StartMap("graph");
+  ORT_RETURN_IF_ERROR(graph_->Serialize(builder));
+  builder.EndMap(graph_start);
 
   return Status::OK();
 }

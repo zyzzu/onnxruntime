@@ -100,7 +100,6 @@ class NodeArg {
 
   // deserialize ctor
   NodeArg(const flexbuffers::Reference& fbr);
-  void Serialize(ProtobufSerializer& protobuf_serializer) const;
 
   void SetType(ONNX_NAMESPACE::DataType p_type);
   void SetType(const ONNX_NAMESPACE::TypeProto& type_proto);

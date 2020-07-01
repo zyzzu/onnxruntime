@@ -1379,7 +1379,7 @@ Status InferenceSession::Serialize(flexbuffers::Builder& builder) const {
     return status;
   }
 
-  auto root_start = builder.StartMap();  // root map
+  auto root_start = builder.StartMap();  // root map for all entries
 
   // save model (which will include the graph)
   auto model_start = builder.StartMap("model");

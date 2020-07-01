@@ -25,6 +25,7 @@
 
 namespace flexbuffers {
 class Builder;
+class Map;
 class Reference;
 }  // namespace flexbuffers
 
@@ -398,9 +399,15 @@ class Node {
 
   Node(NodeIndex index, Graph& graph) : index_(index), graph_(&graph) {}
 
-  // de/serialization
-  void Serialize(flexbuffers::Builder& builder, ProtobufSerializer& protobuf_serializer) const;
-  Node(const flexbuffers::Reference& fbr, Graph& graph);
+  // de/serialization. Need to separate the Node from the edges as we need all the node instances to exist
+  // before recreating the edges as they contain a Node* and not just the node index.
+  // TODO: we could change the edge to have NodeIndex so this wasn't necessary if there's no perf hit from doing so
+  Status Serialize(flexbuffers::Builder& builder, ProtobufSerializer& protobuf_serializer) const;
+  static Status Deserialize(const flexbuffers::Reference& fbr, Graph& graph, const logging::Logger& logger,
+                            std::unique_ptr<Node>& node);
+  Status Deserialize(const flexbuffers::Map& map, const logging::Logger& logger);
+  void SerializeEdges(flexbuffers::Builder& builder) const;
+  void DeserializeEdges(const flexbuffers::Reference& fbr, const Graph& graph);
 
   void Init(const std::string& name,
             const std::string& op_type,
@@ -412,6 +419,8 @@ class Node {
 
   // create a Graph instance for an attribute that contains a GraphProto
   void CreateSubgraph(const std::string& attr_name);
+  // deserialize a Graph instance for an attribute that contains a GraphProto
+  Status CreateSubgraph(const std::string& attr_name, const flexbuffers::Map& map, const logging::Logger& logger);
 
   // internal only method to allow selected classes to directly alter the input/output definitions and arg counts
   Definitions& MutableDefinitions() noexcept;
@@ -916,7 +925,14 @@ class Graph {
   // EXPERIMENTAL
   // Create a flexbuffer from the Graph
   Status Serialize(flexbuffers::Builder& builder) const;
+
+  // deserialize the main graph
   static Status Deserialize(const flexbuffers::Reference& fbr, const logging::Logger& logger,
+                            std::unique_ptr<Graph>& graph);
+
+  // deserialize a subgraph
+  static Status Deserialize(const flexbuffers::Reference& fbr, Graph* parent_graph, const Node* parent_node,
+                            const logging::Logger& logger,
                             std::unique_ptr<Graph>& graph);
 
  private:
@@ -926,9 +942,9 @@ class Graph {
   // Graph::LoadGraph All other access should be via the public API.
   friend class Model;
 
-  // create empty instance to re-create from serialized data
+  // create empty Graph instance to re-create from serialized data.
   // as the deserialize is more likely to be error prone we're preferring returning a Status from that than throwing
-  Graph(const logging::Logger& logger);
+  Graph(Graph* parent_graph, const Node* parent_node, const logging::Logger& logger);
   Status Deserialize(const flexbuffers::Reference& fbr);
 
   // Constructor: Given a <GraphProto> loaded from model file, construct
