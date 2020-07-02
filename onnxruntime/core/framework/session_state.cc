@@ -754,6 +754,8 @@ Status SessionState::DeserializeKernelCreateInfo(const flexbuffers::Reference& f
         queue.push({subgraph_key, &subgraph_session_state});
       }
     }
+
+    queue.pop();
   }
 
   return Status::OK();

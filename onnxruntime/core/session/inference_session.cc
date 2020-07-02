@@ -311,7 +311,7 @@ Status InferenceSession::Deserialize(const gsl::span<const uint8_t>& flexbuffer_
 
   // Initialize takes the session_mutex_ as well so we need to have released it prior to calling this
   auto session_state = root["session_state"];
-  InitializeImpl(&session_state);
+  ORT_RETURN_IF_ERROR(InitializeImpl(&session_state));
 
   return Status::OK();
 }

@@ -816,21 +816,28 @@ Status Node::Serialize(flexbuffers::Builder& builder, ProtobufSerializer& protob
     }
   });
 
-  builder.TypedVector("implicit_inputs", [this, &builder]() {
-    for (const auto& implicit_input : definitions_.implicit_input_defs) {
-      builder.String(implicit_input->Name());
-    }
-  });
+  if (!definitions_.implicit_input_defs.empty()) {
+    builder.TypedVector("implicit_inputs", [this, &builder]() {
+      for (const auto& implicit_input : definitions_.implicit_input_defs) {
+        builder.String(implicit_input->Name());
+      }
+    });
+  }
 
   // serialize any subgraphs
-  auto subgraph_start = builder.StartMap("subgraphs");
-  for (auto& entry : attr_to_subgraph_map_) {
-    // save under attribute name. when deserializing process the attributes with GraphProto values and lookup this
-    // info to deserialize the Graph instance
-    builder.Key(entry.first);
-    ORT_RETURN_IF_ERROR(entry.second->Serialize(builder));
+  if (!attr_to_subgraph_map_.empty()) {
+    auto subgraphs_start = builder.StartMap("subgraphs");
+    for (auto& entry : attr_to_subgraph_map_) {
+      // save under attribute name. when deserializing process the attributes with GraphProto values and lookup this
+      // info to deserialize the Graph instance
+      //builder.Key(entry.first);
+      auto subgraph_start = builder.StartMap(entry.first.c_str());
+      ORT_RETURN_IF_ERROR(entry.second->Serialize(builder));
+      builder.EndMap(subgraph_start);
+    }
+
+    builder.EndMap(subgraphs_start);
   }
-  builder.EndMap(subgraph_start);
 
   builder.EndMap(map_start);
 
@@ -890,16 +897,17 @@ Status Node::Deserialize(const flexbuffers::Map& map, const logging::Logger& log
 
   auto implicit_inputs = map["implicit_inputs"].AsTypedVector();
   for (size_t cur = 0, end = implicit_inputs.size(); cur < end; ++cur) {
-    auto implicit_input_name = input_arg_counts[cur].ToString();
-    gsl::not_null<NodeArg*> implicit_input_nodearg = graph_->GetNodeArg(implicit_input_name);
+    auto implicit_input_name = implicit_inputs[cur].ToString();
+    gsl::not_null<NodeArg*> implicit_input_nodearg = graph_->GetNodeArgIncludingParentGraphs(implicit_input_name);
     definitions_.implicit_input_defs.push_back(implicit_input_nodearg);
   }
 
   // create subgraphs now
+  auto subgraphs = map["subgraphs"].AsMap();
   for (const auto& entry : attributes_) {
     // handle subgraph
     if (entry.second.has_g()) {
-      ORT_RETURN_IF_ERROR(CreateSubgraph(entry.first, map, logger));
+      ORT_RETURN_IF_ERROR(CreateSubgraph(entry.first, subgraphs, logger));
     }
   }
 
@@ -916,15 +924,23 @@ void Node::SerializeEdges(flexbuffers::Builder& builder) const {
     }
   };
 
-  builder.TypedVector("input_edges", [this, &builder, &add_edges]() {
-    add_edges(relationships_.input_edges);
-  });
+  auto start = builder.StartMap();
 
-  builder.TypedVector("output_edges", [this, &builder, &add_edges]() {
-    add_edges(relationships_.output_edges);
-  });
+  if (!relationships_.input_edges.empty()) {
+    builder.TypedVector("input_edges", [this, &builder, &add_edges]() {
+      add_edges(relationships_.input_edges);
+    });
+  }
+
+  if (!relationships_.output_edges.empty()) {
+    builder.TypedVector("output_edges", [this, &builder, &add_edges]() {
+      add_edges(relationships_.output_edges);
+    });
+  }
 
   // skipping control edges. AFAIK nobody uses that. No usage of AddControlEdge found in the ORT repo
+
+  builder.EndMap(start);
 }
 
 void Node::DeserializeEdges(const flexbuffers::Reference& fbr, const Graph& graph) {
@@ -3393,14 +3409,15 @@ Status Graph::Serialize(flexbuffers::Builder& builder) const {
 
   // TODO: How to handle graph with no edges? Can we call add_node_edges and see if nothing was added and
   // delete the key if that was the case???
-  bool has_edges = std::any_of(nodes_.begin(), nodes_.cend(),
-                               [](const std::unique_ptr<Node>& node) {
-                                 return node->GetInputEdgesCount() > 0 || node->GetOutputEdgesCount() > 0;
-                               });
+  //bool has_edges = std::any_of(nodes_.begin(), nodes_.cend(),
+  //                             [](const std::unique_ptr<Node>& node) {
+  //                               return node != nullptr &&
+  //                                      (node->GetInputEdgesCount() > 0 || node->GetOutputEdgesCount() > 0);
+  //                             });
 
-  if (has_edges) {
-    builder.Vector("node_edges", add_node_edges);
-  }
+  //if (has_edges) {
+  builder.Vector("node_edges", add_node_edges);
+  //}
 
   // Subgraph for If node takes all inputs from outer scope
   if (!graph_inputs_including_initializers_.empty()) {
@@ -3415,9 +3432,12 @@ Status Graph::Serialize(flexbuffers::Builder& builder) const {
   return Status::OK();
 }
 
-Status Graph::Deserialize(const flexbuffers::Reference& fbr, const logging::Logger& logger,
+Status Graph::Deserialize(const flexbuffers::Reference& fbr, const Model& owning_model, const logging::Logger& logger,
                           std::unique_ptr<Graph>& graph) {
-  return Graph::Deserialize(fbr, nullptr, nullptr, logger, graph);
+  ORT_RETURN_IF_ERROR(Graph::Deserialize(fbr, nullptr, nullptr, logger, graph));
+  graph->owning_model_ = &owning_model;
+
+  return Status::OK();
 }
 
 Status Graph::Deserialize(const flexbuffers::Reference& fbr, Graph* parent_graph, const Node* parent_node,

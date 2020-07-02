@@ -629,6 +629,9 @@ class Graph {
     return const_cast<Graph*>(this)->GetNodeArg(name);
   }
 
+  // search this and up through any parent_graph_ instance for a NodeArg
+  NodeArg* GetNodeArgIncludingParentGraphs(const std::string& node_arg_name);
+
   /** Gets a mutable NodeArg by name. Creates a new NodeArg that is owned by this Graph if not found.
   @param name The NodeArg name.
   @param[in] p_arg_type Optional TypeProto to use if the NodeArg needs to be created.
@@ -927,8 +930,8 @@ class Graph {
   Status Serialize(flexbuffers::Builder& builder) const;
 
   // deserialize the main graph
-  static Status Deserialize(const flexbuffers::Reference& fbr, const logging::Logger& logger,
-                            std::unique_ptr<Graph>& graph);
+  static Status Deserialize(const flexbuffers::Reference& fbr, const Model& owning_model,
+                            const logging::Logger& logger, std::unique_ptr<Graph>& graph);
 
   // deserialize a subgraph
   static Status Deserialize(const flexbuffers::Reference& fbr, Graph* parent_graph, const Node* parent_node,
@@ -1013,9 +1016,6 @@ class Graph {
    private:
     ORT_DISALLOW_COPY_ASSIGNMENT_AND_MOVE(ResolveContext);
   };
-
-  // search this and up through any parent_graph_ instance for a NodeArg
-  NodeArg* GetNodeArgIncludingParentGraphs(const std::string& node_arg_name);
 
   // Initialize all the graph inputs, initializers and outputs
   common::Status InitInputsInitializersOutputs();

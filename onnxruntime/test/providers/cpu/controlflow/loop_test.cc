@@ -159,6 +159,7 @@ static const ONNX_NAMESPACE::GraphProto CreateSubgraph(const RunOptions& options
                                            is_cond_1d ? &bool_tensor_single_dim : &bool_scalar);
   auto& loop_var_0_in = graph.GetOrCreateNodeArg("loop_var_0_in", &float_tensor_single_dim);
   auto& loop_var_1_in = graph.GetOrCreateNodeArg("loop_var_1_in", &float_tensor_single_dim);
+  auto& loop_var_2_in = graph.GetOrCreateNodeArg("loop_var_2_in", &int64_tensor_single_dim);
 
   auto& iter_num_float = graph.GetOrCreateNodeArg("iter_num_float",
                                                   is_iter_num_1d ? &float_tensor_single_dim : &float_scalar);
@@ -175,6 +176,7 @@ static const ONNX_NAMESPACE::GraphProto CreateSubgraph(const RunOptions& options
   NodeArg* cond_out = nullptr;
   NodeArg* loop_var_0_out = nullptr;
   NodeArg* loop_var_1_out = nullptr;
+  NodeArg* loop_var_2_out = nullptr;
   NodeArg* loop_out_0 = nullptr;
 
   TypeProto sum_tensor;
@@ -271,6 +273,16 @@ static const ONNX_NAMESPACE::GraphProto CreateSubgraph(const RunOptions& options
     concat.AddAttribute("axis", int64_t{0});
   }
 
+  // output loop_var_2_in as loop_var_2_out
+  {
+    loop_var_2_out = &graph.GetOrCreateNodeArg("loop_var_2_out", &int64_tensor_single_dim);
+
+    inputs = {&loop_var_2_in};
+    outputs = {loop_var_2_out};
+
+    graph.AddNode("identity_2", "Identity", "loop_var_2_in -> loop_var_2_out", inputs, outputs);
+  }
+
   // Update cond by checking if sum is < kSumMax
   {
     {
@@ -294,8 +306,8 @@ static const ONNX_NAMESPACE::GraphProto CreateSubgraph(const RunOptions& options
     }
   }
 
-  graph.SetInputs({&iter_num_in, &cond_in, &loop_var_0_in, &loop_var_1_in});
-  graph.SetOutputs({cond_out, loop_var_0_out, loop_var_1_out, loop_out_0});
+  graph.SetInputs({&iter_num_in, &cond_in, &loop_var_0_in, &loop_var_1_in, &loop_var_2_in});
+  graph.SetOutputs({cond_out, loop_var_0_out, loop_var_1_out, loop_var_2_out, loop_out_0});
 
   // optional input backed by an initializer to make sure that's handled too.
   // we expect that Graph::InferAndVerifySubgraphTypes will be able to ignore the optional input if not provided
@@ -341,10 +353,12 @@ void RunTest(int64_t max_iterations,
 
   test.AddInput<float>("loop_var_0_orig", {1}, {0.f});
   test.AddInput<float>("loop_var_1_orig", {1}, {0.f});
+  test.AddInput<int64_t>("loop_var_2_orig", {1}, {123});
   test.AddInput<float>("outer_scope_0", {1}, {kOuterNodeAddValue});
 
   test.AddOutput<float>("loop_var_0_final", {1}, {loop_var_0_final});
   test.AddOutput<float>("loop_var_1_final", loop_var_1_final_shape, loop_var_1_final);
+  test.AddOutput<int64_t>("loop_var_2_final", {1}, {123});
   test.AddOutput<float>("loop_out_0_final", loop_out_0_final_shape, loop_out_0_final);
 
   test.AddOutput<int64_t>("outer_scope_0_out", {1}, {int64_t(kOuterNodeAddValue)});
