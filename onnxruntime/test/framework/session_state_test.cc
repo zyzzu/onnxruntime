@@ -50,6 +50,10 @@ TEST_P(SessionStateAddGetKernelTest, AddGetKernelTest) {
   auto& graph = model.MainGraph();
 
   ExecutionProviders execution_providers;
+  auto tmp_cpu_execution_provider = onnxruntime::make_unique<CPUExecutionProvider>(CPUExecutionProviderInfo(false));
+  auto* cpu_execution_provider = tmp_cpu_execution_provider.get();
+  ASSERT_STATUS_OK(execution_providers.Add(kCpuExecutionProvider, std::move(tmp_cpu_execution_provider)));
+
   DataTransferManager dtm;
   profiling::Profiler profiler;
   SessionState s(graph, execution_providers, true, tp.get(), nullptr, dtm,
@@ -66,7 +70,6 @@ TEST_P(SessionStateAddGetKernelTest, AddGetKernelTest) {
   auto status = graph.Resolve();
   ASSERT_TRUE(status.IsOK());
   auto kernel_def = KernelDefBuilder().SetName("Variable").Provider(kCpuExecutionProvider).SinceVersion(1, 10).Build();
-  auto cpu_execution_provider = onnxruntime::make_unique<CPUExecutionProvider>(CPUExecutionProviderInfo(false));
 
   OpKernelInfo p_info(node, *kernel_def, *cpu_execution_provider, s.GetConstantInitializedTensors(),
                       s.GetOrtValueNameIdxMap(), s.GetFuncMgr(), s.GetDataTransferMgr());
@@ -75,7 +78,6 @@ TEST_P(SessionStateAddGetKernelTest, AddGetKernelTest) {
   size_t orig_num_outputs = p_kernel->Node().OutputDefs().size();
   std::cout << "node_idx: " << node.Index() << std::endl;
 
-  ASSERT_STATUS_OK(execution_providers.Add(kCpuExecutionProvider, std::move(cpu_execution_provider)));
   KernelRegistryManager kernel_registry_manager;
   status = kernel_registry_manager.RegisterKernels(execution_providers);
   ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();

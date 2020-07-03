@@ -142,7 +142,7 @@ class SequentialPlannerTestContext : public ISequentialPlannerContext {
 class PlannerTest : public ::testing::Test {
  private:
   void index(const std::string& name, int& out) {
-    ASSERT_TRUE(state_.GetOrtValueNameIdxMap().GetIdx(name, out).IsOK());
+    ASSERT_TRUE(state_->GetOrtValueNameIdxMap().GetIdx(name, out).IsOK());
   }
 
   onnxruntime::Model model_;
@@ -162,7 +162,7 @@ class PlannerTest : public ::testing::Test {
   std::unique_ptr<concurrency::ThreadPool> tp_;
   DataTransferManager dtm_;
   profiling::Profiler profiler_;
-  SessionState state_;
+  std::unique_ptr<SessionState> state_;
   ShapeMap shape_map_;
   std::unique_ptr<SequentialExecutionPlan> plan_;
 
@@ -171,15 +171,16 @@ class PlannerTest : public ::testing::Test {
       : model_("test", false, DefaultLoggingManager().DefaultLogger()),
         graph_(model_.MainGraph()),
         tp_(concurrency::CreateThreadPool(&onnxruntime::Env::Default(), OrtThreadPoolParams(),
-                                          concurrency::ThreadPoolType::INTRA_OP)),
-        state_(graph_, execution_providers_, false, tp_.get(), nullptr, dtm_, DefaultLoggingManager().DefaultLogger(),
-               profiler_) {
+                                          concurrency::ThreadPoolType::INTRA_OP)) {
     std_kernel_ = KernelDefBuilder().SetName("Transpose").Provider(kCpuExecutionProvider).SinceVersion(1, 10).Build();
     in_place_kernel_ =
         KernelDefBuilder().SetName("Relu").Provider(kCpuExecutionProvider).SinceVersion(1, 10).MayInplace(0, 0).Build();
     CPUExecutionProviderInfo epi;
     auto execution_provider = onnxruntime::make_unique<CPUExecutionProvider>(epi);
     execution_providers_.Add("CPUExecutionProvider", std::move(execution_provider));
+
+    state_.reset(new SessionState(graph_, execution_providers_, false, tp_.get(), nullptr, dtm_,
+                                  DefaultLoggingManager().DefaultLogger(), profiler_));
   }
 
   onnxruntime::NodeArg* Arg(const std::string& name) {
@@ -209,20 +210,21 @@ class PlannerTest : public ::testing::Test {
                   std::unordered_map<NodeIndex, const KernelCreateInfo*>& kernel_create_info_map) {
     const IExecutionProvider* ep = execution_providers_.Get(*p_node);
     ASSERT_NE(ep, nullptr);
-    auto info = onnxruntime::make_unique<OpKernelInfo>(*p_node, kernel_def, *ep,
-                                                       state_.GetInitializedTensors(), state_.GetOrtValueNameIdxMap(),
-                                                       state_.GetFuncMgr(), state_.GetDataTransferMgr());
+    auto info = onnxruntime::make_unique<OpKernelInfo>(
+        *p_node, kernel_def, *ep, state_->GetInitializedTensors(), state_->GetOrtValueNameIdxMap(),
+        state_->GetFuncMgr(), state_->GetDataTransferMgr());
+
     op_kernel_infos_.push_back(std::move(info));
     if (!KernelRegistry::HasImplementationOf(*reg, *p_node, onnxruntime::kCpuExecutionProvider)) {
       auto st = reg->Register(
           KernelCreateInfo(onnxruntime::make_unique<KernelDef>(kernel_def),
                            [](const OpKernelInfo& info) -> OpKernel* { return new DummyOpKernel(info); }));
       ORT_ENFORCE(st.IsOK(), st.ErrorMessage());
-
-      const KernelCreateInfo* kci;
-      ASSERT_STATUS_OK(reg->TryFindKernel(*p_node, "", &kci));
-      kernel_create_info_map[p_node->Index()] = kci;
     }
+
+    const KernelCreateInfo* kci;
+    ASSERT_STATUS_OK(reg->TryFindKernel(*p_node, "", &kci));
+    kernel_create_info_map[p_node->Index()] = kci;
   }
 
   void SetShape(std::string& name, TensorShapeProto* shape) { shape_map_[Arg(name)] = shape; }
@@ -248,20 +250,18 @@ class PlannerTest : public ::testing::Test {
     auto cpu_execution_provider = onnxruntime::make_unique<CPUExecutionProvider>(CPUExecutionProviderInfo());
     KernelRegistryManager kernel_registry_manager;
     kernel_registry_manager.RegisterKernelRegistry(reg);
-    ExecutionProviders execution_providers;
-    execution_providers.Add(onnxruntime::kCpuExecutionProvider, std::move(cpu_execution_provider));
-    auto status = kernel_registry_manager.RegisterKernels(execution_providers);
+    auto status = kernel_registry_manager.RegisterKernels(execution_providers_);
     EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
 
-    status = state_.FinalizeSessionState(ORT_TSTR(""), kernel_registry_manager);
+    status = state_->FinalizeSessionState(ORT_TSTR(""), kernel_registry_manager);
 
     // status = state_.CreateKernels(kernel_registry_manager);
     EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
     SequentialPlannerTestContext test_context(&shape_map_);
 
-    status = SequentialPlanner::CreatePlan(nullptr, GraphViewer(graph_), outer_scope_node_args, execution_providers,
+    status = SequentialPlanner::CreatePlan(nullptr, GraphViewer(graph_), outer_scope_node_args, execution_providers_,
                                            kernel_registry_manager, kernel_create_info_map,
-                                           state_.GetOrtValueNameIdxMap(), test_context, plan_);
+                                           state_->GetOrtValueNameIdxMap(), test_context, plan_);
 
     EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
     AllocationPlanTestUtility::BasicIntegrityCheck(*plan_, name_to_arg_.size());
@@ -291,7 +291,7 @@ class PlannerTest : public ::testing::Test {
  protected:
   Graph& GetGraph() { return graph_; }
   const SequentialExecutionPlan& GetPlan() const { return *plan_; }
-  const SessionState& GetState() const { return state_; }
+  const SessionState& GetState() const { return *state_; }
 };
 
 TEST_F(PlannerTest, ChainTest) {
