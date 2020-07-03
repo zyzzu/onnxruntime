@@ -271,7 +271,8 @@ class SessionState {
   Status FinalizeSessionState(const std::basic_string<PATH_CHAR_TYPE>& graph_loc,
                               KernelRegistryManager& kernel_registry_manager,
                               ExecutionMode execution_mode = ORT_SEQUENTIAL,
-                              const flexbuffers::Reference* serialized_data = nullptr);
+                              const flexbuffers::Reference* serialized_data = nullptr,
+                              bool remove_initializers = true);
 
   Status SerializeKernelCreateInfo(flexbuffers::Builder& builder) const;
 
@@ -304,7 +305,8 @@ class SessionState {
                                   KernelRegistryManager& kernel_registry_manager,
                                   _In_opt_ const Node* parent_node,
                                   ExecutionMode execution_mode,
-                                  const flexbuffers::Reference* serialized_data);
+                                  const flexbuffers::Reference* serialized_data,
+                                  bool remove_initializers);
 
 #ifdef ENABLE_TRAINING
   Status GeneratePatternGroupCache(

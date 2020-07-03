@@ -253,7 +253,10 @@ class PlannerTest : public ::testing::Test {
     auto status = kernel_registry_manager.RegisterKernels(execution_providers_);
     EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
 
-    status = state_->FinalizeSessionState(ORT_TSTR(""), kernel_registry_manager);
+    // Finalize session state but leave initializers so we can separately call CreatePlan for testing
+    const bool remove_initializers = false;
+    status = state_->FinalizeSessionState(ORT_TSTR(""), kernel_registry_manager, ExecutionMode::ORT_SEQUENTIAL,
+                                          nullptr, remove_initializers);
 
     // status = state_.CreateKernels(kernel_registry_manager);
     EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();

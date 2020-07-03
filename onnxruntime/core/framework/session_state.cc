@@ -570,15 +570,18 @@ const std::unordered_set<NodeIndex>* SessionState::GetToBeExecutedNodes(
 Status SessionState::FinalizeSessionState(const std::basic_string<PATH_CHAR_TYPE>& graph_location,
                                           KernelRegistryManager& kernel_registry_manager,
                                           ExecutionMode execution_mode,
-                                          const flexbuffers::Reference* serialized_data) {
-  return FinalizeSessionStateImpl(graph_location, kernel_registry_manager, nullptr, execution_mode, serialized_data);
+                                          const flexbuffers::Reference* serialized_data,
+                                          bool remove_initializers) {
+  return FinalizeSessionStateImpl(graph_location, kernel_registry_manager, nullptr, execution_mode,
+                                  serialized_data, remove_initializers);
 }
 
 Status SessionState::FinalizeSessionStateImpl(const std::basic_string<PATH_CHAR_TYPE>& graph_location,
                                               KernelRegistryManager& kernel_registry_manager,
                                               _In_opt_ const Node* parent_node,
                                               ExecutionMode execution_mode,
-                                              const flexbuffers::Reference* serialized_data) {
+                                              const flexbuffers::Reference* serialized_data,
+                                              bool remove_initializers) {
   // recursively populate the kernel create info.
   // it's simpler to do recursively when deserializing,
   // so also do it recursively when calling PopulateKernelCreateInfo for consistency
@@ -632,7 +635,9 @@ Status SessionState::FinalizeSessionStateImpl(const std::basic_string<PATH_CHAR_
   // remove weights from the graph now to save memory but in many cases it won't save memory, if the tensor was
   // preallocated with the some other tensors in a single 'allocate' call, which is very common.
   // TODO: make it better
-  CleanInitializedTensorsFromGraph();
+  if (remove_initializers) {
+    CleanInitializedTensorsFromGraph();
+  }
 
   ORT_RETURN_IF_ERROR(CreateKernels(kernel_registry_manager));
   ORT_RETURN_IF_ERROR(
@@ -667,7 +672,7 @@ Status SessionState::FinalizeSessionStateImpl(const std::basic_string<PATH_CHAR_
       // Currently all subgraphs are executed using the sequential EP due to potential deadlock with the current
       // parallel executor implementation.
       ORT_RETURN_IF_ERROR(subgraph_session_state.FinalizeSessionStateImpl(
-          graph_location, kernel_registry_manager, &node, ExecutionMode::ORT_SEQUENTIAL, nullptr));
+          graph_location, kernel_registry_manager, &node, ExecutionMode::ORT_SEQUENTIAL, nullptr, remove_initializers));
 
       // setup all the info for handling the feeds and fetches used in subgraph execution
       auto* p_op_kernel = GetMutableKernel(node.Index());

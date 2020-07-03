@@ -923,11 +923,15 @@ common::Status InferenceSession::InitializeImpl(const flexbuffers::Reference* se
       // ONNX type/shape inferencing)
     }
 
+    bool keep_initializers = !session_options_.optimized_model_filepath.empty();
+
+    ORT_RETURN_IF_ERROR_SESSIONID_(session_state_->FinalizeSessionState(model_location_, kernel_registry_manager_,
+                                                                        session_options_.execution_mode,
+                                                                        serialized_data,
+                                                                        !keep_initializers));
+
     // TODO: We could also use this for saving the flexbuffer. could just check file extension when deciding
     // the output format to use.
-
-    std::unique_ptr<flexbuffers::Builder> serializer;
-    size_t root_start = 0;
 
     if (!serialized_data && !session_options_.optimized_model_filepath.empty()) {
       if (session_options_.graph_optimization_level >= TransformerLevel::Level3) {
@@ -943,42 +947,35 @@ common::Status InferenceSession::InitializeImpl(const flexbuffers::Reference* se
         ORT_RETURN_IF_ERROR_SESSIONID_(Model::Save(*model_, session_options_.optimized_model_filepath));
       } else if (session_options_.optimized_model_format == SerializationFormat::Internal) {
         // TODO: Set initial buffer size based on model file size
-        serializer = onnxruntime::make_unique<flexbuffers::Builder>(4 * 1024 * 1024,
-                                                                    flexbuffers::BUILDER_FLAG_SHARE_KEYS_AND_STRINGS);
+        flexbuffers::Builder serializer(4 * 1024 * 1024,
+                                        flexbuffers::BUILDER_FLAG_SHARE_KEYS_AND_STRINGS);
 
-        root_start = serializer->StartMap();  // root map for all entries
+        size_t root_start = serializer.StartMap();  // root map for all entries
 
         // serialize model which includes the graph
         // we need to do this before FinalizeSessionState as the initializers will be removed from the Graph
         // during that process
-        auto model_start = serializer->StartMap("model");
-        ORT_RETURN_IF_ERROR_SESSIONID_(model_->Serialize(*serializer));
-        serializer->EndMap(model_start);
+        auto model_start = serializer.StartMap("model");
+        ORT_RETURN_IF_ERROR_SESSIONID_(model_->Serialize(serializer));
+        serializer.EndMap(model_start);
+
+        auto session_start = serializer.StartMap("session_state");
+        ORT_RETURN_IF_ERROR_SESSIONID_(session_state_->SerializeKernelCreateInfo(serializer));
+        serializer.EndMap(session_start);
+
+        serializer.EndMap(root_start);
+        serializer.Finish();
+
+        const std::vector<uint8_t>& bytes = serializer.GetBuffer();
+
+        std::ofstream outfile(session_options_.optimized_model_filepath,
+                              std::ofstream::out | std::ofstream::binary | std::ofstream::trunc);
+        outfile.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
       } else {
         ORT_RETURN_IF_ERROR_SESSIONID_(
             ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Invalid serialization format of ",
                             static_cast<int>(session_options_.optimized_model_format)));
       }
-    }
-
-    ORT_RETURN_IF_ERROR_SESSIONID_(session_state_->FinalizeSessionState(model_location_, kernel_registry_manager_,
-                                                                        session_options_.execution_mode,
-                                                                        serialized_data));
-
-    if (serializer) {
-      // now that SessionState is finalized it has the kernel create info we need so we can serialize it now
-      auto session_start = serializer->StartMap("session_state");
-      ORT_RETURN_IF_ERROR_SESSIONID_(session_state_->SerializeKernelCreateInfo(*serializer));
-      serializer->EndMap(session_start);
-
-      serializer->EndMap(root_start);
-      serializer->Finish();
-
-      const std::vector<uint8_t>& bytes = serializer->GetBuffer();
-
-      std::ofstream outfile(session_options_.optimized_model_filepath,
-                            std::ofstream::out | std::ofstream::binary | std::ofstream::trunc);
-      outfile.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
     }
 
     session_state_->ResolveMemoryPatternFlag();
