@@ -17,6 +17,12 @@ enum class FreeDimensionOverrideType {
   Name = 2
 };
 
+enum class SerializationFormat {
+  Invalid = 0,
+  OnnxProtobuf = 1,
+  Internal = 2
+};
+
 struct FreeDimensionOverride {
   std::string dim_identifier;
   FreeDimensionOverrideType dim_identifer_type;
@@ -34,6 +40,7 @@ struct SessionOptions {
 
   // non empty filepath enables serialization of the transformed optimized model to the specified filepath.
   std::basic_string<ORTCHAR_T> optimized_model_filepath;
+  SerializationFormat optimized_model_format = SerializationFormat::OnnxProtobuf;
 
   // enable the memory pattern optimization.
   // The idea is if the input shapes are the same, we could trace the internal memory allocation

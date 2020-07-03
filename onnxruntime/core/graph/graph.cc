@@ -2585,8 +2585,9 @@ Status Graph::ReplaceInitializedTensor(const ONNX_NAMESPACE::TensorProto& new_in
   auto existing_entry = std::find(mutable_initializers.pointer_begin(), mutable_initializers.pointer_end(),
                                   &old_initializer);
 
-  // these should always be in sync as the pointer in name_to_initial_tensor_ is to memory owned by graph_proto_
-  ORT_ENFORCE(existing_entry != mutable_initializers.pointer_end(),
+  // these should always be in sync as the pointer in name_to_initial_tensor_ is to memory owned by graph_proto_,
+  // unless we created the Graph via deserialization in which case GraphProto starts off empty
+  ORT_ENFORCE(existing_entry != mutable_initializers.pointer_end() || graph_proto_ == &deserialized_proto_data_,
               "graph_proto_ is not in sync with name_to_initial_tensor_");
 
   **existing_entry = new_initializer;
@@ -2814,6 +2815,9 @@ bool Graph::AddControlEdge(NodeIndex src_node_index, NodeIndex dst_node_index) {
 }
 
 const ONNX_NAMESPACE::GraphProto& Graph::ToGraphProto() {
+  ORT_ENFORCE(graph_proto_ != &deserialized_proto_data_,
+              "Graph was loaded via deserialization and cannot be converted to a GraphProto.");
+
   if (!GraphProtoSyncNeeded()) {
     return *graph_proto_;
   }
@@ -2827,9 +2831,12 @@ const ONNX_NAMESPACE::GraphProto& Graph::ToGraphProto() {
 }
 
 ONNX_NAMESPACE::GraphProto Graph::ToGraphProto() const {
+  ORT_ENFORCE(graph_proto_ != &deserialized_proto_data_,
+              "Graph was loaded via deserialization and cannot be converted to a GraphProto.");
   if (!GraphProtoSyncNeeded()) {
     return *graph_proto_;
   }
+
   GraphProto result;
   ToGraphProtoInternal(result);
 
@@ -3339,22 +3346,27 @@ Currently onnx-ml.pb is ~55KiB uncompressed so unknown if the engineering cost o
 ***********************/
 
 Status Graph::Serialize(flexbuffers::Builder& builder) const {
+  // TODO: Would need some sort of serialization versioning if we go with flexbuffers over flatbuffers
+  // and should store the version number here.
+
+  // helper to share a buffer for any protobuf types that we serialize to a blob
   auto protobuf_serializer = ProtobufSerializer(builder);
 
-  // initializers
+  // initializers: Vector[Blob]
   auto add_initializers = [this, &builder, &protobuf_serializer]() {
     for (const auto& pair : name_to_initial_tensor_) {
       protobuf_serializer.Serialize(*pair.second);
     }
   };
 
+  // node args: Vector[Blob]
   auto add_node_args = [this, &builder, &protobuf_serializer] {
     for (const auto& name_to_node_arg : node_args_) {
       protobuf_serializer.Serialize(name_to_node_arg.second->ToProto());
     }
   };
 
-  // create a Vector of Map entries
+  // nodes: Vector[Map]
   auto add_nodes = [this, &builder, &protobuf_serializer]() -> Status {
     for (const auto& node : nodes_) {
       if (node != nullptr) {
@@ -3365,6 +3377,7 @@ Status Graph::Serialize(flexbuffers::Builder& builder) const {
     return Status::OK();
   };
 
+  // node edges: Vector[Map]
   auto add_node_edges = [this, &builder]() -> void {
     for (const auto& node : nodes_) {
       if (node != nullptr) {
@@ -3372,9 +3385,6 @@ Status Graph::Serialize(flexbuffers::Builder& builder) const {
       }
     }
   };
-
-  // TODO: If we create a map of name to index in the serialized data for all the NodeArg's we could just store
-  // index numbers in a lot of places instead of names.
 
   auto add_graph_inputs = [this, &builder]() {
     std::for_each(graph_inputs_including_initializers_.cbegin(),
@@ -3387,12 +3397,7 @@ Status Graph::Serialize(flexbuffers::Builder& builder) const {
                   [&builder](const NodeArg* entry) { builder.String(entry->Name()); });
   };
 
-  // TODO: Would need some sort of serialization versioning if we go with flexbuffers over flatbuffers
-  // and should store the version number here
-  if (!name_to_initial_tensor_.empty()) {
-    builder.Vector("initializers", add_initializers);
-  }
-
+  builder.Vector("initializers", add_initializers);
   builder.Vector("node_args", add_node_args);
 
   builder.UInt("num_nodes", nodes_.size());
@@ -3405,16 +3410,16 @@ Status Graph::Serialize(flexbuffers::Builder& builder) const {
   builder.Vector("graph_outputs", add_graph_outputs);
   builder.Int("ir_version", ir_version_);
 
-  // TODO: Functions
+  // TODO: Can we support Functions?
+  ORT_ENFORCE(function_container_.empty(), "Serializing functions is currently unsupported.");
 
   return Status::OK();
 }
 
-Status Graph::Deserialize(const flexbuffers::Reference& fbr, const Model& owning_model, GraphProto* graph_proto,
+Status Graph::Deserialize(const flexbuffers::Reference& fbr, const Model& owning_model,
                           const logging::Logger& logger, std::unique_ptr<Graph>& graph) {
   ORT_RETURN_IF_ERROR(Graph::Deserialize(fbr, nullptr, nullptr, logger, graph));
   graph->owning_model_ = &owning_model;
-  graph->graph_proto_ = graph_proto;  // TODO: This is just an empty GraphProto from the model. we don't really need it
   return Status::OK();
 }
 
@@ -3422,7 +3427,6 @@ Status Graph::Deserialize(const flexbuffers::Reference& fbr, Graph* parent_graph
                           const logging::Logger& logger, std::unique_ptr<Graph>& graph) {
   // can't use make_unique as we're calling a private ctor
   graph.reset(new Graph(parent_graph, parent_node, logger));
-
   auto status = graph->Deserialize(fbr);
 
   return status;
@@ -3491,7 +3495,7 @@ Status Graph::Deserialize(const flexbuffers::Reference& fbr) {
 }
 
 Graph::Graph(Graph* parent_graph, const Node* parent_node, const logging::Logger& logger)
-    : graph_proto_(nullptr),
+    : graph_proto_(&deserialized_proto_data_),
       parent_graph_(parent_graph),
       parent_node_(parent_node),
       logger_(logger),

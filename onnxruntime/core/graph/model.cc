@@ -556,8 +556,7 @@ Status Model::Deserialize(const flexbuffers::Reference& fbr,
   }
 
   auto serialized_graph = m["graph"];
-  ORT_RETURN_IF_ERROR(Graph::Deserialize(serialized_graph, *model, model->model_proto_.mutable_graph(),
-                                         logger, model->graph_));
+  ORT_RETURN_IF_ERROR(Graph::Deserialize(serialized_graph, *model, logger, model->graph_));
 
   return Status::OK();
 }

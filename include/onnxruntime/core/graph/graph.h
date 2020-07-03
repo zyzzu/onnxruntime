@@ -931,13 +931,11 @@ class Graph {
 
   // deserialize the main graph
   static Status Deserialize(const flexbuffers::Reference& fbr, const Model& owning_model,
-                            ONNX_NAMESPACE::GraphProto* graph_proto,  // empty GraphProto from owning_model
                             const logging::Logger& logger, std::unique_ptr<Graph>& graph);
 
   // deserialize a subgraph
   static Status Deserialize(const flexbuffers::Reference& fbr, Graph* parent_graph, const Node* parent_node,
-                            const logging::Logger& logger,
-                            std::unique_ptr<Graph>& graph);
+                            const logging::Logger& logger, std::unique_ptr<Graph>& graph);
 
  private:
   ORT_DISALLOW_COPY_ASSIGNMENT_AND_MOVE(Graph);

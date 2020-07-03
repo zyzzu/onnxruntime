@@ -239,9 +239,6 @@ class InferenceSession {
     */
   common::Status Initialize() ORT_MUST_USE_RESULT;
 
-  // initialize and save Graph and SessionState
-  common::Status Initialize(flexbuffers::Builder& serializer) ORT_MUST_USE_RESULT;
-
   common::Status Run(const RunOptions& run_options, const std::vector<std::string>& feed_names,
                      const std::vector<OrtValue>& feeds, const std::vector<std::string>& output_names,
                      std::vector<OrtValue>* p_fetches) ORT_MUST_USE_RESULT;
@@ -386,10 +383,8 @@ class InferenceSession {
                          const Environment& session_env);
 
   // Initialize the session.
-  // Pass 'serializer' to save the model and session state
   // Pass 'serialized_data' to restore the session state from a saved version
-  common::Status InitializeImpl(flexbuffers::Builder* serializer = nullptr,
-                                const flexbuffers::Reference* serialized_data = nullptr) ORT_MUST_USE_RESULT;
+  common::Status InitializeImpl(const flexbuffers::Reference* serialized_data = nullptr) ORT_MUST_USE_RESULT;
 
   bool HasLocalSchema() const {
     return !custom_schema_registries_.empty();

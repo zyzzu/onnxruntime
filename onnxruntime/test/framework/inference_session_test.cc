@@ -431,7 +431,10 @@ TEST(InferenceSessionTests, TestModelSerialization) {
   SessionOptions so_opt;
   so_opt.session_logid = "InferenceSessionTests.TestModelSerialization";
   so_opt.graph_optimization_level = TransformerLevel::Default;
-  so_opt.optimized_model_filepath = ToWideString(so.optimized_model_filepath) + ToWideString("-TransformLevel-" + std::to_string(static_cast<uint32_t>(so_opt.graph_optimization_level)));
+  so_opt.optimized_model_filepath = ToWideString(so.optimized_model_filepath) +
+                                    ToWideString("-TransformLevel-" + std::to_string(static_cast<uint32_t>(
+                                                                          so_opt.graph_optimization_level)));
+
   InferenceSession session_object_opt{so_opt, GetEnvironment()};
   ASSERT_TRUE(session_object_opt.Load(so.optimized_model_filepath).IsOK());
   ASSERT_TRUE(session_object_opt.Initialize().IsOK());
@@ -2367,43 +2370,31 @@ TEST(InferenceSessionTests, InvalidSessionEnvCombination) {
 }
 
 TEST(InferenceSessionTests, SerializeToFlexBuffer) {
+  const auto output_file = ORT_TSTR("ort_github_issue_4031.onnx.ort");
   SessionOptions so;
   so.session_logid = "SerializeToFlexBuffer";
+  so.optimized_model_filepath = output_file;
+  so.optimized_model_format = SerializationFormat::Internal;
+
   InferenceSessionGetGraphWrapper session_object{so, GetEnvironment()};
 
   ASSERT_STATUS_OK(session_object.Load(ORT_TSTR("testdata/ort_github_issue_4031.onnx")));
 
-  flexbuffers::Builder builder(512, flexbuffers::BUILDER_FLAG_SHARE_KEYS_AND_STRINGS);
-  ASSERT_STATUS_OK(session_object.Initialize(builder));
+  ASSERT_STATUS_OK(session_object.Initialize());
 
-  // load a graph that has initializers and subgraphs
-  //std::shared_ptr<Model> model;
-  //ASSERT_STATUS_OK(Model::Load(ORT_TSTR("testdata/ort_github_issue_4031.onnx"), model, nullptr, *logger_));
-  //ASSERT_STATUS_OK(model->MainGraph().Resolve());
-  //const auto& graph = model->MainGraph();
+  size_t length = 0;
+  ASSERT_STATUS_OK(Env::Default().GetFileLength(output_file, length));
 
-  // simulate InferenceSession adding root map and calling model->Serialize under a map key of 'model'
-  //auto start = builder.StartMap();
+  std::ifstream bytes_stream(output_file, std::ifstream::in | std::ifstream::binary);
 
-  //builder.Map("model", [&model, &builder]() {
-  //  ASSERT_STATUS_OK(model->Serialize(builder));
-  //});
+  std::vector<uint8_t> bytes;
+  bytes.resize(length);
+  bytes_stream.read(reinterpret_cast<char*>(bytes.data()), length);
 
-  //builder.EndMap(start);
-
-  builder.Finish();
-
-  const std::vector<uint8_t>& bytes = builder.GetBuffer();
   auto bytes_span = gsl::make_span<std::vector<uint8_t>>(bytes);
 
   InferenceSessionGetGraphWrapper session_object2{so, GetEnvironment()};
   ASSERT_STATUS_OK(session_object2.Deserialize(bytes_span));
-
-  // InferenceSession will call the Model deserialize so replicate that
-  //auto root = flexbuffers::GetRoot(bytes_span.data(), bytes_span.size()).AsMap();
-  //auto serialized_model = root["model"];
-  //ASSERT_STATUS_OK(Model::Deserialize(serialized_model, *logger_, model2));
-  // const auto& graph2 = model2->MainGraph();
 
   const auto& graph = session_object.GetGraph();
   const auto& graph2 = session_object2.GetGraph();

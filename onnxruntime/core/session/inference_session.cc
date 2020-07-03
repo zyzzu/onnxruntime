@@ -313,7 +313,7 @@ Status InferenceSession::Deserialize(const gsl::span<const uint8_t>& flexbuffer_
 
   // Initialize takes the session_mutex_ as well so we need to have released it prior to calling this
   auto session_state = root["session_state"];
-  ORT_RETURN_IF_ERROR(InitializeImpl(nullptr, &session_state));
+  ORT_RETURN_IF_ERROR(InitializeImpl(&session_state));
 
   return Status::OK();
 }
@@ -823,12 +823,7 @@ common::Status InferenceSession::Initialize() {
   return InitializeImpl();
 }
 
-common::Status InferenceSession::Initialize(flexbuffers::Builder& serializer) {
-  return InitializeImpl(&serializer);
-}
-
-common::Status InferenceSession::InitializeImpl(flexbuffers::Builder* serializer,
-                                                const flexbuffers::Reference* serialized_data) {
+common::Status InferenceSession::InitializeImpl(const flexbuffers::Reference* serialized_data) {
   Status status = Status::OK();
   TimePoint tp;
   if (session_profiler_.IsEnabled()) {
@@ -931,9 +926,10 @@ common::Status InferenceSession::InitializeImpl(flexbuffers::Builder* serializer
     // TODO: We could also use this for saving the flexbuffer. could just check file extension when deciding
     // the output format to use.
 
+    std::unique_ptr<flexbuffers::Builder> serializer;
+    size_t root_start = 0;
+
     if (!serialized_data && !session_options_.optimized_model_filepath.empty()) {
-      // Serialize optimized ONNX model.
-      ORT_RETURN_IF_ERROR_SESSIONID_(Model::Save(*model_, session_options_.optimized_model_filepath));
       if (session_options_.graph_optimization_level >= TransformerLevel::Level3) {
         LOGS(*session_logger_, WARNING) << "Serializing Optimized ONNX model with Graph Optimization"
                                            " level greater than ORT_ENABLE_EXTENDED. The generated"
@@ -941,18 +937,28 @@ common::Status InferenceSession::InitializeImpl(flexbuffers::Builder* serializer
                                            " optimizations, and should only be used in the same environment"
                                            " the model was optimized for.";
       }
-    }
 
-    size_t root_start = 0;
-    if (serializer) {
-      root_start = serializer->StartMap();  // root map for all entries
+      if (session_options_.optimized_model_format == SerializationFormat::OnnxProtobuf) {
+        // Serialize optimized ONNX model.
+        ORT_RETURN_IF_ERROR_SESSIONID_(Model::Save(*model_, session_options_.optimized_model_filepath));
+      } else if (session_options_.optimized_model_format == SerializationFormat::Internal) {
+        // TODO: Set initial buffer size based on model file size
+        serializer = onnxruntime::make_unique<flexbuffers::Builder>(4 * 1024 * 1024,
+                                                                    flexbuffers::BUILDER_FLAG_SHARE_KEYS_AND_STRINGS);
 
-      // save model (which will include the graph).
-      // we need to do this before FinalizeSessionState as the initializers will be removed from the Graph
-      // during that process
-      auto model_start = serializer->StartMap("model");
-      ORT_RETURN_IF_ERROR_SESSIONID_(model_->Serialize(*serializer));
-      serializer->EndMap(model_start);
+        root_start = serializer->StartMap();  // root map for all entries
+
+        // serialize model which includes the graph
+        // we need to do this before FinalizeSessionState as the initializers will be removed from the Graph
+        // during that process
+        auto model_start = serializer->StartMap("model");
+        ORT_RETURN_IF_ERROR_SESSIONID_(model_->Serialize(*serializer));
+        serializer->EndMap(model_start);
+      } else {
+        ORT_RETURN_IF_ERROR_SESSIONID_(
+            ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Invalid serialization format of ",
+                            static_cast<int>(session_options_.optimized_model_format)));
+      }
     }
 
     ORT_RETURN_IF_ERROR_SESSIONID_(session_state_->FinalizeSessionState(model_location_, kernel_registry_manager_,
@@ -960,11 +966,19 @@ common::Status InferenceSession::InitializeImpl(flexbuffers::Builder* serializer
                                                                         serialized_data));
 
     if (serializer) {
+      // now that SessionState is finalized it has the kernel create info we need so we can serialize it now
       auto session_start = serializer->StartMap("session_state");
       ORT_RETURN_IF_ERROR_SESSIONID_(session_state_->SerializeKernelCreateInfo(*serializer));
       serializer->EndMap(session_start);
 
       serializer->EndMap(root_start);
+      serializer->Finish();
+
+      const std::vector<uint8_t>& bytes = serializer->GetBuffer();
+
+      std::ofstream outfile(session_options_.optimized_model_filepath,
+                            std::ofstream::out | std::ofstream::binary | std::ofstream::trunc);
+      outfile.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
     }
 
     session_state_->ResolveMemoryPatternFlag();
