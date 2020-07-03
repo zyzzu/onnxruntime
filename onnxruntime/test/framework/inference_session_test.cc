@@ -2372,11 +2372,9 @@ TEST(InferenceSessionTests, SerializeToFlexBuffer) {
   InferenceSessionGetGraphWrapper session_object{so, GetEnvironment()};
 
   ASSERT_STATUS_OK(session_object.Load(ORT_TSTR("testdata/ort_github_issue_4031.onnx")));
-  ASSERT_STATUS_OK(session_object.Initialize());
 
   flexbuffers::Builder builder(512, flexbuffers::BUILDER_FLAG_SHARE_KEYS_AND_STRINGS);
-
-  session_object.Serialize(builder);
+  ASSERT_STATUS_OK(session_object.Initialize(builder));
 
   // load a graph that has initializers and subgraphs
   //std::shared_ptr<Model> model;
@@ -2453,7 +2451,7 @@ TEST(InferenceSessionTests, SerializeToFlexBuffer) {
 
   // Now run
   ASSERT_STATUS_OK(session_object.Run(feeds, output_names, &fetches));
-  ASSERT_STATUS_OK(session_object2.Run(feeds, output_names, &fetches));
+  ASSERT_STATUS_OK(session_object2.Run(feeds, output_names, &fetches2));
 
   const auto& output = fetches[0].Get<Tensor>();
   ASSERT_TRUE(output.Shape().Size() == 1);

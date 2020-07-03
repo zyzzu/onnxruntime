@@ -305,13 +305,15 @@ Status InferenceSession::Deserialize(const gsl::span<const uint8_t>& flexbuffer_
     // need to go from unique_ptr to shared_ptr when moving into model_
     std::unique_ptr<Model> tmp_model;
     ORT_RETURN_IF_ERROR(Model::Deserialize(root["model"], *session_logger_, tmp_model));
+    ORT_RETURN_IF_ERROR(SaveModelMetadata(*tmp_model));
     model_ = std::move(tmp_model);
+
     is_model_loaded_ = true;
   }
 
   // Initialize takes the session_mutex_ as well so we need to have released it prior to calling this
   auto session_state = root["session_state"];
-  ORT_RETURN_IF_ERROR(InitializeImpl(&session_state));
+  ORT_RETURN_IF_ERROR(InitializeImpl(nullptr, &session_state));
 
   return Status::OK();
 }
@@ -821,7 +823,12 @@ common::Status InferenceSession::Initialize() {
   return InitializeImpl();
 }
 
-common::Status InferenceSession::InitializeImpl(const flexbuffers::Reference* serialized_data) {
+common::Status InferenceSession::Initialize(flexbuffers::Builder& serializer) {
+  return InitializeImpl(&serializer);
+}
+
+common::Status InferenceSession::InitializeImpl(flexbuffers::Builder* serializer,
+                                                const flexbuffers::Reference* serialized_data) {
   Status status = Status::OK();
   TimePoint tp;
   if (session_profiler_.IsEnabled()) {
@@ -921,6 +928,9 @@ common::Status InferenceSession::InitializeImpl(const flexbuffers::Reference* se
       // ONNX type/shape inferencing)
     }
 
+    // TODO: We could also use this for saving the flexbuffer. could just check file extension when deciding
+    // the output format to use.
+
     if (!serialized_data && !session_options_.optimized_model_filepath.empty()) {
       // Serialize optimized ONNX model.
       ORT_RETURN_IF_ERROR_SESSIONID_(Model::Save(*model_, session_options_.optimized_model_filepath));
@@ -933,9 +943,29 @@ common::Status InferenceSession::InitializeImpl(const flexbuffers::Reference* se
       }
     }
 
-    ORT_RETURN_IF_ERROR_SESSIONID_(
-        session_state_->FinalizeSessionState(model_location_, kernel_registry_manager_,
-                                             session_options_.execution_mode, serialized_data));
+    size_t root_start = 0;
+    if (serializer) {
+      root_start = serializer->StartMap();  // root map for all entries
+
+      // save model (which will include the graph).
+      // we need to do this before FinalizeSessionState as the initializers will be removed from the Graph
+      // during that process
+      auto model_start = serializer->StartMap("model");
+      ORT_RETURN_IF_ERROR_SESSIONID_(model_->Serialize(*serializer));
+      serializer->EndMap(model_start);
+    }
+
+    ORT_RETURN_IF_ERROR_SESSIONID_(session_state_->FinalizeSessionState(model_location_, kernel_registry_manager_,
+                                                                        session_options_.execution_mode,
+                                                                        serialized_data));
+
+    if (serializer) {
+      auto session_start = serializer->StartMap("session_state");
+      ORT_RETURN_IF_ERROR_SESSIONID_(session_state_->SerializeKernelCreateInfo(*serializer));
+      serializer->EndMap(session_start);
+
+      serializer->EndMap(root_start);
+    }
 
     session_state_->ResolveMemoryPatternFlag();
     is_inited_ = true;
@@ -1368,32 +1398,6 @@ std::string InferenceSession::EndProfiling() {
   }
   LOGS(*session_logger_, ERROR) << "Could not write a profile because no model was loaded.";
   return std::string();
-}
-
-Status InferenceSession::Serialize(flexbuffers::Builder& builder) const {
-  std::lock_guard<onnxruntime::OrtMutex> l(session_mutex_);
-
-  if (!is_inited_) {
-    Status status(ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Session must be initialized before being serialized."));
-    LOGS(*session_logger_, ERROR) << status.ErrorMessage();
-    return status;
-  }
-
-  auto root_start = builder.StartMap();  // root map for all entries
-
-  // save model (which will include the graph)
-  auto model_start = builder.StartMap("model");
-  ORT_RETURN_IF_ERROR(model_->Serialize(builder));
-  builder.EndMap(model_start);
-
-  // save KCI for now. TBD if we need anything else from SessionState
-  auto session_start = builder.StartMap("session_state");
-  ORT_RETURN_IF_ERROR(session_state_->SerializeKernelCreateInfo(builder));
-  builder.EndMap(session_start);
-
-  builder.EndMap(root_start);
-
-  return Status::OK();
 }
 
 // assumes model has already been loaded before

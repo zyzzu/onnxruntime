@@ -103,6 +103,7 @@ class KernelDef {
     // use name, start/end, domain, provider and the type constraints.
     // we wouldn't have two kernels that only differed by the inplace or alias info or memory types.
     // currently nothing sets exec_queue_id either
+    hash_ = 0;
     HashCombine(hash_, op_name_);
     HashCombine(hash_, op_since_version_start_);
     HashCombine(hash_, op_since_version_end_);
@@ -111,7 +112,8 @@ class KernelDef {
     for (const auto& key_value : type_constraints_) {
       HashCombine(hash_, key_value.first);
       for (const auto& data_type : key_value.second) {
-        HashCombine(hash_, DataTypeImpl::ToString(data_type));
+        // need to construct a std::string so it doesn't hash the address of a const char*
+        HashCombine(hash_, std::string(DataTypeImpl::ToString(data_type)));
       }
     }
 

@@ -825,19 +825,17 @@ Status Node::Serialize(flexbuffers::Builder& builder, ProtobufSerializer& protob
   }
 
   // serialize any subgraphs
-  if (!attr_to_subgraph_map_.empty()) {
-    auto subgraphs_start = builder.StartMap("subgraphs");
-    for (auto& entry : attr_to_subgraph_map_) {
-      // save under attribute name. when deserializing process the attributes with GraphProto values and lookup this
-      // info to deserialize the Graph instance
-      //builder.Key(entry.first);
-      auto subgraph_start = builder.StartMap(entry.first.c_str());
-      ORT_RETURN_IF_ERROR(entry.second->Serialize(builder));
-      builder.EndMap(subgraph_start);
-    }
-
-    builder.EndMap(subgraphs_start);
+  auto subgraphs_start = builder.StartMap("subgraphs");
+  for (auto& entry : attr_to_subgraph_map_) {
+    // save under attribute name. when deserializing process the attributes with GraphProto values and lookup this
+    // info to deserialize the Graph instance
+    //builder.Key(entry.first);
+    auto subgraph_start = builder.StartMap(entry.first.c_str());
+    ORT_RETURN_IF_ERROR(entry.second->Serialize(builder));
+    builder.EndMap(subgraph_start);
   }
+
+  builder.EndMap(subgraphs_start);
 
   builder.EndMap(map_start);
 
@@ -926,17 +924,13 @@ void Node::SerializeEdges(flexbuffers::Builder& builder) const {
 
   auto start = builder.StartMap();
 
-  if (!relationships_.input_edges.empty()) {
-    builder.TypedVector("input_edges", [this, &builder, &add_edges]() {
-      add_edges(relationships_.input_edges);
-    });
-  }
+  builder.TypedVector("input_edges", [this, &builder, &add_edges]() {
+    add_edges(relationships_.input_edges);
+  });
 
-  if (!relationships_.output_edges.empty()) {
-    builder.TypedVector("output_edges", [this, &builder, &add_edges]() {
-      add_edges(relationships_.output_edges);
-    });
-  }
+  builder.TypedVector("output_edges", [this, &builder, &add_edges]() {
+    add_edges(relationships_.output_edges);
+  });
 
   // skipping control edges. AFAIK nobody uses that. No usage of AddControlEdge found in the ORT repo
 
@@ -3401,29 +3395,13 @@ Status Graph::Serialize(flexbuffers::Builder& builder) const {
 
   builder.Vector("node_args", add_node_args);
 
-  if (!nodes_.empty()) {
-    auto nodes_start = builder.StartVector("nodes");
-    ORT_RETURN_IF_ERROR(add_nodes());
-    builder.EndVector(nodes_start, false, false);
-  }
+  builder.UInt("num_nodes", nodes_.size());
+  auto nodes_start = builder.StartVector("nodes");
+  ORT_RETURN_IF_ERROR(add_nodes());
+  builder.EndVector(nodes_start, false, false);
 
-  // TODO: How to handle graph with no edges? Can we call add_node_edges and see if nothing was added and
-  // delete the key if that was the case???
-  //bool has_edges = std::any_of(nodes_.begin(), nodes_.cend(),
-  //                             [](const std::unique_ptr<Node>& node) {
-  //                               return node != nullptr &&
-  //                                      (node->GetInputEdgesCount() > 0 || node->GetOutputEdgesCount() > 0);
-  //                             });
-
-  //if (has_edges) {
   builder.Vector("node_edges", add_node_edges);
-  //}
-
-  // Subgraph for If node takes all inputs from outer scope
-  if (!graph_inputs_including_initializers_.empty()) {
-    builder.Vector("graph_inputs", add_graph_inputs);  // separate into inc/exc initializers and overridable initializers when loading
-  }
-
+  builder.Vector("graph_inputs", add_graph_inputs);
   builder.Vector("graph_outputs", add_graph_outputs);
   builder.Int("ir_version", ir_version_);
 
@@ -3432,11 +3410,11 @@ Status Graph::Serialize(flexbuffers::Builder& builder) const {
   return Status::OK();
 }
 
-Status Graph::Deserialize(const flexbuffers::Reference& fbr, const Model& owning_model, const logging::Logger& logger,
-                          std::unique_ptr<Graph>& graph) {
+Status Graph::Deserialize(const flexbuffers::Reference& fbr, const Model& owning_model, GraphProto* graph_proto,
+                          const logging::Logger& logger, std::unique_ptr<Graph>& graph) {
   ORT_RETURN_IF_ERROR(Graph::Deserialize(fbr, nullptr, nullptr, logger, graph));
   graph->owning_model_ = &owning_model;
-
+  graph->graph_proto_ = graph_proto;  // TODO: This is just an empty GraphProto from the model. we don't really need it
   return Status::OK();
 }
 
@@ -3468,16 +3446,17 @@ Status Graph::Deserialize(const flexbuffers::Reference& fbr) {
     node_args_[n->Name()] = std::move(n);
   }
 
+  size_t num_nodes = root["num_nodes"].AsUInt32();
+  nodes_.resize(num_nodes);
   auto nodes = root["nodes"].AsVector();
-  nodes_.reserve(nodes.size());
   for (size_t cur = 0, end = nodes.size(); cur < end; ++cur) {
     std::unique_ptr<Node> node;
     ORT_RETURN_IF_ERROR(Node::Deserialize(nodes[cur], *this, logger_, node));
-    nodes_.push_back(std::move(node));
+    nodes_[node->Index()] = std::move(node);
   }
 
   auto node_edges = root["node_edges"].AsVector();
-  ORT_ENFORCE(node_edges.size() == nodes_.size(), "Expected one entry in node_edges per node");
+  ORT_ENFORCE(node_edges.size() == nodes.size(), "Expected one entry in node_edges per node");
   for (size_t cur = 0, end = node_edges.size(); cur < end; ++cur) {
     nodes_[cur]->DeserializeEdges(node_edges[cur], *this);
   }
@@ -3502,7 +3481,8 @@ Status Graph::Deserialize(const flexbuffers::Reference& fbr) {
   graph_outputs_.reserve(num_outputs);
   for (size_t cur = 0; cur < num_outputs; ++cur) {
     auto output_name = outputs[cur].ToString();
-    gsl::not_null<NodeArg*> input_nodearg = GetNodeArg(output_name);
+    gsl::not_null<NodeArg*> output_nodearg = GetNodeArg(output_name);
+    graph_outputs_.push_back(output_nodearg);
   }
 
   ir_version_ = root["ir_version"].AsInt64();

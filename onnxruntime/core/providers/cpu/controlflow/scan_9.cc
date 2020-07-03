@@ -160,14 +160,6 @@ class ScanImpl {
 
 template <>
 Scan<9>::Scan(const OpKernelInfo& info) : OpKernel(info) {
-  // make sure the attribute was present even though we don't need it here.
-  // The GraphProto is loaded as a Graph instance by main Graph::Resolve,
-  // and a SessionState instance for executing the subgraph is created by InferenceSession.
-  // This is available via Info().GetSubgraphSessionState("attribute_name") when Compute is called.
-  ONNX_NAMESPACE::GraphProto proto;
-  ORT_ENFORCE(info.GetAttr<ONNX_NAMESPACE::GraphProto>("body", &proto).IsOK());
-  (void)proto;
-
   ORT_ENFORCE(info.GetAttr<int64_t>("num_scan_inputs", &num_scan_inputs_).IsOK());
 
   auto num_loop_state_vars = info.GetInputCount() - num_scan_inputs_;

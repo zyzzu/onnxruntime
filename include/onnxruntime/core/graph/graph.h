@@ -931,6 +931,7 @@ class Graph {
 
   // deserialize the main graph
   static Status Deserialize(const flexbuffers::Reference& fbr, const Model& owning_model,
+                            ONNX_NAMESPACE::GraphProto* graph_proto,  // empty GraphProto from owning_model
                             const logging::Logger& logger, std::unique_ptr<Graph>& graph);
 
   // deserialize a subgraph

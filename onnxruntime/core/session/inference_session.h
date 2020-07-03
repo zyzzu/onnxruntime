@@ -239,6 +239,9 @@ class InferenceSession {
     */
   common::Status Initialize() ORT_MUST_USE_RESULT;
 
+  // initialize and save Graph and SessionState
+  common::Status Initialize(flexbuffers::Builder& serializer) ORT_MUST_USE_RESULT;
+
   common::Status Run(const RunOptions& run_options, const std::vector<std::string>& feed_names,
                      const std::vector<OrtValue>& feeds, const std::vector<std::string>& output_names,
                      std::vector<OrtValue>* p_fetches) ORT_MUST_USE_RESULT;
@@ -343,12 +346,6 @@ class InferenceSession {
     */
   std::string EndProfiling();
 
-  /**
-    * Serialize the model and necessary pieces of session state to be able to reload the model with no
-    * dependency on ONNX
-    */
-  Status Serialize(flexbuffers::Builder& builder) const;
-
  protected:
   /**
     * Load an ONNX model.
@@ -388,7 +385,11 @@ class InferenceSession {
   void ConstructorCommon(const SessionOptions& session_options,
                          const Environment& session_env);
 
-  common::Status InitializeImpl(const flexbuffers::Reference* serialized_data = nullptr) ORT_MUST_USE_RESULT;
+  // Initialize the session.
+  // Pass 'serializer' to save the model and session state
+  // Pass 'serialized_data' to restore the session state from a saved version
+  common::Status InitializeImpl(flexbuffers::Builder* serializer = nullptr,
+                                const flexbuffers::Reference* serialized_data = nullptr) ORT_MUST_USE_RESULT;
 
   bool HasLocalSchema() const {
     return !custom_schema_registries_.empty();

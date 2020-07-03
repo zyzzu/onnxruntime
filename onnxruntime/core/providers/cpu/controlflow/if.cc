@@ -124,14 +124,6 @@ class IfImpl {
 };
 
 If::If(const OpKernelInfo& info) : OpKernel(info) {
-  // make sure the required attributes are present even though we don't need it here.
-  // The GraphProto attributes are loaded as a Graph instance by main Graph::Resolve,
-  // and a SessionState instance for executing the subgraph is created by InferenceSession.
-  // This is available via Info().GetSubgraphSessionState("attribute_name") when Compute is called.
-  ONNX_NAMESPACE::GraphProto proto;
-  ORT_ENFORCE(info.GetAttr<ONNX_NAMESPACE::GraphProto>("then_branch", &proto).IsOK());
-  ORT_ENFORCE(info.GetAttr<ONNX_NAMESPACE::GraphProto>("else_branch", &proto).IsOK());
-  ORT_IGNORE_RETURN_VALUE(proto);
 }
 
 // we need this to be in the .cc so 'unique_ptr<Info> info_' can be handled

@@ -693,11 +693,8 @@ Status SessionState::SerializeKernelCreateInfo(flexbuffers::Builder& builder) co
     const SessionState& cur_session_state = *entry.second;
     builder.TypedVector(entry.first.c_str(), [&builder, &cur_session_state]() {
       for (const auto& kvp : cur_session_state.kernel_create_info_map_) {
-        builder.Int(kvp.first);  // node index
-        builder.Int(kvp.second->kernel_def->GetHash());
-
-        // TEMP check
-        assert(kvp.second->kernel_def->GetHash() != 0);
+        builder.UInt(kvp.first);  // node index
+        builder.UInt(kvp.second->kernel_def->GetHash());
       }
     });
 
@@ -729,7 +726,7 @@ Status SessionState::DeserializeKernelCreateInfo(const flexbuffers::Reference& f
   while (!queue.empty()) {
     const auto& queue_entry = queue.front();
     const std::string& key = queue_entry.first;
-    const SessionState& cur_session_state = *queue_entry.second;
+    SessionState& cur_session_state = *queue_entry.second;
     const auto& entries = kernel_info_map[key].AsTypedVector();
 
     for (size_t cur = 0, end = entries.size(); cur < end;) {
@@ -742,7 +739,7 @@ Status SessionState::DeserializeKernelCreateInfo(const flexbuffers::Reference& f
       // search with hash
       const KernelCreateInfo* kci = nullptr;
       ORT_RETURN_IF_ERROR(kernel_registry_manager.SearchKernelRegistry(*node, hash, &kci));
-      kernel_create_info_map_[node->Index()] = kci;
+      cur_session_state.kernel_create_info_map_[node->Index()] = kci;
     };
 
     for (const auto& entry : cur_session_state.subgraph_session_states_) {
