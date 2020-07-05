@@ -142,9 +142,6 @@ Status SessionState::PopulateKernelCreateInfo(KernelRegistryManager& kernel_regi
 Status SessionState::CreateKernels(const KernelRegistryManager& kernel_registry_manager) {
   const GraphNodes& nodes = graph_viewer_->Nodes();
   if (!nodes.empty()) {
-    ORT_ENFORCE(!kernel_create_info_map_.empty(),
-                "PopulateKernelCreateInfo or DeserializeKernelInfo should have been called");
-
     size_t max_nodeid = 0;
     for (auto& node : graph_viewer_->Nodes()) {
       max_nodeid = std::max(max_nodeid, node.Index());
@@ -153,6 +150,13 @@ Status SessionState::CreateKernels(const KernelRegistryManager& kernel_registry_
     session_kernels_.resize(max_nodeid + 1, nullptr);
     for (auto& node : graph_viewer_->Nodes()) {
       // construct and save the kernels
+      auto entry = kernel_create_info_map_.find(node.Index());
+      if (entry == kernel_create_info_map_.cend()) {
+        // PopulateKernelCreateInfo or DeserializeKernelInfo should have added the entry
+        return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Missing kernel create info for node '", node.Name(),
+                               "' (", node.OpType(), ") index ", node.Index());
+      }
+
       const KernelCreateInfo* kci = kernel_create_info_map_.at(node.Index());
       // TODO: Should custom ops have KCI by now?
       ORT_ENFORCE(kci, "Missing kernel create info for node ", node.Index());
