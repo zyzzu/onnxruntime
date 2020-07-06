@@ -204,6 +204,11 @@ typedef enum ExecutionMode {
   ORT_PARALLEL = 1,
 } ExecutionMode;
 
+typedef enum SerializationFormat {
+  ORT_ONNX_FORMAT = 0,
+  ORT_INTERNAL_FORMAT = 1,
+} SerializationFormat;
+
 struct OrtKernelInfo;
 typedef struct OrtKernelInfo OrtKernelInfo;
 struct OrtKernelContext;
@@ -826,15 +831,15 @@ struct OrtApi {
    * The caller is responsible for freeing each char * and the pointer
    * array by calling ReleaseAvailableProviders().
    */
-  ORT_API2_STATUS(GetAvailableProviders, _Outptr_ char ***out_ptr,
-                  _In_ int *provider_length);
+  ORT_API2_STATUS(GetAvailableProviders, _Outptr_ char*** out_ptr,
+                  _In_ int* provider_length);
 
   /**
    * \param ptr is the pointer to an array of available providers you
    * get after calling GetAvailableProviders().
    * \param providers_length is the number of available providers.
    */
-  ORT_API2_STATUS(ReleaseAvailableProviders, _In_ char **ptr,
+  ORT_API2_STATUS(ReleaseAvailableProviders, _In_ char** ptr,
                   _In_ int providers_length);
 };
 

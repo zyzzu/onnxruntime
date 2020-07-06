@@ -795,6 +795,7 @@ Status Node::Serialize(flexbuffers::Builder& builder, ProtobufSerializer& protob
   builder.Int("node_index", index_);
   builder.String("execution_provider_type", execution_provider_type_);
   builder.Int("node_type", static_cast<int32_t>(node_type_));
+  builder.Int("since_version", since_version_);
 
   // most fields are covered by a serialized NodeProto. ToProto will save an empty GraphProto for subgraphs as we
   // will de/serialize the subgraph into a Graph instance and don't need the GraphProto for it.
@@ -803,8 +804,9 @@ Status Node::Serialize(flexbuffers::Builder& builder, ProtobufSerializer& protob
   builder.Key("node_proto");
   protobuf_serializer.Serialize(proto);
 
-  if (func_body_ != nullptr) {
-    return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Serialization of function body is not currently supported");
+  // if type is Primitive it's an ONNX function and currently we have kernel implementations for all those
+  if (func_body_ != nullptr && node_type_ != Type::Primitive) {
+    return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Serialization of fused function body is not currently supported");
   }
 
   // Serialize remainder of definitions_ that are not covered by NodeProto
@@ -854,6 +856,7 @@ Status Node::Deserialize(const flexbuffers::Reference& fbr, Graph& graph, const 
 Status Node::Deserialize(const flexbuffers::Map& map, const logging::Logger& logger) {
   execution_provider_type_ = map["execution_provider_type"].ToString();
   node_type_ = static_cast<Node::Type>(map["node_type"].AsInt32());
+  since_version_ = map["since_version"].AsInt32();
 
   auto b = map["node_proto"].AsBlob();
   {
@@ -924,6 +927,8 @@ void Node::SerializeEdges(flexbuffers::Builder& builder) const {
 
   auto start = builder.StartMap();
 
+  builder.Int("node_index", index_);
+
   builder.TypedVector("input_edges", [this, &builder, &add_edges]() {
     add_edges(relationships_.input_edges);
   });
@@ -937,8 +942,7 @@ void Node::SerializeEdges(flexbuffers::Builder& builder) const {
   builder.EndMap(start);
 }
 
-void Node::DeserializeEdges(const flexbuffers::Reference& fbr, const Graph& graph) {
-  auto map = fbr.AsMap();
+void Node::DeserializeEdges(const flexbuffers::Map& map, const Graph& graph) {
   auto input_edges = map["input_edges"].AsTypedVector();
   auto output_edges = map["output_edges"].AsTypedVector();
 
@@ -952,7 +956,7 @@ void Node::DeserializeEdges(const flexbuffers::Reference& fbr, const Graph& grap
   };
 
   add_edges(input_edges, relationships_.input_edges);
-  add_edges(output_edges, relationships_.input_edges);
+  add_edges(output_edges, relationships_.output_edges);
 }
 
 // Constructor: Given a <GraphProto> loaded from model file, construct
@@ -2256,11 +2260,17 @@ Status Graph::VerifyNodeAndOpMatch(const ResolveOptions& options) {
       auto maxInclusiveVersion = DomainToVersionMap().find(domain)->second;
       node.op_ = schema_registry_->GetSchema(node.OpType(), maxInclusiveVersion, node.Domain());
 
-      if (node.op_ && node.op_->Deprecated()) {
-        node.op_ = nullptr;
+      if (!node.op_) {
+        return Status(ONNXRUNTIME, FAIL, "Fatal error: " + node.OpType() + " is not a registered function/op");
       }
 
-      if (node.op_ && (node.op_->HasFunction() || node.op_->HasContextDependentFunction())) {
+      if (node.op_->Deprecated()) {
+        return Status(ONNXRUNTIME, FAIL, "Fatal error: " + node.OpType() + " is deprecated");
+      }
+
+      node.since_version_ = node.op_->SinceVersion();
+
+      if (node.op_->HasFunction() || node.op_->HasContextDependentFunction()) {
         onnx::FunctionProto onnx_function_proto;
         onnx::FunctionBodyBuildContextImpl function_body_ctx(node_proto);
         if (node.op_->HasContextDependentFunction()) {
@@ -2274,10 +2284,6 @@ Status Graph::VerifyNodeAndOpMatch(const ResolveOptions& options) {
 
         function_container_.emplace_back(std::move(func_ptr));
         node.SetFunctionBody(*function_container_.back());
-      }
-
-      if (!node.op_) {
-        return Status(ONNXRUNTIME, FAIL, "Fatal error: " + node.OpType() + " is not a registered function/op");
       }
     }
 
@@ -3410,8 +3416,9 @@ Status Graph::Serialize(flexbuffers::Builder& builder) const {
   builder.Vector("graph_outputs", add_graph_outputs);
   builder.Int("ir_version", ir_version_);
 
-  // TODO: Can we support Functions?
-  ORT_ENFORCE(function_container_.empty(), "Serializing functions is currently unsupported.");
+  // TODO: Can we support Functions? At least need to be able to ignore the function body for an ONNX op
+  // where we have a kernel implementation.
+  // ORT_ENFORCE(function_container_.empty(), "Serializing functions is currently unsupported.");
 
   return Status::OK();
 }
@@ -3462,7 +3469,9 @@ Status Graph::Deserialize(const flexbuffers::Reference& fbr) {
   auto node_edges = root["node_edges"].AsVector();
   ORT_ENFORCE(node_edges.size() == nodes.size(), "Expected one entry in node_edges per node");
   for (size_t cur = 0, end = node_edges.size(); cur < end; ++cur) {
-    nodes_[cur]->DeserializeEdges(node_edges[cur], *this);
+    auto map = node_edges[cur].AsMap();
+    auto idx = map["node_index"].AsUInt64();
+    nodes_[idx]->DeserializeEdges(map, *this);
   }
 
   auto inputs = root["graph_inputs"].AsVector();

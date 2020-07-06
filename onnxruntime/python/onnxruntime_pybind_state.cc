@@ -373,14 +373,13 @@ void RegisterExecutionProviders(InferenceSession* sess, const std::vector<std::s
   }
 }
 
-void InitializeSession(InferenceSession* sess, const std::vector<std::string>& provider_types) {
+static void RegisterProviders(InferenceSession* sess, const std::vector<std::string>& provider_types) {
   if (provider_types.empty()) {
     // use default registration priority.
     RegisterExecutionProviders(sess, GetAllProviders());
   } else {
     RegisterExecutionProviders(sess, provider_types);
   }
-  OrtPybindThrowIfError(sess->Initialize());
 }
 
 void addGlobalMethods(py::module& m, const Environment& env) {
@@ -460,13 +459,13 @@ void addGlobalMethods(py::module& m, const Environment& env) {
             onnxruntime::CreateExecutionProviderFactory_MIGraphX(0)
 #endif
 #ifdef USE_VITISAI
-            onnxruntime::CreateExecutionProviderFactory_VitisAI("DPU", 0),
+                onnxruntime::CreateExecutionProviderFactory_VitisAI("DPU", 0),
 #endif
 #ifdef USE_ACL
             onnxruntime::CreateExecutionProviderFactory_ACL(0)
 #endif
 #ifdef USE_ARMNN
-            onnxruntime::CreateExecutionProviderFactory_ArmNN(0)
+                onnxruntime::CreateExecutionProviderFactory_ArmNN(0)
 #endif
         };
 
@@ -630,6 +629,10 @@ void addObjectMethods(py::module& m, Environment& env) {
       .def_static("cuda", []() { return OrtDevice::GPU; })
       .def_static("default_memory", []() { return OrtDevice::MemType::DEFAULT; });
 
+  py::enum_<SerializationFormat>(m, "SerializationFormat")
+      .value("ONNX", ORT_ONNX_FORMAT)
+      .value("ORT", ORT_INTERNAL_FORMAT);
+
   py::class_<SessionIOBinding> binding(m, "SessionIOBinding");
   binding
       .def(py::init<InferenceSession*>())
@@ -642,7 +645,7 @@ void addObjectMethods(py::module& m, Environment& env) {
           throw std::runtime_error("Either failed to get model inputs from the session object or the input def list was null");
         }
 
-        //Check if input is sequence of tensors 
+        //Check if input is sequence of tensors
         onnx::TypeProto type_proto;
         const auto& def_list = *px.second;
         auto ret_it = std::find_if(std::begin(def_list), std::end(def_list),
@@ -654,7 +657,7 @@ void addObjectMethods(py::module& m, Environment& env) {
         if (!temp) {
           throw std::runtime_error("Corresponding type_proto is null");
         } else {
-        type_proto = *temp;
+          type_proto = *temp;
         }
         if (type_proto.has_sequence_type()) {
           throw std::runtime_error("Cannot bind input to sequence of tensors");
@@ -681,8 +684,8 @@ void addObjectMethods(py::module& m, Environment& env) {
         OrtValue mlvalue;
 
         mlvalue.Init(p_tensor.release(),
-                       DataTypeImpl::GetType<Tensor>(),
-                       DataTypeImpl::GetType<Tensor>()->GetDeleteFunc());
+                     DataTypeImpl::GetType<Tensor>(),
+                     DataTypeImpl::GetType<Tensor>()->GetDeleteFunc());
         auto status = io_binding->Get()->BindInput(name, mlvalue);
         if (!status.IsOK())
           throw std::runtime_error("Error when bind input: " + status.ErrorMessage());
@@ -699,9 +702,9 @@ void addObjectMethods(py::module& m, Environment& env) {
         std::unique_ptr<Tensor> p_tensor = onnxruntime::make_unique<Tensor>(NumpyTypeToOnnxRuntimeType(type_num), shape, (void*)data_ptr, info);
         OrtValue mlvalue;
         mlvalue.Init(p_tensor.release(),
-                       DataTypeImpl::GetType<Tensor>(),
-                       DataTypeImpl::GetType<Tensor>()->GetDeleteFunc());
-        
+                     DataTypeImpl::GetType<Tensor>(),
+                     DataTypeImpl::GetType<Tensor>()->GetDeleteFunc());
+
         auto status = io_binding->Get()->BindOutput(name, mlvalue);
         if (!status.IsOK())
           throw std::runtime_error("Error when bind output: " + status.ErrorMessage());
@@ -743,6 +746,39 @@ Set this option to false if you don't want it. Default is True.)pbdoc")
                      R"pbdoc(Enable profiling for this session. Default is false.)pbdoc")
       .def_readwrite("optimized_model_filepath", &SessionOptions::optimized_model_filepath,
                      R"pbdoc(File path to serialize optimized model. By default, optimized model is not serialized if optimized_model_filepath is not provided.)pbdoc")
+      /*      
+      .def_property(
+          "optimized_model_format",
+          [](const SessionOptions* options) -> SerializationFormat {
+            SerializationFormat retval = ONNX;
+            switch (options->optimized_model_format) {
+              case onnxruntime::SerializationFormat::OnnxProtobuf: {
+                retval = ONNX;
+                break;
+              }
+              case onnxruntime::SerializationFormat::Internal: {
+                retval = ORT;
+                break;
+              }
+              default:
+                LOGS_DEFAULT(WARNING) << "Got invalid graph optimization level; defaulting to ONNX";
+                break;
+            }
+            return retval;
+          },
+          [](const SessionOptions* options, SerializationFormat format) -> void {
+            switch (format) {
+              case ONNX:
+                options->graph_optimization_level = onnxruntime::SerializationFormat::OnnxProtobuf;
+                break;
+              case ORT:
+                options->graph_optimization_level = onnxruntime::SerializationFormat::Internal;
+                break;
+            }
+          },
+          R"pbdoc(Format to use when serializing optimized model.)pbdoc")*/
+      .def_readwrite("serialized_model_format", &SessionOptions::optimized_model_format,
+                     R"pbdoc(Format to use when serializing optimized model.)pbdoc")
       .def_readwrite("enable_mem_pattern", &SessionOptions::enable_mem_pattern,
                      R"pbdoc(Enable the memory pattern optimization. Default is true.)pbdoc")
       .def_readwrite("logid", &SessionOptions::session_logid,
@@ -894,22 +930,36 @@ including arg name, arg type (contains both type and shape).)pbdoc")
       // In Python3, a Python bytes object will be passed to C++ functions that accept std::string or char*
       // without any conversion. So this init method can be used for model file path (string)
       // and model content (bytes)
-      .def(py::init([&env](const SessionOptions& so, const std::string& arg, bool is_arg_file_name) {
+      .def(py::init([&env](const SessionOptions& so) {
         // Given arg is the file path. Invoke the corresponding ctor().
-        if (is_arg_file_name) {
-          return onnxruntime::make_unique<InferenceSession>(so, env, arg);
-        }
-
-        // Given arg is the model content as bytes. Invoke the corresponding ctor().
-        std::istringstream buffer(arg);
-        return onnxruntime::make_unique<InferenceSession>(so, env, buffer);
+        return onnxruntime::make_unique<InferenceSession>(so, env);
       }))
       .def(
-          "load_model", [](InferenceSession* sess, std::vector<std::string>& provider_types) {
-            OrtPybindThrowIfError(sess->Load());
-            InitializeSession(sess, provider_types);
+          "load_model", [](InferenceSession* sess, const std::string& arg, bool is_arg_file_name, std::vector<std::string>& provider_types) {
+            if (is_arg_file_name) {
+              OrtPybindThrowIfError(sess->Load(arg));
+            } else {
+              // Given arg is the model content as bytes. Invoke the corresponding ctor().
+              std::istringstream buffer(arg);
+              OrtPybindThrowIfError(sess->Load(buffer));
+            }
+
+            RegisterProviders(sess, provider_types);
+            OrtPybindThrowIfError(sess->Initialize());
           },
           R"pbdoc(Load a model saved in ONNX format.)pbdoc")
+      .def(
+          "deserialize_model", [](InferenceSession* sess, const std::string& arg, bool is_arg_file_name, std::vector<std::string>& provider_types) {
+            RegisterProviders(sess, provider_types);
+
+            if (is_arg_file_name) {
+              OrtPybindThrowIfError(sess->Deserialize(arg));
+            } else {
+              gsl::span<const uint8_t> bytes_span(reinterpret_cast<const uint8_t*>(arg.data()), arg.size());
+              OrtPybindThrowIfError(sess->Deserialize(bytes_span));
+            }
+          },
+          R"pbdoc(Load a model saved in ORT format.)pbdoc")
       .def("run", [](InferenceSession* sess, std::vector<std::string> output_names, std::map<std::string, py::object> pyfeeds, RunOptions* run_options = nullptr) -> std::vector<py::object> {
         NameMLValMap feeds;
         for (auto _ : pyfeeds) {

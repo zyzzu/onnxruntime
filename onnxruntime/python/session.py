@@ -19,7 +19,7 @@ class Session:
     """
     This is the main class used to run a model.
     """
-    def __init__(self, sess):
+    def __init__(self):
         self._enable_fallback = True
 
     def _reset_session(self):
@@ -146,35 +146,25 @@ class InferenceSession(Session):
     """
     This is the main class used to run a model.
     """
-    def __init__(self, path_or_bytes, sess_options=None, providers=None):
+    def __init__(self, path_or_bytes, sess_options=None, providers=None, deserialize=False):
         """
         :param path_or_bytes: filename or serialized model in a byte string
         :param sess_options: session options
         :param providers: providers to use for session. If empty, will use
             all available providers.
         """
-        self._path_or_bytes = path_or_bytes
+        Session.__init__(self)
+
+        providers = providers or []
+
         self._sess_options = sess_options
-        self._load_model(providers or [])
         self._enable_fallback = True
-        Session.__init__(self, self._sess)
+        self._sess = C.InferenceSession(self._sess_options if self._sess_options else C.get_default_session_options())
 
-    def _load_model(self, providers):
-        if isinstance(self._path_or_bytes, str):
-            self._sess = C.InferenceSession(
-                self._sess_options if self._sess_options else C.get_default_session_options(), self._path_or_bytes,
-                True)
-        elif isinstance(self._path_or_bytes, bytes):
-            self._sess = C.InferenceSession(
-                self._sess_options if self._sess_options else C.get_default_session_options(), self._path_or_bytes,
-                False)
-        # elif isinstance(self._path_or_bytes, tuple):
-        # to remove, hidden trick
-        #   self._sess.load_model_no_init(self._path_or_bytes[0], providers)
+        if deserialize:
+            self._deserialize_model(path_or_bytes, providers)
         else:
-            raise TypeError("Unable to load from type '{0}'".format(type(self._path_or_bytes)))
-
-        self._sess.load_model(providers)
+            self._load_model(path_or_bytes, providers)
 
         self._sess_options = self._sess.session_options
         self._inputs_meta = self._sess.inputs_meta
@@ -188,6 +178,22 @@ class InferenceSession(Session):
             self._fallback_providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
         else:
             self._fallback_providers = ['CPUExecutionProvider']
+
+    def _deserialize_model(self, path_or_bytes, providers):
+        if isinstance(path_or_bytes, str):
+            self._sess.deserialize_model(path_or_bytes, True, providers)
+        elif isinstance(path_or_bytes, bytes):
+            self._sess.deserialize_model(path_or_bytes, False, providers)
+        else:
+            raise TypeError("Unable to load from type '{0}'".format(type(self.path_or_bytes)))
+
+    def _load_model(self, path_or_bytes, providers):
+        if isinstance(path_or_bytes, str):
+            self._sess.load_model(path_or_bytes, True, providers)
+        elif isinstance(path_or_bytes, bytes):
+            self._sess.load_model(path_or_bytes, False, providers)
+        else:
+            raise TypeError("Unable to load from type '{0}'".format(type(self.path_or_bytes)))
 
 
 class IOBinding:

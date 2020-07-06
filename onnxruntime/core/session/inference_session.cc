@@ -284,6 +284,25 @@ InferenceSession::InferenceSession(const SessionOptions& session_options, const 
   ConstructorCommon(session_options, session_env);
 }
 
+Status InferenceSession::Deserialize(const std::string& model_uri) {
+  return Deserialize(ToWideString(model_uri));
+}
+
+Status InferenceSession::Deserialize(const std::wstring& model_uri) {
+  size_t length = 0;
+  ORT_RETURN_IF_ERROR(Env::Default().GetFileLength(model_uri.c_str(), length));
+
+  std::ifstream bytes_stream(model_uri, std::ifstream::in | std::ifstream::binary);
+
+  std::vector<uint8_t> bytes;
+  bytes.resize(length);
+  bytes_stream.read(reinterpret_cast<char*>(bytes.data()), length);
+
+  auto bytes_span = gsl::make_span<std::vector<uint8_t>>(bytes);
+
+  return Deserialize(bytes_span);
+}
+
 Status InferenceSession::Deserialize(const gsl::span<const uint8_t>& flexbuffer_serialized_bytes) {
   auto root = flexbuffers::GetRoot(flexbuffer_serialized_bytes.data(), flexbuffer_serialized_bytes.size()).AsMap();
 
@@ -699,7 +718,7 @@ common::Status InferenceSession::TransformGraph(onnxruntime::Graph& graph,
         oss << node.Name() << ":";
       oss << node.OpType();
       if (node.Op()) {
-        oss << "(" << node.Op()->since_version() << ")";
+        oss << "(" << node.SinceVersion() << ")";
       }
       return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, oss.str());
     } else {
@@ -942,10 +961,10 @@ common::Status InferenceSession::InitializeImpl(const flexbuffers::Reference* se
                                            " the model was optimized for.";
       }
 
-      if (session_options_.optimized_model_format == SerializationFormat::OnnxProtobuf) {
+      if (session_options_.optimized_model_format == ORT_ONNX_FORMAT) {
         // Serialize optimized ONNX model.
         ORT_RETURN_IF_ERROR_SESSIONID_(Model::Save(*model_, session_options_.optimized_model_filepath));
-      } else if (session_options_.optimized_model_format == SerializationFormat::Internal) {
+      } else if (session_options_.optimized_model_format == ORT_INTERNAL_FORMAT) {
         // TODO: Set initial buffer size based on model file size
         flexbuffers::Builder serializer(4 * 1024 * 1024,
                                         flexbuffers::BUILDER_FLAG_SHARE_KEYS_AND_STRINGS);

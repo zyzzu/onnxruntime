@@ -411,7 +411,7 @@ class PlannerImpl {
         std::ostringstream errormsg;
         errormsg << "No suitable kernel definition found for op " << pnode->OpType();
         if (pnode->Op() != nullptr) {
-          errormsg << "(" << pnode->Op()->since_version() << ")";
+          errormsg << "(" << pnode->SinceVersion() << ")";
         }
         if (!pnode->Name().empty()) errormsg << " (node " << pnode->Name() << ")";
         return Status(ONNXRUNTIME, FAIL, errormsg.str());

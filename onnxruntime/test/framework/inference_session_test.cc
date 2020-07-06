@@ -2374,7 +2374,7 @@ TEST(InferenceSessionTests, SerializeToFlexBuffer) {
   SessionOptions so;
   so.session_logid = "SerializeToFlexBuffer";
   so.optimized_model_filepath = output_file;
-  so.optimized_model_format = SerializationFormat::Internal;
+  so.optimized_model_format = ORT_INTERNAL_FORMAT;
 
   InferenceSessionGetGraphWrapper session_object{so, GetEnvironment()};
 
@@ -2382,19 +2382,21 @@ TEST(InferenceSessionTests, SerializeToFlexBuffer) {
 
   ASSERT_STATUS_OK(session_object.Initialize());
 
-  size_t length = 0;
-  ASSERT_STATUS_OK(Env::Default().GetFileLength(output_file, length));
-
-  std::ifstream bytes_stream(output_file, std::ifstream::in | std::ifstream::binary);
-
-  std::vector<uint8_t> bytes;
-  bytes.resize(length);
-  bytes_stream.read(reinterpret_cast<char*>(bytes.data()), length);
-
-  auto bytes_span = gsl::make_span<std::vector<uint8_t>>(bytes);
-
   InferenceSessionGetGraphWrapper session_object2{so, GetEnvironment()};
-  ASSERT_STATUS_OK(session_object2.Deserialize(bytes_span));
+
+  //size_t length = 0;
+  //ASSERT_STATUS_OK(Env::Default().GetFileLength(output_file, length));
+
+  //std::ifstream bytes_stream(output_file, std::ifstream::in | std::ifstream::binary);
+
+  //std::vector<uint8_t> bytes;
+  //bytes.resize(length);
+  //bytes_stream.read(reinterpret_cast<char*>(bytes.data()), length);
+
+  //auto bytes_span = gsl::make_span<std::vector<uint8_t>>(bytes);
+
+  //ASSERT_STATUS_OK(session_object2.Deserialize(bytes_span));
+  ASSERT_STATUS_OK(session_object2.Deserialize(output_file));
 
   const auto& graph = session_object.GetGraph();
   const auto& graph2 = session_object2.GetGraph();

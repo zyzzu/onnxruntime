@@ -174,12 +174,14 @@ def run_test_dir(model_or_dir):
     if os.path.isdir(model_or_dir):
         model_dir = os.path.abspath(model_or_dir)
         # check there's only one onnx file
-        models = glob.glob(os.path.join(model_dir, '*.onnx'))
+        onnx_models = glob.glob(os.path.join(model_dir, '*.onnx'))
+        ort_models = glob.glob(os.path.join(model_dir, '*.ort'))
+        models = onnx_models + ort_models
         if len(models) > 1:
-            raise ValueError(f"'Multiple .onnx files found in {model_dir}. '"
-                             "'Please provide specific .onnx file as input.")
+            raise ValueError(f"'Multiple .onnx and/or .ort files found in {model_dir}. '"
+                             "'Please provide specific .onnx or .ort file as input.")
         elif len(models) == 0:
-            raise ValueError(f"'No .onnx files found in {model_dir}.")
+            raise ValueError(f"'No .onnx or .ort files found in {model_dir}.")
 
         model_path = models[0]
     else:
@@ -192,7 +194,9 @@ def run_test_dir(model_or_dir):
     if not test_dirs:
         raise ValueError(f"No directories with name starting with 'test' were found in {model_dir}.")
 
-    sess = ort.InferenceSession(model_path)
+    deserialize = model_path.endswith('.ort')
+
+    sess = ort.InferenceSession(model_path, deserialize=deserialize)
 
     for d in test_dirs:
         print(d)
@@ -200,6 +204,14 @@ def run_test_dir(model_or_dir):
 
         if expected_outputs:
             output_names = list(expected_outputs.keys())
+            # handle case where there's a single expected output file but no name in it (empty string for name)
+            # e.g. ONNX test models 20190729\opset8\tf_mobilenet_v2_1.4_224
+            if len(output_names) == 1 and output_names[0] == '':
+                output_names = [o.name for o in sess.get_outputs()]
+                assert(len(output_names) == 1)
+                expected_outputs[output_names[0]] = expected_outputs['']
+                expected_outputs.pop('')
+
         else:
             output_names = [o.name for o in sess.get_outputs()]
 

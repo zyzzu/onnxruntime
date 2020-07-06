@@ -104,6 +104,11 @@ class Node {
   @remarks The graph containing this node must be resolved, otherwise nullptr will be returned. */
   const ONNX_NAMESPACE::OpSchema* Op() const noexcept;
 
+  /** Gets the Node's SinceVersion.
+  Allows decoupling from OpSchema for models using the ORT format with no ONNX dependencies.
+  */
+  const ONNX_NAMESPACE::OperatorSetVersion SinceVersion() const noexcept { return since_version_; }
+
   /** Gets the Node's Node::Type. */
   Node::Type NodeType() const noexcept;
 
@@ -406,8 +411,9 @@ class Node {
   static Status Deserialize(const flexbuffers::Reference& fbr, Graph& graph, const logging::Logger& logger,
                             std::unique_ptr<Node>& node);
   Status Deserialize(const flexbuffers::Map& map, const logging::Logger& logger);
+
   void SerializeEdges(flexbuffers::Builder& builder) const;
-  void DeserializeEdges(const flexbuffers::Reference& fbr, const Graph& graph);
+  void DeserializeEdges(const flexbuffers::Map& map, const Graph& graph);
 
   void Init(const std::string& name,
             const std::string& op_type,
@@ -452,8 +458,11 @@ class Node {
   // OperatorSet domain of op_type_.
   std::string domain_;
 
+  ONNX_NAMESPACE::OperatorSetVersion since_version_;
+
   // OperatorSchema that <*this> node refers to.
   const ONNX_NAMESPACE::OpSchema* op_ = nullptr;
+
   Node::Type node_type_ = Node::Type::Primitive;
 
   // The function body is owned by graph_

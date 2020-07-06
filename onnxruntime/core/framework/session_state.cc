@@ -696,6 +696,7 @@ Status SessionState::SerializeKernelCreateInfo(flexbuffers::Builder& builder) co
   // add kernel info for the MainGraph first, and for all subgraphs after that
   std::queue<Entry> queue;
   queue.push({"MainGraph", this});
+  uint32_t subgraph_prefix = 0;
 
   while (!queue.empty()) {
     const Entry& entry = queue.front();
@@ -709,15 +710,42 @@ Status SessionState::SerializeKernelCreateInfo(flexbuffers::Builder& builder) co
 
     queue.pop();
 
-    // add any subgraphs
-    for (const auto& node_idx_to_subgraph_ss : cur_session_state.subgraph_session_states_) {
-      const Node& node = *cur_session_state.graph_.GetNode(node_idx_to_subgraph_ss.first);
-      for (const auto& name_to_subgraph_session_state : node_idx_to_subgraph_ss.second) {
-        const std::string& attr_name = name_to_subgraph_session_state.first;
-        SessionState& subgraph_session_state = *name_to_subgraph_session_state.second;
-        std::string key(std::to_string(node.Index()) + "_" + attr_name);
-        queue.push({key, &subgraph_session_state});
+    // add any subgraphs. need to use deterministic order
+    if (!cur_session_state.subgraph_session_states_.empty()) {
+      std::vector<NodeIndex> sorted_node_indexes;
+      sorted_node_indexes.reserve(cur_session_state.subgraph_session_states_.size());
+      std::transform(cur_session_state.subgraph_session_states_.cbegin(),
+                     cur_session_state.subgraph_session_states_.cend(),
+                     std::back_inserter(sorted_node_indexes),
+                     [](auto const& pair) {
+                       return pair.first;
+                     });
+
+      std::sort(sorted_node_indexes.begin(), sorted_node_indexes.end());
+
+      for (const NodeIndex idx : sorted_node_indexes) {
+        const Node& node = *cur_session_state.graph_.GetNode(idx);
+        const auto& session_states = cur_session_state.subgraph_session_states_.at(idx);
+
+        for (const auto& name_to_subgraph_session_state : session_states) {
+          const std::string& attr_name = name_to_subgraph_session_state.first;
+          SessionState& subgraph_session_state = *name_to_subgraph_session_state.second;
+          std::string key(std::to_string(subgraph_prefix) + "_" + std::to_string(node.Index()) + "_" + attr_name);
+          queue.push({key, &subgraph_session_state});
+        }
       }
+
+      //for (const auto& node_idx_to_subgraph_ss : cur_session_state.subgraph_session_states_) {
+      //  const Node& node = *cur_session_state.graph_.GetNode(node_idx_to_subgraph_ss.first);
+      //  for (const auto& name_to_subgraph_session_state : node_idx_to_subgraph_ss.second) {
+      //    const std::string& attr_name = name_to_subgraph_session_state.first;
+      //    SessionState& subgraph_session_state = *name_to_subgraph_session_state.second;
+      //    std::string key(std::to_string(node.Index()) + "_" + attr_name);
+      //    queue.push({key, &subgraph_session_state});
+      //  }
+      //}
+
+      ++subgraph_prefix;
     }
   }
 
@@ -731,12 +759,12 @@ Status SessionState::DeserializeKernelCreateInfo(const flexbuffers::Reference& f
 
   std::queue<Entry> queue;
   queue.push({"MainGraph", this});
+  uint32_t subgraph_prefix = 0;
 
   while (!queue.empty()) {
     const auto& queue_entry = queue.front();
-    const std::string& key = queue_entry.first;
+    const auto& entries = kernel_info_map[queue_entry.first].AsTypedVector();
     SessionState& cur_session_state = *queue_entry.second;
-    const auto& entries = kernel_info_map[key].AsTypedVector();
 
     for (size_t cur = 0, end = entries.size(); cur < end;) {
       size_t node_index = static_cast<size_t>(entries[cur++].AsUInt64());
@@ -751,16 +779,40 @@ Status SessionState::DeserializeKernelCreateInfo(const flexbuffers::Reference& f
       cur_session_state.kernel_create_info_map_[node->Index()] = kci;
     };
 
-    for (const auto& entry : cur_session_state.subgraph_session_states_) {
-      const Node& node = *cur_session_state.graph_.GetNode(entry.first);
-      for (const auto& name_to_subgraph_session_state : entry.second) {
-        const std::string& attr_name = name_to_subgraph_session_state.first;
-        SessionState& subgraph_session_state = *name_to_subgraph_session_state.second;
-        std::string subgraph_key(std::to_string(node.Index()) + "_" + attr_name);
-        queue.push({subgraph_key, &subgraph_session_state});
-      }
-    }
+    if (!cur_session_state.subgraph_session_states_.empty()) {
+      std::vector<NodeIndex> sorted_node_indexes;
+      sorted_node_indexes.reserve(cur_session_state.subgraph_session_states_.size());
+      std::transform(cur_session_state.subgraph_session_states_.cbegin(),
+                     cur_session_state.subgraph_session_states_.cend(),
+                     std::back_inserter(sorted_node_indexes),
+                     [](auto const& pair) {
+                       return pair.first;
+                     });
 
+      std::sort(sorted_node_indexes.begin(), sorted_node_indexes.end());
+      for (const NodeIndex idx : sorted_node_indexes) {
+        const Node& node = *cur_session_state.graph_.GetNode(idx);
+        const auto& session_states = cur_session_state.subgraph_session_states_.at(idx);
+        for (const auto& name_to_subgraph_session_state : session_states) {
+          const std::string& attr_name = name_to_subgraph_session_state.first;
+          SessionState& subgraph_session_state = *name_to_subgraph_session_state.second;
+          std::string key(std::to_string(subgraph_prefix) + "_" + std::to_string(node.Index()) + "_" + attr_name);
+          queue.push({key, &subgraph_session_state});
+        }
+      }
+
+      //for (const auto& entry : cur_session_state.subgraph_session_states_) {
+      //  const Node& node = *cur_session_state.graph_.GetNode(entry.first);
+      //  for (const auto& name_to_subgraph_session_state : entry.second) {
+      //    const std::string& attr_name = name_to_subgraph_session_state.first;
+      //    SessionState& subgraph_session_state = *name_to_subgraph_session_state.second;
+      //    std::string subgraph_key(std::to_string(subgraph_prefix) + "_" + std::to_string(node.Index()) + "_" + attr_name);
+      //    queue.push({subgraph_key, &subgraph_session_state});
+      //  }
+      //}
+
+      ++subgraph_prefix;
+    }
     queue.pop();
   }
 

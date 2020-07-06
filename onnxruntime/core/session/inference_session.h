@@ -152,6 +152,8 @@ class InferenceSession {
 
   // construct instance with session_options and session_env first, then call Deserialize
   Status Deserialize(const gsl::span<const uint8_t>& flexbuffer_serialized_bytes);
+  Status Deserialize(const std::string& model_uri);
+  Status Deserialize(const std::wstring& model_uri);
 
   virtual ~InferenceSession();
 
