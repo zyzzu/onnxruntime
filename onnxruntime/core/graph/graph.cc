@@ -472,6 +472,19 @@ void Node::SetNodeType(Node::Type node_type) noexcept {
   node_type_ = node_type;
 }
 
+const Function* Node::GetFunctionBody(bool try_init_func_body) {
+  if (nullptr != func_body_) {
+    return func_body_;
+  }
+
+  // Initialize function body
+  if (try_init_func_body) {
+    graph_->InitFunctionBodyForNode(*this);
+  }
+
+  return func_body_;
+}
+
 const Function* Node::GetFunctionBody() const noexcept {
   return func_body_;
 }
@@ -2269,21 +2282,11 @@ Status Graph::VerifyNodeAndOpMatch(const ResolveOptions& options) {
       }
 
       node.since_version_ = node.op_->SinceVersion();
+	  
+	  InitFunctionBodyForNode(node);
 
-      if (node.op_->HasFunction() || node.op_->HasContextDependentFunction()) {
-        onnx::FunctionProto onnx_function_proto;
-        onnx::FunctionBodyBuildContextImpl function_body_ctx(node_proto);
-        if (node.op_->HasContextDependentFunction()) {
-          node.op_->BuildContextDependentFunction(function_body_ctx, onnx_function_proto);
-        } else {
-          onnx_function_proto = *(node.op_->GetFunction());
-        }
-
-        auto func_ptr = onnxruntime::make_unique<onnxruntime::FunctionImpl>(*this, node.Index(), onnx_function_proto,
-                                                                            logger_);
-
-        function_container_.emplace_back(std::move(func_ptr));
-        node.SetFunctionBody(*function_container_.back());
+      if (!node.op_) {
+        return Status(ONNXRUNTIME, FAIL, "Fatal error: " + node.OpType() + " is not a registered function/op");
       }
     }
 
@@ -2327,6 +2330,26 @@ Status Graph::VerifyNodeAndOpMatch(const ResolveOptions& options) {
   }
 
   return Status::OK();
+}
+
+void Graph::InitFunctionBodyForNode(Node& node) {
+  if (node.op_ && (node.op_->HasFunction() || node.op_->HasContextDependentFunction())) {
+    onnx::FunctionProto onnx_function_proto;
+    if (node.op_->HasContextDependentFunction()) {
+      NodeProto node_proto;
+      node.ToProto(node_proto);
+      onnx::FunctionBodyBuildContextImpl function_body_ctx(node_proto);
+      node.op_->BuildContextDependentFunction(function_body_ctx, onnx_function_proto);
+    } else {
+      onnx_function_proto = *(node.op_->GetFunction());
+    }
+
+    auto func_ptr = onnxruntime::make_unique<onnxruntime::FunctionImpl>(*this, node.Index(), onnx_function_proto,
+                                                                        logger_);
+
+    function_container_.emplace_back(std::move(func_ptr));
+    node.SetFunctionBody(*function_container_.back());
+  }
 }
 
 void Graph::FindAllSubgraphs(std::vector<Graph*>& subgraphs) {
@@ -2497,11 +2520,7 @@ void Graph::SetDescription(const std::string& description) {
 }
 
 const Path& Graph::ModelPath() const {
-  // this should never happen. we only need ModelPath to load external data for a TensorProto,
-  // and external data shouldn't apply to a deserialized Graph instance (only time owning_model_ should be nullptr)
-  // as the serialized version should contain everything directly.
-  ORT_ENFORCE(owning_model_, "Calling ModelPath on a Graph instance loaded from deserialization.");
-  return owning_model_->ModelPath();
+  return owning_model_.ModelPath();
 }
 
 void Graph::AddInitializedTensor(const TensorProto& tensor) {

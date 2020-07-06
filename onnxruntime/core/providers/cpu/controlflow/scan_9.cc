@@ -159,7 +159,7 @@ class ScanImpl {
 };
 
 template <>
-Scan<9>::Scan(const OpKernelInfo& info) : OpKernel(info) {
+Scan<9>::Scan(const OpKernelInfo& info) : IControlFlowKernel(info) {
   ORT_ENFORCE(info.GetAttr<int64_t>("num_scan_inputs", &num_scan_inputs_).IsOK());
 
   auto num_loop_state_vars = info.GetInputCount() - num_scan_inputs_;

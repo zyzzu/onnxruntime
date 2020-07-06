@@ -123,7 +123,7 @@ class IfImpl {
   std::vector<std::pair<AllocationType, OrtValue>> outputs_;
 };
 
-If::If(const OpKernelInfo& info) : OpKernel(info) {
+If::If(const OpKernelInfo& info) : IControlFlowKernel(info) {
 }
 
 // we need this to be in the .cc so 'unique_ptr<Info> info_' can be handled

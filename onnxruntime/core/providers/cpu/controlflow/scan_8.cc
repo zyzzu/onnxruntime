@@ -135,7 +135,7 @@ class Scan8Impl {
 };
 
 template <>
-Scan<8>::Scan(const OpKernelInfo& info) : OpKernel(info) {
+Scan<8>::Scan(const OpKernelInfo& info) : IControlFlowKernel(info) {
   ORT_ENFORCE(info.GetAttr<int64_t>("num_scan_inputs", &num_scan_inputs_).IsOK());
 
   ReadDirections(info, "directions", input_directions_, num_scan_inputs_);

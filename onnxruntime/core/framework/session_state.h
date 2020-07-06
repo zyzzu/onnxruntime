@@ -71,7 +71,8 @@ class SessionState {
                concurrency::ThreadPool* inter_op_thread_pool,
                const DataTransferManager& data_transfer_mgr,
                const logging::Logger& logger,
-               profiling::Profiler& profiler)
+               profiling::Profiler& profiler,
+               bool use_deterministic_compute = false)
       : graph_(graph),
         execution_providers_(execution_providers),
         logger_(logger),
@@ -79,7 +80,8 @@ class SessionState {
         enable_mem_pattern_(enable_mem_pattern),
         thread_pool_(thread_pool),
         inter_op_thread_pool_(inter_op_thread_pool),
-        data_transfer_mgr_(data_transfer_mgr) {
+        data_transfer_mgr_(data_transfer_mgr),
+        use_deterministic_compute_(use_deterministic_compute) {
     SetupAllocators();
   }
 
@@ -188,6 +190,8 @@ class SessionState {
   */
   Status UpdateMemoryPatternGroupCache(const std::vector<std::reference_wrapper<const TensorShape>>& input_shape,
                                        std::unique_ptr<MemoryPatternGroup> mem_patterns) const;
+
+  bool GetUseDeterministicCompute() const {return use_deterministic_compute_;}
 
   /**
   Get enable memory pattern flag
@@ -401,6 +405,8 @@ class SessionState {
   bool export_fused_dll_ = false;
   FuncManager fused_funcs_mgr_;
   const DataTransferManager& data_transfer_mgr_;
+
+  bool use_deterministic_compute_;
 
   std::unique_ptr<NodeIndexInfo> node_index_info_;
   std::multimap<int, std::unique_ptr<FeedsFetchesManager>> cached_feeds_fetches_managers_;

@@ -216,7 +216,7 @@ static Status ConcatenateCpuOutput(std::vector<OrtValue>& per_iteration_output,
   return Status::OK();
 }
 
-Loop::Loop(const OpKernelInfo& info) : OpKernel(info) {
+Loop::Loop(const OpKernelInfo& info) : IControlFlowKernel(info) {
   concat_output_func_ = ConcatenateCpuOutput;
 }
 
