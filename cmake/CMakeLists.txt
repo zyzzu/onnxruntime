@@ -74,6 +74,7 @@ option(onnxruntime_USE_AVX512 "Use AVX512 instructions" OFF)
 option(onnxruntime_USE_LLVM "Build tvm with LLVM" OFF)
 option(onnxruntime_USE_OPENMP "Build with OpenMP support" OFF)
 option(onnxruntime_BUILD_SHARED_LIB "Build a shared library" OFF)
+option(onnxruntime_ORT_MODEL_FORMAT "Limit build to components required to execute an ORT formatted model only" OFF)
 option(onnxruntime_ENABLE_MICROSOFT_INTERNAL "Use this option to enable/disable microsoft internal only code" OFF)
 option(onnxruntime_USE_NUPHAR "Build with Nuphar" OFF)
 option(onnxruntime_USE_VITISAI "Build with Vitis-AI" OFF)
@@ -195,6 +196,10 @@ if(onnxruntime_DISABLE_RTTI)
   else()
     add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>")
   endif()
+endif()
+
+if(onnxruntime_ORT_MODEL_FORMAT)
+  add_compile_definitions(ORT_MODEL_FORMAT_ONLY)
 endif()
 
 set(REPO_ROOT ${PROJECT_SOURCE_DIR}/..)
@@ -613,6 +618,7 @@ if (APPLE)
   string(APPEND CMAKE_CXX_FLAGS " -Wno-deprecated")
   string(APPEND CMAKE_C_FLAGS " -Wno-deprecated")
 endif()
+
 # ONNX
 add_subdirectory(onnx)
 

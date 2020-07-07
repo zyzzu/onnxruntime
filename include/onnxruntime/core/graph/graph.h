@@ -312,7 +312,7 @@ class Node {
   }
 
   /** Get the const subgraphs from a node.
-  @remarks Creates a new vector so calling ContainsSubgraphs first is preferred. */
+  @remarks Creates a new vector so calling ContainsSubgraphs first is recommended. */
   std::vector<gsl::not_null<const Graph*>> GetSubgraphs() const;
 
   /** Gets a map of attribute name to the mutable Graph instances for all subgraphs of the Node.
@@ -329,12 +329,14 @@ class Node {
   /** Sets the execution ProviderType that this Node will be executed by. */
   void SetExecutionProviderType(ProviderType execution_provider_type);
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   /** Gets the NodeProto representation of this Node.
   @param update_subgraphs Update the GraphProto values for any subgraphs in the returned NodeProto.
                           If graph optimization has been run this is most likely required
                           to ensure the complete Graph is valid.
   */
   void ToProto(ONNX_NAMESPACE::NodeProto& proto, bool update_subgraphs = false, bool serializing = false) const;
+#endif
 
   /** Call the provided function for all explicit inputs, implicit inputs, and outputs of this Node.
       If the NodeArg is an explicit or implicit input, is_input will be true when func is called.
@@ -418,16 +420,27 @@ class Node {
 
   Node(NodeIndex index, Graph& graph) : index_(index), graph_(&graph) {}
 
-  // de/serialization. Need to separate the Node from the edges as we need all the node instances to exist
-  // before recreating the edges as they contain a Node* and not just the node index.
-  // TODO: we could change the edge to have NodeIndex so this wasn't necessary if there's no perf hit from doing so
-  Status Serialize(flexbuffers::Builder& builder, ProtobufSerializer& protobuf_serializer) const;
+  // DESERIALIZATION
+  // Include in the full build so we can test serialization + deserialization in one build
+  // TODO: See if we want a separate #define to exclude this from the default full build as well
   static Status Deserialize(const flexbuffers::Reference& fbr, Graph& graph, const logging::Logger& logger,
                             std::unique_ptr<Node>& node);
   Status Deserialize(const flexbuffers::Map& map, const logging::Logger& logger);
 
-  void SerializeEdges(flexbuffers::Builder& builder) const;
   void DeserializeEdges(const flexbuffers::Map& map, const Graph& graph);
+
+  // deserialize a Graph instance for an attribute that contains a GraphProto
+  Status CreateSubgraph(const std::string& attr_name, const flexbuffers::Map& map, const logging::Logger& logger);
+
+  const Definitions& GetDefinitions() const noexcept { return definitions_; }
+  const Relationships& GetRelationships() const noexcept { return relationships_; }
+
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+  // de/serialization. Need to separate the Node from the edges as we need all the node instances to exist
+  // before recreating the edges as they contain a Node* and not just the node index.
+  // TODO: we could change the edge to have NodeIndex so this wasn't necessary if there's no perf hit from doing so
+  Status Serialize(flexbuffers::Builder& builder, ProtobufSerializer& protobuf_serializer) const;
+  void SerializeEdges(flexbuffers::Builder& builder) const;
 
   void Init(const std::string& name,
             const std::string& op_type,
@@ -439,8 +452,6 @@ class Node {
 
   // create a Graph instance for an attribute that contains a GraphProto
   void CreateSubgraph(const std::string& attr_name);
-  // deserialize a Graph instance for an attribute that contains a GraphProto
-  Status CreateSubgraph(const std::string& attr_name, const flexbuffers::Map& map, const logging::Logger& logger);
 
   // internal only method to allow selected classes to directly alter the input/output definitions and arg counts
   Definitions& MutableDefinitions() noexcept;
@@ -450,15 +461,15 @@ class Node {
 
   const std::vector<std::unique_ptr<Graph>>& MutableSubgraphs() noexcept { return subgraphs_; }
 
-  const Definitions& GetDefinitions() const noexcept { return definitions_; }
-  const Relationships& GetRelationships() const noexcept { return relationships_; }
-
   void SetNodeType(Node::Type node_type) noexcept;
 
+  // Function currently has a hard dependency on onnx::OpSchema. If we can remove that it could potentially be
+  // supported in an ORT_MODEL_FORMAT_ONLY build if needed
   void SetFunctionBody(const Function& func);
 
   // validate and update the input arg count
   common::Status UpdateInputArgCount();
+#endif
 
   // Node index. Default to impossible value rather than 0.
   NodeIndex index_ = std::numeric_limits<NodeIndex>::max();
@@ -517,6 +528,7 @@ class Graph {
  public:
   /** Gets the Graph name. */
   const std::string& Name() const noexcept;
+
   /** Sets the Graph name. */
   void SetName(const std::string& name);
 
@@ -803,6 +815,7 @@ class Graph {
     return domain_to_version_;
   }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   /** Gets the GraphProto representation of this Graph. */
   const ONNX_NAMESPACE::GraphProto& ToGraphProto();
   ONNX_NAMESPACE::GraphProto ToGraphProto() const;
@@ -849,6 +862,7 @@ class Graph {
   @remarks Note that the output order matters for subgraphs.
   */
   void SetOutputs(const std::vector<const NodeArg*>& outputs);
+#endif
 
   /** Returns true if this is a subgraph or false if it is a high-level graph. */
   bool IsSubgraph() const { return parent_graph_ != nullptr; }
@@ -898,10 +912,12 @@ class Graph {
     }
   }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   /** During constant folding it may become possible to infer the shape for a node.
       To avoid running a full Resolve allow an individual node to have the shape inferencing re-run.
   */
   Status UpdateShapeInference(Node& node);
+#endif
 
   // Options to control Graph::Resolve.
   struct ResolveOptions {
@@ -941,6 +957,8 @@ class Graph {
     return resolve_context_.outer_scope_node_args.find(name) != resolve_context_.outer_scope_node_args.cend();
   }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+
   /** Construct a Graph instance for a subgraph that is created from a GraphProto attribute in a Node.
   Inherits some properties from the parent graph.
   @param parent_graph The Graph containing the Node that has the GraphProto attribute.
@@ -948,12 +966,15 @@ class Graph {
   @param subgraph_proto The GraphProto from the Node attribute.
   */
   Graph(Graph& parent_graph, const Node& parent_node, ONNX_NAMESPACE::GraphProto& subgraph_proto);
+#endif
 
   virtual ~Graph();
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   // EXPERIMENTAL
   // Create a flexbuffer from the Graph
   Status Serialize(flexbuffers::Builder& builder) const;
+#endif
 
   // deserialize the main graph
   static Status Deserialize(const flexbuffers::Reference& fbr, const Model& owning_model,
@@ -970,6 +991,15 @@ class Graph {
   // Graph::LoadGraph All other access should be via the public API.
   friend class Model;
 
+  //
+  // Experimental serialization
+  //
+  // create empty Graph instance to re-create from serialized data.
+  // as the deserialize is more likely to be error prone we're preferring returning a Status from that than throwing
+  Graph(const Model& owning_model, Graph* parent_graph, const Node* parent_node, const logging::Logger& logger);
+  Status Deserialize(const flexbuffers::Reference& fbr);
+
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   // Constructor: Given a <GraphProto> loaded from model file, construct
   // a <Graph> object. Used by Model to create a Graph instance.
   Graph(const Model& owning_model,
@@ -991,18 +1021,12 @@ class Graph {
         const logging::Logger& logger,
         const std::unordered_map<std::string, const ONNX_NAMESPACE::FunctionProto*>& model_functions);
 
-  //
-  // Experimental serialization
-  // create empty Graph instance to re-create from serialized data.
-  // as the deserialize is more likely to be error prone we're preferring returning a Status from that than throwing
-  Graph(const Model& owning_model, Graph* parent_graph, const Node* parent_node, const logging::Logger& logger);
-  Status Deserialize(const flexbuffers::Reference& fbr);
-
   void InitializeStateFromModelFileGraphProto();
 
   // Add node with specified <node_proto>.
   Node& AddNode(const ONNX_NAMESPACE::NodeProto& node_proto,
                 const ArgNameToTypeMap& name_to_type);
+#endif
 
   Version IrVersion() const noexcept {
     return ir_version_;
@@ -1066,13 +1090,8 @@ class Graph {
   // order if <Status> returned is "OK", otherwise it's undefined.
   common::Status PerformTopologicalSortAndCheckIsAcyclic();
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   common::Status PerformTypeAndShapeInferencing(const ResolveOptions& options);
-
-  // Recursively find all subgraphs including nested subgraphs
-  void FindAllSubgraphs(std::vector<Graph*>& subgraphs);
-
-  // Iterate this Graph instance and all subgraphs, calling the provided function for each.
-  common::Status ForThisAndAllSubgraphs(const std::vector<Graph*>& subgraphs, std::function<Status(Graph&)> func);
 
   common::Status InferAndVerifyTypeMatch(Node& node, const ONNX_NAMESPACE::OpSchema& op, const ResolveOptions& options);
 
@@ -1084,6 +1103,13 @@ class Graph {
 
   // Apply type-inference and type-checking to all inputs and initializers:
   common::Status TypeCheckInputsAndInitializers();
+#endif
+
+  // Recursively find all subgraphs including nested subgraphs
+  void FindAllSubgraphs(std::vector<Graph*>& subgraphs);
+
+  // Iterate this Graph instance and all subgraphs, calling the provided function for each.
+  common::Status ForThisAndAllSubgraphs(const std::vector<Graph*>& subgraphs, std::function<Status(Graph&)> func);
 
   // Compute set of input and initializer names and checking for duplicate names
   common::Status VerifyInputAndInitializerNames();
@@ -1092,13 +1118,17 @@ class Graph {
   // information matches between node and op.
   common::Status VerifyNodeAndOpMatch(const ResolveOptions& options);
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   // Set graph inputs/outputs when resolving a graph..
   common::Status SetGraphInputsOutputs();
+#endif
 
   // Clear all unused initializers
   void CleanUnusedInitializers(const std::unordered_set<std::string>* initializer_names_to_preserve = nullptr);
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   gsl::not_null<Node*> AllocateNode();
+#endif
 
   // Release the node.
   // @returns false if node_index was invalid.
@@ -1119,7 +1149,9 @@ class Graph {
 
   void AddFunction(const ONNX_NAMESPACE::FunctionProto* func_proto);
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   void ToGraphProtoInternal(ONNX_NAMESPACE::GraphProto& graph_proto) const;
+#endif
 
   template <typename TInstance>
   static auto GetProducerNodeImpl(
