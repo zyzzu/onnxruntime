@@ -606,7 +606,7 @@ Status Node::CreateSubgraph(const std::string& attr_name, const flexbuffers::Map
   auto serialized_graph = map[attr_name];
 
   std::unique_ptr<Graph> subgraph;
-  ORT_RETURN_IF_ERROR(Graph::Deserialize(serialized_graph, graph_, this, logger, subgraph));
+  ORT_RETURN_IF_ERROR(Graph::Deserialize(serialized_graph, *graph_, *this, logger, subgraph));
 
   attr_to_subgraph_map_.insert({std::string(attr_name), gsl::not_null<Graph*>{subgraph.get()}});
   subgraphs_.push_back(std::move(subgraph));
@@ -998,10 +998,10 @@ Graph::Graph(const Model& owning_model,
              IOnnxRuntimeOpSchemaCollectionPtr schema_registry,
              const logging::Logger& logger,
              const std::unordered_map<std::string, const ONNX_NAMESPACE::FunctionProto*>& model_functions)
-    : Graph(&owning_model, graph_proto, domain_to_version, ir_version, schema_registry, nullptr, nullptr, logger,
+    : Graph(owning_model, graph_proto, domain_to_version, ir_version, schema_registry, nullptr, nullptr, logger,
             model_functions) {}
 
-Graph::Graph(const Model* owning_model,
+Graph::Graph(const Model& owning_model,
              GraphProto* graph_proto, const std::unordered_map<std::string, int>& domain_to_version, Version ir_version,
              IOnnxRuntimeOpSchemaCollectionPtr schema_registry, Graph* parent_graph, const Node* parent_node,
              const logging::Logger& logger,
@@ -2282,8 +2282,8 @@ Status Graph::VerifyNodeAndOpMatch(const ResolveOptions& options) {
       }
 
       node.since_version_ = node.op_->SinceVersion();
-	  
-	  InitFunctionBodyForNode(node);
+
+      InitFunctionBodyForNode(node);
 
       if (!node.op_) {
         return Status(ONNXRUNTIME, FAIL, "Fatal error: " + node.OpType() + " is not a registered function/op");
@@ -3442,17 +3442,27 @@ Status Graph::Serialize(flexbuffers::Builder& builder) const {
   return Status::OK();
 }
 
-Status Graph::Deserialize(const flexbuffers::Reference& fbr, const Model& owning_model,
-                          const logging::Logger& logger, std::unique_ptr<Graph>& graph) {
-  ORT_RETURN_IF_ERROR(Graph::Deserialize(fbr, nullptr, nullptr, logger, graph));
-  graph->owning_model_ = &owning_model;
-  return Status::OK();
+Graph::Graph(const Model& owning_model, Graph* parent_graph, const Node* parent_node, const logging::Logger& logger)
+    : owning_model_(owning_model),
+      graph_proto_(&deserialized_proto_data_),
+      parent_graph_(parent_graph),
+      parent_node_(parent_node),
+      logger_(logger),
+      is_loaded_from_model_file_(true) {  // true as the Graph isn't manually constructed from scratch
 }
 
-Status Graph::Deserialize(const flexbuffers::Reference& fbr, Graph* parent_graph, const Node* parent_node,
+Status Graph::Deserialize(const flexbuffers::Reference& fbr, const Model& owning_model,
+                          const logging::Logger& logger, std::unique_ptr<Graph>& graph) {
+  graph.reset(new Graph(owning_model, nullptr, nullptr, logger));
+
+  auto status = graph->Deserialize(fbr);
+  return status;
+}
+
+Status Graph::Deserialize(const flexbuffers::Reference& fbr, Graph& parent_graph, const Node& parent_node,
                           const logging::Logger& logger, std::unique_ptr<Graph>& graph) {
   // can't use make_unique as we're calling a private ctor
-  graph.reset(new Graph(parent_graph, parent_node, logger));
+  graph.reset(new Graph(parent_graph.owning_model_, &parent_graph, &parent_node, logger));
   auto status = graph->Deserialize(fbr);
 
   return status;
@@ -3522,11 +3532,4 @@ Status Graph::Deserialize(const flexbuffers::Reference& fbr) {
   return Status::OK();
 }
 
-Graph::Graph(Graph* parent_graph, const Node* parent_node, const logging::Logger& logger)
-    : graph_proto_(&deserialized_proto_data_),
-      parent_graph_(parent_graph),
-      parent_node_(parent_node),
-      logger_(logger),
-      is_loaded_from_model_file_(true) {  // true as the Graph isn't manually constructed from scratch
-}
 }  // namespace onnxruntime

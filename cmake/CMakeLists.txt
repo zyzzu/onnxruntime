@@ -626,6 +626,8 @@ if (onnxruntime_RUN_ONNX_TESTS)
   add_definitions(-DORT_RUN_EXTERNAL_ONNX_TESTS)
 endif()
 
+set(FLATBUFFERS_BUILD_TESTS OFF)
+set(FLATBUFFERS_INSTALL OFF)
 add_subdirectory(external/flatbuffers EXCLUDE_FROM_ALL)
 list(APPEND onnxruntime_EXTERNAL_DEPENDENCIES flatbuffers)
 list(APPEND onnxruntime_EXTERNAL_LIBRARIES flatbuffers)

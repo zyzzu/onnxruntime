@@ -123,7 +123,7 @@ class Node {
   Nodes of type "Fused" are created during partitioning and the function body 
   initialization for such nodes also happens during node creation. Therefore, 
   initialization of function body will happen via this method only in case 2 mentioned above.
-  */ 
+  */
   const Function* GetFunctionBody(bool try_init_func_body = true);
 
   /** Gets the function body if applicable otherwise nullptr. */
@@ -472,7 +472,7 @@ class Node {
   // OperatorSet domain of op_type_.
   std::string domain_;
 
-  ONNX_NAMESPACE::OperatorSetVersion since_version_;
+  ONNX_NAMESPACE::OperatorSetVersion since_version_ = -1;
 
   // OperatorSchema that <*this> node refers to.
   const ONNX_NAMESPACE::OpSchema* op_ = nullptr;
@@ -823,7 +823,7 @@ class Graph {
   @param node Node with Node::Type of Node::Type::Fused
   @returns Status indicating success or providing an error message.
   */
-  Status InlineFunction(Node& node); 
+  Status InlineFunction(Node& node);
 
   /** Initialize function body for the given node */
   void InitFunctionBodyForNode(Node& node);
@@ -960,7 +960,7 @@ class Graph {
                             const logging::Logger& logger, std::unique_ptr<Graph>& graph);
 
   // deserialize a subgraph
-  static Status Deserialize(const flexbuffers::Reference& fbr, Graph* parent_graph, const Node* parent_node,
+  static Status Deserialize(const flexbuffers::Reference& fbr, Graph& parent_graph, const Node& parent_node,
                             const logging::Logger& logger, std::unique_ptr<Graph>& graph);
 
  private:
@@ -969,11 +969,6 @@ class Graph {
   // This friendship relationship should only be used to call Graph::Graph and
   // Graph::LoadGraph All other access should be via the public API.
   friend class Model;
-
-  // create empty Graph instance to re-create from serialized data.
-  // as the deserialize is more likely to be error prone we're preferring returning a Status from that than throwing
-  Graph(Graph* parent_graph, const Node* parent_node, const logging::Logger& logger);
-  Status Deserialize(const flexbuffers::Reference& fbr);
 
   // Constructor: Given a <GraphProto> loaded from model file, construct
   // a <Graph> object. Used by Model to create a Graph instance.
@@ -986,7 +981,7 @@ class Graph {
         const std::unordered_map<std::string, const ONNX_NAMESPACE::FunctionProto*>& model_functions);
 
   // internal use by the Graph class only
-  Graph(const Model* owning_model,
+  Graph(const Model& owning_model,
         ONNX_NAMESPACE::GraphProto* graph_proto,
         const std::unordered_map<std::string, int>& domain_to_version,
         Version ir_version,
@@ -995,6 +990,13 @@ class Graph {
         const Node* parent_node,
         const logging::Logger& logger,
         const std::unordered_map<std::string, const ONNX_NAMESPACE::FunctionProto*>& model_functions);
+
+  //
+  // Experimental serialization
+  // create empty Graph instance to re-create from serialized data.
+  // as the deserialize is more likely to be error prone we're preferring returning a Status from that than throwing
+  Graph(const Model& owning_model, Graph* parent_graph, const Node* parent_node, const logging::Logger& logger);
+  Status Deserialize(const flexbuffers::Reference& fbr);
 
   void InitializeStateFromModelFileGraphProto();
 
@@ -1144,7 +1146,7 @@ class Graph {
     return results;
   }
 
-  const Model* owning_model_ = nullptr;
+  const Model& owning_model_;
 
   // GraphProto to store name, version, initializer.
   // When serializing <*this> Graph to a GraphProto, the nodes and

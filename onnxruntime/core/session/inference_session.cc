@@ -789,8 +789,6 @@ common::Status InferenceSession::CreateSubgraphSessionState(Graph& graph, Sessio
   return Status::OK();
 }
 
-      // Downcast is safe, since only control flow nodes have subgraphs (node.GetAttributeNameToMutableSubgraphMap() is non-empty)
-      auto& control_flow_kernel = dynamic_cast<controlflow::IControlFlowKernel&>(*p_op_kernel);
 bool InferenceSession::IsInitialized() const {
   std::lock_guard<onnxruntime::OrtMutex> l(session_mutex_);
   return is_inited_;

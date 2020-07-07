@@ -12,6 +12,11 @@ class ValueInfoProto;
 class TensorProto;
 class TypeProto;
 class AttributeProto;
+// define some types that would come from the ONNX library if we were building against it.
+#if defined(ORT_MODEL_FORMAT_ONLY)
+using OperatorSetVersion = int;
+#endif
+
 }  // namespace ONNX_NAMESPACE
 
 namespace onnxruntime {

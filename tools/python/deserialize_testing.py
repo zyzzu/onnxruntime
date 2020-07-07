@@ -1,7 +1,6 @@
 import onnxruntime as ort
 import os
-import sys
-
+# import sys
 # sys.path.append(r'D:\src\github\ort.serialize\tools\python')
 from ort_test_dir_utils import run_test_dir
 
@@ -34,11 +33,8 @@ for model, target in test_models.items():
     print(f"Serialized {model} to {target_path}. Sizes: orig={orig_size} new={new_size} diff={new_size/orig_size:.4f}")
 
     run_test_dir(target_path)
-    os.remove(target_path)
+    # os.remove(target_path)
 
     # sess2 = ort.InferenceSession(target_path, deserialize=True)
     # for i in sess2.get_inputs():
     #    print(i.name)
-
-
-
