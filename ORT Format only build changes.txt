@@ -1,0 +1,118 @@
+ORT Format only build changes
+
+High level approach:
+  - Serialize Graph instance including Node instances and initializers
+    - subgraphs are serialized the same way
+    - current assumption is that EPs to be used in deployed version should be known, and L1 and L2 transformers can be run ahead of time 
+      - we can add in transformers if this isn't the case though, but cost will vary depending on what's required
+    - needed to add storage of SinceVersion in Node so ONNX OpSchema isn't required 
+  - Serialize SessionState
+    - currently this is just the KernelCreateInfo
+    - allows kernel to be instantiated without dependency on ONNX for schema lookup/validation
+      - e.g. if kernel is templatized on type this will save the KCI for the correct version
+    - refactored to remove usage of SearchKernelRegistry multiple times for a Node 
+      - single lookup in finalization of SessionState to save KCI
+        - allocation planner and kernel registry manager now use saved KCI
+    - somewhat significant refactoring so that finalization is inside SessionState and InferenceSession usage is now cleaner
+      - recent cleanup of SessionState made this viable
+  - Currently serializing a few things using a protobuf blob
+    - done for expediency as we currently have a hard dependency on the protobuf types
+
+Initial status from RelWithDebInfo build
+  - need to build that way to get per-symbol info on Windows. MinSizeRel is signficantly smaller
+
+=====
+TODO: Need better baseline with more equivalent builds that both exclude RTTI and ML ops
+=====
+
+ONNX: 
+  26KB (-800KB)
+  - Library just includes data type helpers
+
+Optimizers: 
+  45KB (-277KB)
+  Kept ones required post-transform (required if we enable NCHW)
+    - graph tranformer, insert cast, memcpy
+    - Excluded all others
+    - could remove all if no transformations after load
+
+Framework:
+  346KB (-50KB)
+  - Removed Custom op support
+    - currently no good separation between just getting the kernel defs and the schemas
+  - Removed implementation of GraphPartitioner
+    - serialized model must be partitioned first
+  - Remove VerifyKernelDef
+  Can save in a few places:
+    - 49KB in data_types and a lot of that is for ML types
+    - 31KB for allocation planner: could serialize
+    - 16KB parallel executor: could exclude
+    - 7KB BFCArena::DumpMemoryLog + DebugString could be excluded
+    - 7KB dealing with TensorProto to OrtValue - could just create OrtValue from offset in flatbuffer/flexbuffer     
+      - probably a few other places where doing so would save multiple KB
+
+
+Graph:
+  88KB (-210KB)
+  - Cut out initial set of obvious methods that weren't required. 
+    - e.g. ctors used for load from proto (Model and Graph), ToProto, Serialization, Node::Op (returns onnx::OpSchema instance), OnnxRuntimeOpSchemaRegistry
+  - Pieces required for transformers are still supported but could be removed
+    - Could save about 20KB from that
+      - e.g. Resolve, AddNode, AddEdge, RemoveEdge, etc. 
+  - No support for Function 
+    - tightly bound to OpSchema class in ONNX 
+      - can't bring in in schema.cc from ONNX without splitting that up more
+      - TBD if Function support is required
+  - Can remove some training related code for some minor savings
+    - consumer/provider info
+  - Can remove graph_utils if no transformer support
+    - only 5.6KB though
+
+Providers:
+  2.1MB (-427KB)
+  *** this is slightly off as Einsum shows up as significant diff. need equivalent base commit id ***
+  - Excluded ML ops which was most of diff
+  - Currently includes all contrib ops
+    - can split out based on category
+      - Experimental/NCHWc/Optimizer related (inc. BERT specific)/
+  
+
+Session:
+  280KB (-40KB)
+  - Excluded custom ops and ctors involving loading ModelProto
+  - Can remove support for config in model and exclude JSON parser 
+    - Saving: 65KB (remove inference_session_utils.*)
+  - C API could be minimized
+    Currently 100KB
+      - probably a lot we can remove to minimized
+      - lot of cost to support ML types such as Map that could be removed based on --disable_ml_ops
+
+MLAS:
+  260KB
+  - Not sure what ARM size will be
+  - AVX512 support is expensive. could make that optional
+    - Saving ~110KB
+
+Common:
+  79KB
+  - telemetry is 6.6KB + some cost in InferenceSession
+  - profiler is 7.5KB + some cost in InferenceSession
+    - could be made optional
+
+Other:
+  - Exclude RE2
+    - 163KB
+
+-----
+
+Other notes:
+  - Still have a dependency on ONNX PB
+    - More work to replace though given internal use of *Proto types in many places
+    - Current size is 83KB
+      - Could probably cut down by excluding training and function related pieces
+
+
+  - Are we paying cost for templatized containers in multiple libs
+    - e.g. Graph has Hash of unique_ptr<NodeArg> for 552 bytes
+    - may not exist in MinSizeRel build
+

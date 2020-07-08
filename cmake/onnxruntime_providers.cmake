@@ -10,10 +10,18 @@ if(onnxruntime_DISABLE_ML_OPS)
   list(FILTER onnxruntime_providers_srcs EXCLUDE REGEX ".*/ml/.*")
 endif()
 
+#if (NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
 file(GLOB_RECURSE onnxruntime_cpu_contrib_ops_srcs CONFIGURE_DEPENDS
   "${ONNXRUNTIME_ROOT}/contrib_ops/cpu/*.h"
   "${ONNXRUNTIME_ROOT}/contrib_ops/cpu/*.cc"
 )
+# else()
+# file(GLOB onnxruntime_cpu_contrib_ops_srcs CONFIGURE_DEPENDS
+#   "${ONNXRUNTIME_ROOT}/contrib_ops/cpu/fused*.h"
+#   "${ONNXRUNTIME_ROOT}/contrib_ops/cpu/fused*.cc"
+#   "${ONNXRUNTIME_ROOT}/contrib_ops/cpu/activations.*"
+# )
+# endif()
 
 file(GLOB_RECURSE onnxruntime_cuda_contrib_ops_cc_srcs CONFIGURE_DEPENDS
   "${ONNXRUNTIME_ROOT}/contrib_ops/cuda/*.h"
