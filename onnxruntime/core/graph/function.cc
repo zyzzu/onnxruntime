@@ -8,6 +8,8 @@
 #include "onnx/shape_inference/implementation.h"
 
 namespace onnxruntime {
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+
 // Auto inferred and generate an opschema for stand-alone functions
 // TODO: revisit to see if we can eliminate typeconstraint step
 void IOTypeConstraintHelper(const ONNX_NAMESPACE::FunctionProto& onnx_func_proto_,
@@ -414,4 +416,12 @@ std::unique_ptr<Function> MakeFunction(const onnxruntime::Graph& graph,
                                        const logging::Logger& logger) {
   return onnxruntime::make_unique<FunctionImpl>(graph, std::move(customized_func), logger);
 }
+#else
+std::unique_ptr<Function> MakeFunction(const onnxruntime::Graph& /*graph*/,
+                                       std::unique_ptr<IndexedSubGraph> /*customized_func*/,
+                                       const logging::Logger& /*logger*/) {
+  ORT_THROW("Not currently supported in this build type.");
+}
+
+#endif
 }  // namespace onnxruntime

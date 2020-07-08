@@ -375,9 +375,18 @@ ORT_API_STATUS_IMPL(OrtApis::RegisterCustomOpsLibrary, _Inout_ OrtSessionOptions
 }
 
 namespace {
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 ORT_STATUS_PTR LoadAndInitializeSession(_In_ const OrtEnv* /*env*/, _In_ const OrtSessionOptions* options,
                                         _In_ std::unique_ptr<::onnxruntime::InferenceSession>& sess,
                                         _Outptr_ OrtSession** out) {
+#else
+ORT_STATUS_PTR LoadAndInitializeSession(_In_ const OrtEnv* /*env*/, _In_ const OrtSessionOptions* options,
+                                        _In_ std::unique_ptr<::onnxruntime::InferenceSession>& sess,
+                                        _In_ const ORTCHAR_T* model_path,
+                                        _In_ gsl::span<const uint8_t>* model_bytes,
+                                        _Outptr_ OrtSession** out) {
+
+#endif
   // we need to disable mem pattern if DML is one of the providers since DML doesn't have the concept of
   // byte addressable memory
   std::vector<std::unique_ptr<IExecutionProvider>> provider_list;
@@ -399,6 +408,7 @@ ORT_STATUS_PTR LoadAndInitializeSession(_In_ const OrtEnv* /*env*/, _In_ const O
   }
 
   Status status;
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   if (options) {
     if (!options->custom_op_domains_.empty()) {
       status = sess->AddCustomOpDomains(options->custom_op_domains_);
@@ -406,6 +416,7 @@ ORT_STATUS_PTR LoadAndInitializeSession(_In_ const OrtEnv* /*env*/, _In_ const O
         return ToOrtStatus(status);
     }
   }
+#endif
 
   // register the providers
   for (auto& provider : provider_list) {
@@ -416,15 +427,28 @@ ORT_STATUS_PTR LoadAndInitializeSession(_In_ const OrtEnv* /*env*/, _In_ const O
     }
   }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   status = sess->Load();
+
   if (!status.IsOK())
     return ToOrtStatus(status);
 
   status = sess->Initialize();
+#else
+  if (model_path)
+    sess->Deserialize(model_path);
+  else if (model_bytes)
+    sess->Deserialize(*model_bytes);
+  else
+    return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT,
+                                 "Internal error. Neither model_path nor model_bytes were provided.");
+
+#endif
   if (!status.IsOK())
     return ToOrtStatus(status);
+  else
 
-  *out = reinterpret_cast<OrtSession*>(sess.release());
+    *out = reinterpret_cast<OrtSession*>(sess.release());
   return nullptr;
 }
 }  // namespace
@@ -433,14 +457,25 @@ ORT_API_STATUS_IMPL(OrtApis::CreateSession, _In_ const OrtEnv* env, _In_ const O
                     _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out) {
   API_IMPL_BEGIN
   std::unique_ptr<onnxruntime::InferenceSession> sess;
+
   try {
+#if !defined(ORT_MODEL_FORMAT_ONLY)
     sess = onnxruntime::make_unique<onnxruntime::InferenceSession>(
         options == nullptr ? onnxruntime::SessionOptions() : options->value,
         env->GetEnvironment(), model_path);
+#else
+    sess = onnxruntime::make_unique<onnxruntime::InferenceSession>(
+        options == nullptr ? onnxruntime::SessionOptions() : options->value, env->GetEnvironment());
+#endif
   } catch (const std::exception& e) {
     return OrtApis::CreateStatus(ORT_FAIL, e.what());
   }
+
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   return LoadAndInitializeSession(env, options, sess, out);
+#else
+  return LoadAndInitializeSession(env, options, sess, model_path, nullptr, out);
+#endif
   API_IMPL_END
 }
 
@@ -448,6 +483,7 @@ ORT_API_STATUS_IMPL(OrtApis::CreateSessionFromArray, _In_ const OrtEnv* env, _In
                     _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out) {
   API_IMPL_BEGIN
   std::unique_ptr<onnxruntime::InferenceSession> sess;
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   try {
     sess = onnxruntime::make_unique<onnxruntime::InferenceSession>(
         options == nullptr ? onnxruntime::SessionOptions() : options->value,
@@ -455,7 +491,16 @@ ORT_API_STATUS_IMPL(OrtApis::CreateSessionFromArray, _In_ const OrtEnv* env, _In
   } catch (const std::exception& e) {
     return OrtApis::CreateStatus(ORT_FAIL, e.what());
   }
+#else
+
+#endif
+
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   return LoadAndInitializeSession(env, options, sess, out);
+#else
+  gsl::span<const uint8_t> bytes(static_cast<const uint8_t*>(model_data), model_data_length);
+  return LoadAndInitializeSession(env, options, sess, nullptr, &bytes, out);
+#endif
   API_IMPL_END
 }
 

@@ -21,7 +21,12 @@ target_include_directories(onnxruntime_util PRIVATE ${ONNXRUNTIME_ROOT} ${MKLML_
 if (onnxruntime_USE_CUDA)
  target_include_directories(onnxruntime_util PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 endif()
-onnxruntime_add_include_to_target(onnxruntime_util onnxruntime_common onnxruntime_framework onnx onnx_proto protobuf::libprotobuf)
+
+onnxruntime_add_include_to_target(onnxruntime_util onnxruntime_common onnxruntime_framework onnx_proto protobuf::libprotobuf)
+if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
+  onnxruntime_add_include_to_target(onnxruntime_util onnx)
+endif()
+
 if(UNIX)
     target_compile_options(onnxruntime_util PUBLIC "-Wno-error=comment")
 endif()

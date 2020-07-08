@@ -228,6 +228,7 @@ InferenceSession::InferenceSession(const SessionOptions& session_options, const 
   ConstructorCommon(session_options, session_env);
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 InferenceSession::InferenceSession(const SessionOptions& session_options, const Environment& session_env,
                                    const std::string& model_uri)
     : model_location_(ToWideString(model_uri)),
@@ -282,6 +283,7 @@ InferenceSession::InferenceSession(const SessionOptions& session_options, const 
   // Finalize session options and initialize assets of this session instance
   ConstructorCommon(session_options, session_env);
 }
+#endif
 
 Status InferenceSession::Deserialize(const std::string& model_uri) {
   return Deserialize(ToWideString(model_uri));
@@ -399,6 +401,7 @@ common::Status InferenceSession::RegisterExecutionProvider(std::unique_ptr<IExec
   return execution_providers_.Add(provider_type, std::move(p_exec_provider));
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 common::Status InferenceSession::RegisterGraphTransformer(
     std::unique_ptr<onnxruntime::GraphTransformer> p_graph_transformer, TransformerLevel level) {
   if (p_graph_transformer == nullptr) {
@@ -651,6 +654,7 @@ common::Status InferenceSession::Load() {
 
   return Load(loader, "model_loading_from_saved_proto");
 }
+#endif
 
 common::Status InferenceSession::TransformGraph(onnxruntime::Graph& graph,
                                                 const onnxruntime::GraphTransformerManager& graph_transformer_mgr,
@@ -658,6 +662,8 @@ common::Status InferenceSession::TransformGraph(onnxruntime::Graph& graph,
                                                 KernelRegistryManager& kernel_registry_manager,
                                                 const InsertCastTransformer& insert_cast_transformer,
                                                 SessionState& session_state) {
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+
   // The transformer order:
   // 1. built-in graph rewriter
   // 2. each execution provider's transformer
@@ -690,6 +696,9 @@ common::Status InferenceSession::TransformGraph(onnxruntime::Graph& graph,
   GraphPartitioner partitioner(kernel_registry_manager, providers);
   ORT_RETURN_IF_ERROR_SESSIONID_(partitioner.Partition(graph, session_state.ExportDll(),
                                                        session_state.GetMutableFuncMgr()));
+#else
+  ORT_UNUSED_PARAMETER(session_state);
+#endif
 
   // apply transformers except default transformers
   // Default transformers are required for correctness and they are owned and run by inference session
@@ -712,10 +721,7 @@ common::Status InferenceSession::TransformGraph(onnxruntime::Graph& graph,
       oss << "Could not find an implementation for the node ";
       if (!node.Name().empty())
         oss << node.Name() << ":";
-      oss << node.OpType();
-      if (node.Op()) {
-        oss << "(" << node.SinceVersion() << ")";
-      }
+      oss << node.OpType() << "(" << node.SinceVersion() << ")";
       return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, oss.str());
     } else {
       if (is_verbose_mode) {  // TODO: should we disable this if the number of nodes are above a certain threshold?
@@ -924,20 +930,23 @@ common::Status InferenceSession::InitializeImpl(const flexbuffers::Reference* se
     // create SessionState for subgraphs as it's needed by the transformers
     ORT_RETURN_IF_ERROR_SESSIONID_(CreateSubgraphSessionState(graph, *session_state_));
 
-    if (serialized_data == nullptr) {
-      // apply any transformations to the main graph and any subgraphs
-      ORT_RETURN_IF_ERROR_SESSIONID_(TransformGraph(graph, graph_transformation_mgr_,
-                                                    execution_providers_, kernel_registry_manager_,
-                                                    insert_cast_transformer_,
-                                                    *session_state_));
+    // TEMP TESTING if TransformGraph can still run
+    //if (serialized_data == nullptr) {
 
-      // now that all the transforms are done, call Resolve on the main graph. this will recurse into the subgraphs.
-      ORT_RETURN_IF_ERROR_SESSIONID_(graph.Resolve());
-    } else {
-      // Graph is fully partitioned and resolved and all transforms should have been done previously.
-      // This is to minimize binary size so we don't have any ONNX dependencies (Graph::Resolve calls
-      // ONNX type/shape inferencing)
-    }
+    // apply any transformations to the main graph and any subgraphs
+    ORT_RETURN_IF_ERROR_SESSIONID_(TransformGraph(graph, graph_transformation_mgr_,
+                                                  execution_providers_, kernel_registry_manager_,
+                                                  insert_cast_transformer_,
+                                                  *session_state_));
+
+    // now that all the transforms are done, call Resolve on the main graph. this will recurse into the subgraphs.
+    ORT_RETURN_IF_ERROR_SESSIONID_(graph.Resolve());
+
+    //} else {
+    //  // Graph is fully partitioned and resolved and all transforms should have been done previously.
+    //  // This is to minimize binary size so we don't have any ONNX dependencies (Graph::Resolve calls
+    //  // ONNX type/shape inferencing)
+    //}
 
     bool keep_initializers = !session_options_.optimized_model_filepath.empty();
 
@@ -946,9 +955,7 @@ common::Status InferenceSession::InitializeImpl(const flexbuffers::Reference* se
                                                                         serialized_data,
                                                                         !keep_initializers));
 
-    // TODO: We could also use this for saving the flexbuffer. could just check file extension when deciding
-    // the output format to use.
-
+#if !defined(ORT_MODEL_FORMAT_ONLY)
     if (!serialized_data && !session_options_.optimized_model_filepath.empty()) {
       if (session_options_.graph_optimization_level >= TransformerLevel::Level3) {
         LOGS(*session_logger_, WARNING) << "Serializing Optimized ONNX model with Graph Optimization"
@@ -993,6 +1000,7 @@ common::Status InferenceSession::InitializeImpl(const flexbuffers::Reference* se
                             static_cast<int>(session_options_.optimized_model_format)));
       }
     }
+#endif
 
     session_state_->ResolveMemoryPatternFlag();
     is_inited_ = true;
@@ -1441,12 +1449,14 @@ std::string InferenceSession::EndProfiling() {
   return std::string();
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 // assumes model has already been loaded before
 common::Status InferenceSession::DoPostLoadProcessing(onnxruntime::Model& model) {
   // TODO add other post load processing here
   common::Status status = SaveModelMetadata(model);
   return status;
 }
+#endif
 
 common::Status InferenceSession::SaveModelMetadata(const onnxruntime::Model& model) {
   VLOGS(*session_logger_, 1) << "Saving model metadata";

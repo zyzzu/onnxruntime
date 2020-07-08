@@ -9,7 +9,9 @@
 using namespace ::onnxruntime::common;
 namespace onnxruntime {
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 namespace {
+
 // Traverses the node's formal parameters and calls TraverseFn with the formal
 // parameter and its associated TypeProto.
 //   node - the node to traverse
@@ -198,6 +200,7 @@ bool KernelRegistry::VerifyKernelDef(const onnxruntime::Node& node,
   }
   return true;
 }
+#endif
 
 Status KernelRegistry::Register(KernelDefBuilder& kernel_builder,
                                 const KernelCreateFn& kernel_creator) {
@@ -279,14 +282,18 @@ Status KernelRegistry::TryFindKernel(const onnxruntime::Node& node,
         *out = &i->second;
         return Status::OK();
       }
-    } else {
+    }
+#if defined(ORT_MODEL_FORMAT_ONLY)
+    ORT_ENFORCE(kernel_def_hash != 0, "Lookup of kernel for ORT format model requires the hash of the kernel def");
+#else
+    else {
       if (VerifyKernelDef(node, *i->second.kernel_def, error_str)) {
         *out = &i->second;
         return Status::OK();
       }
-
       verify_kernel_def_error_strs.push_back(error_str);
     }
+#endif
   }
 
   *out = nullptr;

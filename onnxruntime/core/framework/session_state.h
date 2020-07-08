@@ -24,6 +24,7 @@
 #include "core/framework/mem_pattern.h"
 #include "core/framework/ml_value.h"
 #include "core/framework/node_index_info.h"
+#include "core/framework/op_kernel.h"
 #include "core/framework/ort_value_name_idx_map.h"
 #include "core/graph/graph_viewer.h"
 #include "core/graph/onnx_protobuf.h"
@@ -191,7 +192,7 @@ class SessionState {
   Status UpdateMemoryPatternGroupCache(const std::vector<std::reference_wrapper<const TensorShape>>& input_shape,
                                        std::unique_ptr<MemoryPatternGroup> mem_patterns) const;
 
-  bool GetUseDeterministicCompute() const {return use_deterministic_compute_;}
+  bool GetUseDeterministicCompute() const { return use_deterministic_compute_; }
 
   /**
   Get enable memory pattern flag

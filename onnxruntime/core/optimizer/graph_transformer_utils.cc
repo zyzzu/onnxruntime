@@ -46,6 +46,7 @@ std::vector<std::unique_ptr<RewriteRule>> GenerateRewriteRules(TransformerLevel 
   std::vector<std::unique_ptr<RewriteRule>> rules;
   switch (level) {
     case TransformerLevel::Level1:
+#if !defined(ORT_MODEL_FORMAT_ONLY)
       rules.push_back(onnxruntime::make_unique<EliminateIdentity>());
       rules.push_back(onnxruntime::make_unique<EliminateSlice>());
       rules.push_back(onnxruntime::make_unique<UnsqueezeElimination>());
@@ -57,6 +58,7 @@ std::vector<std::unique_ptr<RewriteRule>> GenerateRewriteRules(TransformerLevel 
       rules.push_back(onnxruntime::make_unique<ConvAddFusion>());
       rules.push_back(onnxruntime::make_unique<ConvMulFusion>());
       rules.push_back(onnxruntime::make_unique<ConvBNFusion>());
+#endif
       break;
 
     case TransformerLevel::Level2:
@@ -85,9 +87,11 @@ std::vector<std::unique_ptr<RewriteRule>> GenerateRewriteRules(TransformerLevel 
   return rules;
 }
 
-std::unique_ptr<RuleBasedGraphTransformer> GenerateRuleBasedGraphTransformer(TransformerLevel level,
-                                                                             const std::vector<std::string>& rules_to_enable,
-                                                                             const std::unordered_set<std::string>& compatible_execution_providers) {
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+std::unique_ptr<RuleBasedGraphTransformer> GenerateRuleBasedGraphTransformer(
+    TransformerLevel level,
+    const std::vector<std::string>& rules_to_enable,
+    const std::unordered_set<std::string>& compatible_execution_providers) {
   auto rewrite_rules_to_register = GenerateRewriteRules(level, rules_to_enable);
   if (rewrite_rules_to_register.empty()) {
     return nullptr;
@@ -102,27 +106,35 @@ std::unique_ptr<RuleBasedGraphTransformer> GenerateRuleBasedGraphTransformer(Tra
 
   return rule_transformer;
 }
+#endif
 
 std::vector<std::unique_ptr<GraphTransformer>> GenerateTransformers(TransformerLevel level,
                                                                     gsl::span<const FreeDimensionOverride> free_dimension_overrides,
                                                                     const std::vector<std::string>& transformers_and_rules_to_enable) {
   std::vector<std::unique_ptr<GraphTransformer>> transformers;
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   std::unique_ptr<RuleBasedGraphTransformer> rule_transformer = nullptr;
+#endif
+
   switch (level) {
     case TransformerLevel::Level1: {
       std::unordered_set<std::string> l1_execution_providers = {};
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 
       transformers.emplace_back(onnxruntime::make_unique<ConstantFolding>(l1_execution_providers));
       transformers.emplace_back(onnxruntime::make_unique<MatMulAddFusion>(l1_execution_providers));
       transformers.emplace_back(onnxruntime::make_unique<ReshapeFusion>(l1_execution_providers));
       transformers.emplace_back(onnxruntime::make_unique<FreeDimensionOverrideTransformer>(free_dimension_overrides));
-
       rule_transformer = GenerateRuleBasedGraphTransformer(level, transformers_and_rules_to_enable, l1_execution_providers);
+#else
+      ORT_UNUSED_PARAMETER(free_dimension_overrides);
+#endif
     } break;
 
     case TransformerLevel::Level2: {
       std::unordered_set<std::string> cpu_execution_providers = {onnxruntime::kCpuExecutionProvider};
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
       // create rule based transformer consisting of all the level2 rewrite rules
       rule_transformer = GenerateRuleBasedGraphTransformer(level, transformers_and_rules_to_enable, cpu_execution_providers);
 
@@ -145,6 +157,7 @@ std::vector<std::unique_ptr<GraphTransformer>> GenerateTransformers(TransformerL
 
       transformers.emplace_back(onnxruntime::make_unique<FastGeluFusion>(cpu_cuda_execution_providers));
 #endif
+#endif
     } break;
 
     case TransformerLevel::Level3: {
@@ -164,9 +177,11 @@ std::vector<std::unique_ptr<GraphTransformer>> GenerateTransformers(TransformerL
   // if the custom list to enable transformers\rules is empty then return the default generated transformers and rules
   // otherwise generate a filtered list based on the provided custom list.
   if (transformers_and_rules_to_enable.empty()) {
+#if !defined(ORT_MODEL_FORMAT_ONLY)
     if (rule_transformer != nullptr) {
       transformers.emplace_back(std::move(rule_transformer));
     }
+#endif
     return transformers;
   }
 
@@ -180,10 +195,13 @@ std::vector<std::unique_ptr<GraphTransformer>> GenerateTransformers(TransformerL
 #endif
 
   std::vector<std::unique_ptr<GraphTransformer>> filtered_list;
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   // If the rule-based transformer is not empty, it should be included in the custom transformer list below.
   if (rule_transformer != nullptr) {
     filtered_list.emplace_back(std::move(rule_transformer));
   }
+#endif
+
   // pick custom transformers enabled for this session
   for (const auto& t_name : transformers_and_rules_to_enable) {
     std::for_each(transformers.begin(), transformers.end(),

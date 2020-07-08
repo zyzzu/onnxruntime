@@ -838,8 +838,7 @@ Applies to session load, initialization, etc. Default is 0.)pbdoc")
           },
           R"pbdoc(Graph optimization level for this session.)pbdoc")
       .def_readwrite("use_deterministic_compute", &SessionOptions::use_deterministic_compute,
-          R"pbdoc(Whether to use deterministic compute. Default is false.)pbdoc")
-;
+                     R"pbdoc(Whether to use deterministic compute. Default is false.)pbdoc");
 
   py::class_<RunOptions>(m, "RunOptions", R"pbdoc(Configuration information for a single Run.)pbdoc")
       .def(py::init())
@@ -939,6 +938,7 @@ including arg name, arg type (contains both type and shape).)pbdoc")
       }))
       .def(
           "load_model", [](InferenceSession* sess, const std::string& arg, bool is_arg_file_name, std::vector<std::string>& provider_types) {
+#if !(ORT_MODEL_FORMAT_ONLY)
             if (is_arg_file_name) {
               OrtPybindThrowIfError(sess->Load(arg));
             } else {
@@ -949,6 +949,13 @@ including arg name, arg type (contains both type and shape).)pbdoc")
 
             RegisterProviders(sess, provider_types);
             OrtPybindThrowIfError(sess->Initialize());
+#else
+            ORT_UNUSED_PARAMETER(sess);
+            ORT_UNUSED_PARAMETER(arg);
+            ORT_UNUSED_PARAMETER(is_arg_file_name);
+            ORT_UNUSED_PARAMETER(provider_types);
+            throw std::runtime_error("load_model is not supported in this build. Use deserialize_model.");
+#endif
           },
           R"pbdoc(Load a model saved in ONNX format.)pbdoc")
       .def(

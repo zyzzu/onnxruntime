@@ -102,21 +102,35 @@ file(GLOB onnxruntime_test_common_src CONFIGURE_DEPENDS
   "${TEST_SRC_DIR}/common/logging/*.h"
   )
 
-file(GLOB onnxruntime_test_ir_src CONFIGURE_DEPENDS
-  "${TEST_SRC_DIR}/ir/*.cc"
-  "${TEST_SRC_DIR}/ir/*.h"
+if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
+  file(GLOB onnxruntime_test_ir_src CONFIGURE_DEPENDS
+    "${TEST_SRC_DIR}/ir/*.cc"
+    "${TEST_SRC_DIR}/ir/*.h"
   )
+endif()
 
-file(GLOB onnxruntime_test_optimizer_src CONFIGURE_DEPENDS
-  "${TEST_SRC_DIR}/optimizer/*.cc"
-  "${TEST_SRC_DIR}/optimizer/*.h"
+if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
+  file(GLOB onnxruntime_test_optimizer_src CONFIGURE_DEPENDS
+    "${TEST_SRC_DIR}/optimizer/*.cc"
+    "${TEST_SRC_DIR}/optimizer/*.h"
   )
+endif()
 
-set(onnxruntime_test_framework_src_patterns
-  "${TEST_SRC_DIR}/framework/*.cc"
-  "${TEST_SRC_DIR}/framework/*.h"
-  "${TEST_SRC_DIR}/platform/*.cc"
+if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
+  set(onnxruntime_test_framework_src_patterns
+    "${TEST_SRC_DIR}/framework/*.cc"
+    "${TEST_SRC_DIR}/framework/*.h"
+    "${TEST_SRC_DIR}/platform/*.cc"
   )
+else()
+  set(onnxruntime_test_framework_src_patterns
+    "${TEST_SRC_DIR}/framework/test_utils.cc"
+    "${TEST_SRC_DIR}/framework/test_utils.h"
+    "${TEST_SRC_DIR}/framework/ort_model_only_test.cc"
+  )
+endif()
+
+message("${onnxruntime_test_framework_src_patterns}")
 
 file(GLOB onnxruntime_test_training_src
   "${ORTTRAINING_SOURCE_DIR}/test/model/*.cc"
@@ -136,15 +150,23 @@ if(onnxruntime_USE_CUDA)
   list(APPEND onnxruntime_test_framework_src_patterns  ${TEST_SRC_DIR}/framework/cuda/*)
 endif()
 
-set(onnxruntime_test_providers_src_patterns
-  "${TEST_SRC_DIR}/providers/*.h"
-  "${TEST_SRC_DIR}/providers/*.cc"
-  "${TEST_SRC_DIR}/opaque_api/test_opaque_api.cc"
-  "${TEST_SRC_DIR}/framework/TestAllocatorManager.cc"
-  "${TEST_SRC_DIR}/framework/TestAllocatorManager.h"
-  "${TEST_SRC_DIR}/framework/test_utils.cc"
-  "${TEST_SRC_DIR}/framework/test_utils.h"
+if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
+  set(onnxruntime_test_providers_src_patterns
+    "${TEST_SRC_DIR}/providers/*.h"
+    "${TEST_SRC_DIR}/providers/*.cc"
+    "${TEST_SRC_DIR}/opaque_api/test_opaque_api.cc"
+    "${TEST_SRC_DIR}/framework/TestAllocatorManager.cc"
+    "${TEST_SRC_DIR}/framework/TestAllocatorManager.h"
+    "${TEST_SRC_DIR}/framework/test_utils.cc"
+    "${TEST_SRC_DIR}/framework/test_utils.h"
   )
+else()
+  set(onnxruntime_test_providers_src_patterns
+    "${TEST_SRC_DIR}/framework/test_utils.cc"
+    "${TEST_SRC_DIR}/framework/test_utils.h"
+  )
+endif()
+
 if(NOT onnxruntime_DISABLE_CONTRIB_OPS)
   list(APPEND onnxruntime_test_providers_src_patterns
     "${TEST_SRC_DIR}/contrib_ops/*.h"
@@ -158,10 +180,14 @@ if(onnxruntime_USE_FEATURIZERS)
 endif()
 
 file(GLOB onnxruntime_test_providers_src CONFIGURE_DEPENDS
-  ${onnxruntime_test_providers_src_patterns})
-file(GLOB_RECURSE onnxruntime_test_providers_cpu_src CONFIGURE_DEPENDS
-  "${TEST_SRC_DIR}/providers/cpu/*"
+  ${onnxruntime_test_providers_src_patterns}
   )
+
+if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
+  file(GLOB_RECURSE onnxruntime_test_providers_cpu_src CONFIGURE_DEPENDS
+    "${TEST_SRC_DIR}/providers/cpu/*"
+    )
+endif()
 
 if(onnxruntime_DISABLE_ML_OPS)
   list(FILTER onnxruntime_test_providers_cpu_src EXCLUDE REGEX ".*/ml/.*")
@@ -426,7 +452,12 @@ else()
   target_include_directories(onnxruntime_test_utils PRIVATE ${CMAKE_CURRENT_BINARY_DIR} ${ONNXRUNTIME_ROOT}
           "${CMAKE_CURRENT_SOURCE_DIR}/external/nsync/public")
 endif()
-onnxruntime_add_include_to_target(onnxruntime_test_utils onnxruntime_common onnxruntime_framework GTest::gtest onnx onnx_proto)
+
+onnxruntime_add_include_to_target(onnxruntime_test_utils onnxruntime_common onnxruntime_framework GTest::gtest onnx_proto)
+
+if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
+  onnxruntime_add_include_to_target(onnxruntime_test_utils onnx)
+endif()
 
 if (onnxruntime_USE_DNNL)
   target_compile_definitions(onnxruntime_test_utils PUBLIC USE_DNNL=1)
@@ -611,8 +642,13 @@ if (MSVC AND NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
     #TODO: fix the warnings, they are dangerous
     target_compile_options(onnx_test_runner_common PRIVATE "/wd4244")
 endif()
+
 onnxruntime_add_include_to_target(onnx_test_runner_common onnxruntime_common onnxruntime_framework
-        onnxruntime_test_utils onnx onnx_proto re2::re2)
+        onnxruntime_test_utils onnx_proto re2::re2)
+
+if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
+  onnxruntime_add_include_to_target(onnx_test_runner_common onnx)
+endif()
 
 add_dependencies(onnx_test_runner_common onnx_test_data_proto ${onnxruntime_EXTERNAL_DEPENDENCIES})
 target_include_directories(onnx_test_runner_common PRIVATE ${eigen_INCLUDE_DIRS} ${RE2_INCLUDE_DIR}

@@ -19,7 +19,7 @@ Status KernelRegistryManager::CreateKernel(const onnxruntime::Node& node,
   auto create_error_message = [&node](const std::string& error) {
     std::ostringstream errormsg;
     errormsg << error << " " << node.OpType();
-    if (node.Op() != nullptr) errormsg << " (" << node.SinceVersion() << ")";
+    errormsg << " (" << node.SinceVersion() << ")";
     if (!node.Name().empty()) errormsg << " (node '" << node.Name() << "')";
     return errormsg.str();
   };
@@ -139,9 +139,8 @@ Status KernelRegistryManager::SearchKernelRegistry(const onnxruntime::Node& node
   }
 
   std::ostringstream errormsg;
-  errormsg << "Failed to find kernel for " << node.OpType();
+  errormsg << "Failed to find kernel for " << node.OpType() << "(" << node.SinceVersion() << ")";
   if (kernel_def_hash != 0) errormsg << " (using hash of " << kernel_def_hash << ")";
-  if (node.Op() != nullptr) errormsg << " (" << node.SinceVersion() << ")";
   if (!node.Name().empty()) errormsg << " (node " << node.Name() << ").";
   if (!status.IsOK()) {
     errormsg << status.ErrorMessage();

@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 #include "core/framework/customregistry.h"
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 namespace onnxruntime {
 
 common::Status CustomRegistry::RegisterCustomKernel(KernelDefBuilder& kernel_def_builder, const KernelCreateFn& kernel_creator) {
@@ -17,7 +18,6 @@ common::Status CustomRegistry::RegisterOpSet(
     const std::string& domain,
     int baseline_opset_version,
     int opset_version) {
-
   return opschema_registry_->RegisterOpSet(schemas, domain, baseline_opset_version, opset_version);
 }
 
@@ -30,3 +30,4 @@ const std::shared_ptr<onnxruntime::OnnxRuntimeOpSchemaRegistry>& CustomRegistry:
 }
 
 }  // namespace onnxruntime
+#endif

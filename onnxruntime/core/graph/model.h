@@ -28,6 +28,7 @@ class Model {
  public:
   static constexpr Version kNoVersion = INT64_MAX;
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   explicit Model(const std::string& graph_name,
                  bool is_onnx_domain_only,
                  const logging::Logger& logger)
@@ -71,6 +72,7 @@ class Model {
                  const PathString& model_path,
                  const IOnnxRuntimeOpSchemaRegistryList* local_registries,
                  const logging::Logger& logger);
+#endif
 
   // Get model's IR version.
   // Return <kNoVersion> if not specified.
@@ -115,6 +117,7 @@ class Model {
   Graph& MainGraph() noexcept;
   const Graph& MainGraph() const noexcept;
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   // Add function proto to Model
   void AddFunction(const ONNX_NAMESPACE::FunctionProto& func_proto);
 
@@ -189,6 +192,8 @@ class Model {
                              const logging::Logger& logger);
 
   Status Serialize(flexbuffers::Builder& builder) const;
+
+#endif
   static Status Deserialize(const flexbuffers::Reference& fbr,
                             const logging::Logger& logger,
                             std::unique_ptr<Model>& model);

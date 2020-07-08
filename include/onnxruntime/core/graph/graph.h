@@ -100,9 +100,11 @@ class Node {
   /** Gets the domain of the OperatorSet that specifies the operator returned by #OpType. */
   const std::string& Domain() const noexcept;
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   /** Gets the Node's OpSchema.
   @remarks The graph containing this node must be resolved, otherwise nullptr will be returned. */
   const ONNX_NAMESPACE::OpSchema* Op() const noexcept;
+#endif
 
   /** Gets the Node's SinceVersion.
   Allows decoupling from OpSchema for models using the ORT format with no ONNX dependencies.
@@ -112,6 +114,7 @@ class Node {
   /** Gets the Node's Node::Type. */
   Node::Type NodeType() const noexcept;
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   /** 
   Gets the function body if applicable otherwise nullptr
   @param try_init_func_body If not already intialized, initialize the function body
@@ -128,6 +131,7 @@ class Node {
 
   /** Gets the function body if applicable otherwise nullptr. */
   const Function* GetFunctionBody() const noexcept;
+#endif
 
   /** Gets the node description. */
   const std::string& Description() const noexcept;
@@ -441,6 +445,7 @@ class Node {
   // TODO: we could change the edge to have NodeIndex so this wasn't necessary if there's no perf hit from doing so
   Status Serialize(flexbuffers::Builder& builder, ProtobufSerializer& protobuf_serializer) const;
   void SerializeEdges(flexbuffers::Builder& builder) const;
+#endif
 
   void Init(const std::string& name,
             const std::string& op_type,
@@ -461,6 +466,7 @@ class Node {
 
   const std::vector<std::unique_ptr<Graph>>& MutableSubgraphs() noexcept { return subgraphs_; }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   void SetNodeType(Node::Type node_type) noexcept;
 
   // Function currently has a hard dependency on onnx::OpSchema. If we can remove that it could potentially be
@@ -1126,9 +1132,7 @@ class Graph {
   // Clear all unused initializers
   void CleanUnusedInitializers(const std::unordered_set<std::string>* initializer_names_to_preserve = nullptr);
 
-#if !defined(ORT_MODEL_FORMAT_ONLY)
   gsl::not_null<Node*> AllocateNode();
-#endif
 
   // Release the node.
   // @returns false if node_index was invalid.

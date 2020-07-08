@@ -31,6 +31,7 @@ using namespace onnxruntime::common;
 static constexpr int DEFAULT_PROTOBUF_BLOCK_SIZE = 4 * 1024 * 1024;
 
 namespace onnxruntime {
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 Model::Model(const std::string& graph_name,
              bool is_onnx_domain_only,
              const ModelMetaData& model_metadata,
@@ -160,6 +161,7 @@ Model::Model(ModelProto&& model_proto, const PathString& model_path, const IOnnx
   graph_.reset(new Graph(*this, model_proto_.mutable_graph(), domain_to_version, IrVersion(), schema_registry, logger,
                          model_functions_map));
 }
+#endif
 
 Version Model::IrVersion() const {
   if (utils::HasIrVersion(model_proto_)) {
@@ -223,6 +225,7 @@ const Graph& Model::MainGraph() const noexcept {
   return *graph_;
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 void Model::AddFunction(const ONNX_NAMESPACE::FunctionProto& func_proto) {
   auto func_ptr = model_proto_.add_functions();
   func_ptr->CopyFrom(func_proto);
@@ -539,6 +542,8 @@ Status Model::Serialize(flexbuffers::Builder& builder) const {
 
   return Status::OK();
 }
+
+#endif
 
 Status Model::Deserialize(const flexbuffers::Reference& fbr,
                           const logging::Logger& logger,

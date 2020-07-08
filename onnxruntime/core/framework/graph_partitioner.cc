@@ -41,6 +41,16 @@ NonCudaOps non_cuda;
 using namespace ::onnxruntime::common;
 namespace onnxruntime {
 
+#if defined(ORT_MODEL_FORMAT_ONLY)
+
+Status GraphPartitioner::Partition(Graph& /*graph*/, bool /*export_dll*/, FuncManager& /*func_mgr*/) const {
+  return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL,
+                         "Partitioning is not supported in this build. "
+                         "Partitioning information is read from the serialized model.");
+}
+
+#else
+
 KernelDefBuilder& BuildFusedKernelDef(KernelDefBuilder& builder, const onnxruntime::Node& node) {
   auto schema = node.Op();
   builder.SetName(schema->Name())
@@ -151,7 +161,7 @@ Status GraphPartitioner::Partition(Graph& graph, bool export_dll, FuncManager& f
   for (auto& provider : providers_) {
     int count = 0;
     std::vector<Node*> nodes_need_compile;
-    std::vector<std::unique_ptr<ComputeCapability>> capabilities =
+    std::vector<std::unique_ptr<ComputeCapability> > capabilities =
         provider->GetCapability(graph_viewer, kernel_registry_mgr_.GetKernelRegistriesByProviderType(provider->Type()));
     for (auto& capability : capabilities) {
       Node* n = PlaceNode(graph, std::move(capability->sub_graph), kernel_registry_mgr_, provider->Type(), count);
@@ -201,9 +211,9 @@ Status GraphPartitioner::Partition(Graph& graph, bool export_dll, FuncManager& f
       if (nullptr == node_func) {
         continue;
       }
-      nodes_need_inline.push_back(&node);      
+      nodes_need_inline.push_back(&node);
     }
-  }  
+  }
 
   for (auto* node : nodes_need_inline) {
     // If the node has a functionbody with no kernel and cannot be inlined
@@ -235,4 +245,5 @@ Status GraphPartitioner::Partition(Graph& graph, bool export_dll, FuncManager& f
 
   return Status::OK();
 }
+#endif
 }  // namespace onnxruntime

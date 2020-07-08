@@ -1,11 +1,23 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 
-file(GLOB onnxruntime_optimizer_srcs CONFIGURE_DEPENDS
-    "${ONNXRUNTIME_INCLUDE_DIR}/core/optimizer/*.h"
-    "${ONNXRUNTIME_ROOT}/core/optimizer/*.h"
-    "${ONNXRUNTIME_ROOT}/core/optimizer/*.cc"
+if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
+    file(GLOB onnxruntime_optimizer_srcs CONFIGURE_DEPENDS
+        "${ONNXRUNTIME_INCLUDE_DIR}/core/optimizer/*.h"
+        "${ONNXRUNTIME_ROOT}/core/optimizer/*.h"
+        "${ONNXRUNTIME_ROOT}/core/optimizer/*.cc"
+        )
+else()
+    file(GLOB onnxruntime_optimizer_srcs CONFIGURE_DEPENDS
+        "${ONNXRUNTIME_INCLUDE_DIR}/core/optimizer/*.h"
+        "${ONNXRUNTIME_ROOT}/core/optimizer/graph*.h"
+        "${ONNXRUNTIME_ROOT}/core/optimizer/graph*.cc"
+        "${ONNXRUNTIME_ROOT}/core/optimizer/insert_cast_transformer.h"
+        "${ONNXRUNTIME_ROOT}/core/optimizer/insert_cast_transformer.cc"
+        "${ONNXRUNTIME_ROOT}/core/optimizer/transformer_memcpy.h"
+        "${ONNXRUNTIME_ROOT}/core/optimizer/transformer_memcpy.cc"
     )
+endif()
 
 if (onnxruntime_ENABLE_TRAINING)
     file(GLOB orttraining_optimizer_srcs CONFIGURE_DEPENDS
@@ -19,7 +31,11 @@ source_group(TREE ${REPO_ROOT} FILES ${onnxruntime_optimizer_srcs})
 
 add_library(onnxruntime_optimizer ${onnxruntime_optimizer_srcs})
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/../include/onnxruntime/core/optimizer  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/onnxruntime/core)
-onnxruntime_add_include_to_target(onnxruntime_optimizer onnxruntime_common onnxruntime_framework onnx onnx_proto protobuf::libprotobuf)
+onnxruntime_add_include_to_target(onnxruntime_optimizer onnxruntime_common onnxruntime_framework onnx_proto protobuf::libprotobuf)
+if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
+  onnxruntime_add_include_to_target(onnxruntime_optimizer onnx)
+endif()
+
 if (MSVC AND NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
    target_compile_options(onnxruntime_optimizer PRIVATE "/wd4244")   
 endif()

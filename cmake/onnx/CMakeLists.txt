@@ -3,6 +3,8 @@
 
 #TODO: if protobuf is a shared lib and onnxruntime_USE_FULL_PROTOBUF is ON, then onnx_proto should be built as a shared lib instead of a static lib. Otherwise any code outside onnxruntime.dll can't use onnx protobuf definitions if they share the protobuf.dll with onnxruntime. For example, if protobuf is a shared lib and onnx_proto is a static lib then onnxruntime_perf_test won't work.
 
+set(ONNX_SOURCE_ROOT ${PROJECT_SOURCE_DIR}/external/onnx)
+
 add_library(onnx_proto ${ONNXRUNTIME_ROOT}/core/protobuf/onnx-ml.proto ${ONNXRUNTIME_ROOT}/core/protobuf/onnx-operators-ml.proto)
 target_include_directories(onnx_proto PUBLIC $<TARGET_PROPERTY:protobuf::libprotobuf,INTERFACE_INCLUDE_DIRECTORIES> "${CMAKE_CURRENT_BINARY_DIR}/..")
 target_compile_definitions(onnx_proto PUBLIC $<TARGET_PROPERTY:protobuf::libprotobuf,INTERFACE_COMPILE_DEFINITIONS>)
@@ -22,10 +24,13 @@ endif()
 set_target_properties(onnx_proto PROPERTIES FOLDER "External/ONNX")
 
 # build full ONNX unless we're limiting to just the ORT model format
-if(NOT onnxruntime_ORT_MODEL_FORMAT)
+if(onnxruntime_ORT_MODEL_FORMAT_ONLY)
+  # need onnx/onnx_pb.h to be accessible
+  target_include_directories(onnx_proto PUBLIC "${ONNX_SOURCE_ROOT}")
+  target_compile_definitions(onnx_proto PUBLIC "ONNX_ML" "ONNX_NAMESPACE=onnx")
+else()
   # Cpp Tests were added and they require googletest
   # since we have our own copy, try using that
-  set(ONNX_SOURCE_ROOT ${PROJECT_SOURCE_DIR}/external/onnx)
   file(GLOB_RECURSE onnx_src CONFIGURE_DEPENDS
       "${ONNX_SOURCE_ROOT}/onnx/*.h"
       "${ONNX_SOURCE_ROOT}/onnx/*.cc"
