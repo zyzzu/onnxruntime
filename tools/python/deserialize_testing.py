@@ -13,28 +13,39 @@ test_models = {
     # r'C:\Users\scmckay\Desktop\OnnxFootprint\quantized.onnx' : 'bert_nlu.ort',
 }
 
-so = ort.SessionOptions()
-so.serialized_model_format = ort.capi.onnxruntime_pybind11_state.SerializationFormat.ORT
-so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED
 
-for model, target in test_models.items():
-    model_dir = os.path.split(model)[0]
-    target_path = os.path.join(model_dir, target)
+def run(create):
 
-    so.optimized_model_filepath = target_path
+    if create:
+        so = ort.SessionOptions()
+        so.serialized_model_format = ort.capi.onnxruntime_pybind11_state.SerializationFormat.ORT
+        so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED
 
-    # so.intra_op_num_threads = num_threads
-    print(f"Converting {model}")
-    sess = ort.InferenceSession(model, sess_options=so)
-    sess = None
+    for model, target in test_models.items():
+        model_dir = os.path.split(model)[0]
+        target_path = os.path.join(model_dir, target)
 
-    orig_size = os.path.getsize(model)
-    new_size = os.path.getsize(target_path)
-    print(f"Serialized {model} to {target_path}. Sizes: orig={orig_size} new={new_size} diff={new_size/orig_size:.4f}")
+        if create:
+            so.optimized_model_filepath = target_path
 
-    run_test_dir(target_path)
-    # os.remove(target_path)
+            # so.intra_op_num_threads = num_threads
+            print(f"Converting {model}")
+            _ = ort.InferenceSession(model, sess_options=so)
 
-    # sess2 = ort.InferenceSession(target_path, deserialize=True)
-    # for i in sess2.get_inputs():
-    #    print(i.name)
+            orig_size = os.path.getsize(model)
+            new_size = os.path.getsize(target_path)
+            print(f"Serialized {model} to {target_path}. Sizes: orig={orig_size} "
+                  f"new={new_size} diff={new_size/orig_size:.4f}")
+
+        if not create and not os.path.exists(target_path):
+            print(f"Missing serialized ORT format model for {model}")
+        else:
+            run_test_dir(target_path)
+            # os.remove(target_path)
+
+        # sess2 = ort.InferenceSession(target_path, deserialize=True)
+        # for i in sess2.get_inputs():
+        #    print(i.name)
+
+
+run(False)
