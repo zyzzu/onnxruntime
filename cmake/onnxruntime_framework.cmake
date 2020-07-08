@@ -14,7 +14,11 @@ if(onnxruntime_ENABLE_INSTRUMENT)
   target_compile_definitions(onnxruntime_framework PRIVATE ONNXRUNTIME_ENABLE_INSTRUMENT)
 endif()
 target_include_directories(onnxruntime_framework PRIVATE ${ONNXRUNTIME_ROOT} PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
-onnxruntime_add_include_to_target(onnxruntime_framework onnxruntime_common onnx onnx_proto protobuf::libprotobuf flatbuffers)
+onnxruntime_add_include_to_target(onnxruntime_framework onnxruntime_common onnx_proto protobuf::libprotobuf flatbuffers)
+#if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
+  onnxruntime_add_include_to_target(onnxruntime_framework onnx)
+#endif()
+
 set_target_properties(onnxruntime_framework PROPERTIES FOLDER "ONNXRuntime")
 # need onnx to build to create headers that this project includes
 add_dependencies(onnxruntime_framework ${onnxruntime_EXTERNAL_DEPENDENCIES})

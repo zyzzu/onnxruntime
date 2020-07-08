@@ -11,6 +11,7 @@
 #include <deque>
 #include "sstream"
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 namespace onnxruntime {
 using OpName_Domain_Version_Schema_Map = std::unordered_map<
     std::string,
@@ -150,3 +151,4 @@ class SchemaRegistryManager : public onnxruntime::IOnnxRuntimeOpSchemaCollection
 };
 
 }  // namespace onnxruntime
+#endif

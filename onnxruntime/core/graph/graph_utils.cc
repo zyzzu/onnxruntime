@@ -289,8 +289,11 @@ bool IsSupportedOptypeVersionAndDomain(const Node& node,
                                        const std::string& op_type,
                                        const std::initializer_list<ONNX_NAMESPACE::OperatorSetVersion>& versions,
                                        const std::string& domain) {
-  return (node.OpType() == op_type && !node.Op()->Deprecated() &&
-          MatchesOpSinceVersion(node, versions) && MatchesOpSetDomain(node, domain));
+  return (node.OpType() == op_type &&
+          // Graph::VerifyNodeAndOpMatch fails if op is deprecated so this check should not be necessary
+          // !node.Op()->Deprecated() &&
+          MatchesOpSinceVersion(node, versions) &&
+          MatchesOpSetDomain(node, domain));
 }
 
 bool MatchesOpSinceVersion(const Node& node, const std::initializer_list<ONNX_NAMESPACE::OperatorSetVersion>& versions) {

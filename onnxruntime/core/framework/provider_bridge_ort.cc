@@ -13,6 +13,7 @@
 #include "core/platform/env.h"
 #include "core/framework/execution_provider.h"
 #include "core/framework/compute_capability.h"
+#include "core/framework/kernel_registry.h"
 #define PROVIDER_BRIDGE_ORT
 #include "core/providers/shared_library/provider_interfaces.h"
 #include "onnx/common/stl_backports.h"

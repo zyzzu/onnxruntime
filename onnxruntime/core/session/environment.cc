@@ -72,6 +72,7 @@ Status Environment::Initialize(std::unique_ptr<logging::LoggingManager> logging_
 
   try {
     // Register Microsoft domain with min/max op_set version as 1/1.
+#if !defined(ORT_MODEL_FORMAT_ONLY)
     std::call_once(schemaRegistrationOnceFlag, []() {
       ONNX_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::Instance().AddDomainToVersion(onnxruntime::kMSDomain, 1, 1);
       ONNX_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::Instance().AddDomainToVersion(onnxruntime::kMSNchwcDomain, 1, 1);
@@ -111,7 +112,6 @@ Status Environment::Initialize(std::unique_ptr<logging::LoggingManager> logging_
     });
 
     // Register MemCpy schema;
-
     // These ops are internal-only, so register outside of onnx
     ORT_ATTRIBUTE_UNUSED ONNX_OPERATOR_SCHEMA(MemcpyFromHost)
         .Input(0, "X", "input", "T")
@@ -136,7 +136,7 @@ Internal copy node
         .SetDoc(R"DOC(
 Internal copy node
 )DOC");
-
+#endif
     // fire off startup telemetry (this call is idempotent)
     const Env& env = Env::Default();
     env.GetTelemetryProvider().LogProcessInfo();

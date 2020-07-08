@@ -213,6 +213,7 @@ class PlannerImpl {
     const KernelCreateInfo* ci = kernel_create_info_map_.at(node.Index());
     ORT_ENFORCE(ci, "InferenceSession should have saved the KernelCreateInfo prior to this running.");
 
+    // Status st = kernel_registry_.SearchKernelRegistry(node, &ci);
     if (/*!st.IsOK() || ci == nullptr ||*/ ci->kernel_def == nullptr) {
       return false;
     }
@@ -410,9 +411,7 @@ class PlannerImpl {
       if (nullptr == p_kernel_def) {
         std::ostringstream errormsg;
         errormsg << "No suitable kernel definition found for op " << pnode->OpType();
-        if (pnode->Op() != nullptr) {
-          errormsg << "(" << pnode->SinceVersion() << ")";
-        }
+        errormsg << "(" << pnode->SinceVersion() << ")";
         if (!pnode->Name().empty()) errormsg << " (node " << pnode->Name() << ")";
         return Status(ONNXRUNTIME, FAIL, errormsg.str());
       }

@@ -74,6 +74,7 @@ option(onnxruntime_USE_AVX512 "Use AVX512 instructions" OFF)
 option(onnxruntime_USE_LLVM "Build tvm with LLVM" OFF)
 option(onnxruntime_USE_OPENMP "Build with OpenMP support" OFF)
 option(onnxruntime_BUILD_SHARED_LIB "Build a shared library" OFF)
+option(onnxruntime_ORT_MODEL_FORMAT_ONLY "Limit build to the components required to execute an ORT formatted model" OFF)
 option(onnxruntime_ENABLE_MICROSOFT_INTERNAL "Use this option to enable/disable microsoft internal only code" OFF)
 option(onnxruntime_USE_NUPHAR "Build with Nuphar" OFF)
 option(onnxruntime_USE_VITISAI "Build with Vitis-AI" OFF)
@@ -195,6 +196,10 @@ if(onnxruntime_DISABLE_RTTI)
   else()
     add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>")
   endif()
+endif()
+
+if(onnxruntime_ORT_MODEL_FORMAT_ONLY)
+  add_compile_definitions(ORT_MODEL_FORMAT_ONLY)
 endif()
 
 set(REPO_ROOT ${PROJECT_SOURCE_DIR}/..)
@@ -510,7 +515,11 @@ include(eigen)
 #onnxruntime_EXTERNAL_LIBRARIES could contain onnx, onnx_proto,libprotobuf, cuda/cudnn, jemalloc,
 # dnnl/mklml, openblas, onnxruntime_codegen_tvm, tvm, nnvm_compiler and pthread
 # pthread is always at the last
-set(onnxruntime_EXTERNAL_LIBRARIES onnx onnx_proto ${PROTOBUF_LIB} re2::re2)
+# if(onnxruntime_ORT_MODEL_FORMAT_ONLY)
+#   set(onnxruntime_EXTERNAL_LIBRARIES onnx_proto ${PROTOBUF_LIB} re2::re2)
+# else()
+  set(onnxruntime_EXTERNAL_LIBRARIES onnx onnx_proto ${PROTOBUF_LIB} re2::re2)
+# endif()
 
 function(onnxruntime_add_include_to_target dst_target)
     foreach(src_target ${ARGN})
@@ -519,7 +528,11 @@ function(onnxruntime_add_include_to_target dst_target)
     endforeach()
 endfunction()
 
-set(onnxruntime_EXTERNAL_DEPENDENCIES onnx_proto)
+# if(onnxruntime_ORT_MODEL_FORMAT_ONLY)
+#   set(onnxruntime_EXTERNAL_DEPENDENCIES onnx_proto)
+# else()
+  set(onnxruntime_EXTERNAL_DEPENDENCIES onnx onnx_proto)
+# endif()
 
 # ACL
 if (onnxruntime_USE_ACL OR onnxruntime_USE_ACL_1902 OR onnxruntime_USE_ACL_1905 OR onnxruntime_USE_ACL_1908)
@@ -613,6 +626,7 @@ if (APPLE)
   string(APPEND CMAKE_CXX_FLAGS " -Wno-deprecated")
   string(APPEND CMAKE_C_FLAGS " -Wno-deprecated")
 endif()
+
 # ONNX
 add_subdirectory(onnx)
 

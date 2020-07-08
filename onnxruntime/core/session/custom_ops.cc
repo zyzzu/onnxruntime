@@ -68,6 +68,8 @@ ORT_API_STATUS_IMPL(OrtApis::KernelInfoGetAttribute_string, _In_ const OrtKernel
   return onnxruntime::ToOrtStatus(status);
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+
 namespace onnxruntime {
 
 struct CustomOpKernel : OpKernel {
@@ -149,3 +151,5 @@ common::Status CreateCustomRegistry(const std::vector<OrtCustomOpDomain*>& op_do
 }
 
 }  // namespace onnxruntime
+
+#endif

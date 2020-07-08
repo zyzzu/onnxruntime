@@ -54,6 +54,8 @@ class KernelRegistry {
 #endif
 
  private:
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+
   // Check whether the types of inputs/outputs of the given node match the extra
   // type-constraints of the given kernel. This serves two purposes: first, to
   // select the right kernel implementation based on the types of the arguments
@@ -71,6 +73,7 @@ class KernelRegistry {
   static bool VerifyKernelDef(const onnxruntime::Node& node,
                               const KernelDef& kernel_def,
                               std::string& error_str);
+#endif
 
   static std::string GetMapKey(const std::string& op_name, const std::string& domain, const std::string& provider) {
     std::string key(op_name);

@@ -44,6 +44,7 @@ namespace onnxruntime {
     GraphProtoSyncNeeded(sync_needed);               \
   } while (0)
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 static bool UsingLatestOnnxOpset(const DomainToVersionMap& opset_versions) {
   bool is_latest_opset = false;
   auto onnx_opset = opset_versions.find(kOnnxDomain);
@@ -90,6 +91,7 @@ static bool GraphLoadedFromModelFile(const GraphProto* graph_proto) {
   return graph_proto && (graph_proto->node_size() != 0 ||
                          graph_proto->output_size() != 0);
 }
+#endif
 
 // there are some known invalid usages of dim_param and dim_value. remove them from the TypeProto so that
 // they don't affect shape inferencing or the allocation planner
@@ -111,6 +113,7 @@ static void RemoveInvalidValues(ONNX_NAMESPACE::TypeProto& type) {
   }
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 static TypeProto TypeProtoFromTensorProto(const TensorProto& tensor) {
   TypeProto t;
   t.mutable_tensor_type()->set_elem_type(tensor.data_type());
@@ -120,6 +123,7 @@ static TypeProto TypeProtoFromTensorProto(const TensorProto& tensor) {
 
   return t;
 }
+#endif
 
 class ProtobufSerializer {
  public:
@@ -128,7 +132,7 @@ class ProtobufSerializer {
     buffer_.resize(1024 * 1024);
   }
 
-  void Serialize(const MessageLite& item) {
+  void Serialize(const google::protobuf::MessageLite& item) {
     auto size = item.ByteSizeLong();
     if (size > buffer_.size()) {
       // round to next 1MB boundary
@@ -231,6 +235,7 @@ bool NodeArg::HasTensorOrScalarShape() const {
   }
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 void NodeArg::SetShape(const TensorShapeProto& shape) {
   const auto type_case = node_arg_info_.type().value_case();
   switch (type_case) {
@@ -385,6 +390,7 @@ void NodeArg::SetType(const TypeProto& type_proto) {
   type_ = DataTypeUtils::ToType(type_proto);
   *(node_arg_info_.mutable_type()) = type_proto;
 }
+#endif
 
 bool NodeArg::Exists() const noexcept {
   return exists_;
@@ -460,14 +466,18 @@ const std::string& Node::Domain() const noexcept {
   return domain_;
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 const OpSchema* Node::Op() const noexcept {
+  // define some types that would come from the ONNX library if we were building against it.
   return op_;
 }
+#endif
 
 Node::Type Node::NodeType() const noexcept {
   return node_type_;
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 void Node::SetNodeType(Node::Type node_type) noexcept {
   node_type_ = node_type;
 }
@@ -494,6 +504,8 @@ void Node::SetFunctionBody(const Function& func) {
   op_ = &func.OpSchema();
 }
 
+#endif
+
 const std::string& Node::GetExecutionProviderType() const noexcept {
   return execution_provider_type_;
 }
@@ -502,6 +514,7 @@ void Node::SetExecutionProviderType(ProviderType execution_provider_type) {
   execution_provider_type_ = execution_provider_type;
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 void Node::ToProto(NodeProto& proto, bool update_subgraphs, bool serializing) const {
   proto.set_name(name_);
   proto.set_op_type(op_type_);
@@ -543,6 +556,7 @@ void Node::ToProto(NodeProto& proto, bool update_subgraphs, bool serializing) co
     proto.add_output(output_def->Name());
   }
 }
+#endif
 
 void Node::Init(const std::string& name,
                 const std::string& op_type,
@@ -571,7 +585,11 @@ void Node::Init(const std::string& name,
 
     for (auto& name_to_attr : attributes_) {
       if (utils::HasGraph(name_to_attr.second)) {
+#if !defined(ORT_MODEL_FORMAT_ONLY)
         CreateSubgraph(name_to_attr.first);
+#else
+        ORT_THROW("Unsupported: Cannot create subgraph from GraphProto");
+#endif
       }
     }
   }
@@ -591,6 +609,7 @@ Node::Relationships& Node::MutableRelationships() noexcept {
   return relationships_;
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 void Node::CreateSubgraph(const std::string& attr_name) {
   auto attr = attributes_.find(attr_name);
 
@@ -601,6 +620,7 @@ void Node::CreateSubgraph(const std::string& attr_name) {
     subgraphs_.push_back(std::move(subgraph));
   }
 }
+#endif
 
 Status Node::CreateSubgraph(const std::string& attr_name, const flexbuffers::Map& map, const logging::Logger& logger) {
   auto serialized_graph = map[attr_name];
@@ -665,7 +685,10 @@ void Node::AddAttribute(const std::string& attr_name, const GraphProto& value) {
   *a.mutable_g() = value;
   attributes_[attr_name] = a;
 
+// subgraph is created via deserialization and not here in ORT_MODEL_FORMAT_ONLY build
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   CreateSubgraph(attr_name);
+#endif
 };
 
 ADD_BASIC_ATTR_IMPL(float, AttributeProto_AttributeType::AttributeProto_AttributeType_FLOAT, f)
@@ -686,6 +709,7 @@ bool Node::ClearAttribute(const std::string& attr_name) {
   return attributes_.erase(attr_name) > 0;
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 Status Node::UpdateInputArgCount() {
   // The node refers to a primitive operator.
   // Infer and verify node input arg type information.
@@ -741,6 +765,7 @@ Status Node::UpdateInputArgCount() {
 
   return Status::OK();
 }
+#endif
 
 const NodeAttributes& Node::GetAttributes() const noexcept {
   return attributes_;
@@ -803,6 +828,7 @@ void Node::ReplaceDefs(const std::map<const onnxruntime::NodeArg*, onnxruntime::
           def = pair.second;
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 Status Node::Serialize(flexbuffers::Builder& builder, ProtobufSerializer& protobuf_serializer) const {
   auto map_start = builder.StartMap();
   builder.Int("node_index", index_);
@@ -856,6 +882,7 @@ Status Node::Serialize(flexbuffers::Builder& builder, ProtobufSerializer& protob
 
   return Status::OK();
 }
+#endif
 
 Status Node::Deserialize(const flexbuffers::Reference& fbr, Graph& graph, const logging::Logger& logger,
                          std::unique_ptr<Node>& node) {
@@ -928,6 +955,7 @@ Status Node::Deserialize(const flexbuffers::Map& map, const logging::Logger& log
   return Status::OK();
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 void Node::SerializeEdges(flexbuffers::Builder& builder) const {
   // edges
   auto add_edges = [&builder](const EdgeSet& edges) {
@@ -954,6 +982,7 @@ void Node::SerializeEdges(flexbuffers::Builder& builder) const {
 
   builder.EndMap(start);
 }
+#endif
 
 void Node::DeserializeEdges(const flexbuffers::Map& map, const Graph& graph) {
   auto input_edges = map["input_edges"].AsTypedVector();
@@ -990,6 +1019,8 @@ void Node::DeserializeEdges(const flexbuffers::Map& map, const Graph& graph) {
 //  return status;
 //}
 using google::protobuf::RepeatedPtrField;
+
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 
 Graph::Graph(const Model& owning_model,
              GraphProto* graph_proto,
@@ -1204,6 +1235,7 @@ void Graph::InitializeStateFromModelFileGraphProto() {
 
   ComputeOverridableInitializers();
 }
+#endif
 
 Status Graph::VerifyNoDuplicateName() {
   auto& inputs_and_initializers = resolve_context_.inputs_and_initializers;
@@ -1735,6 +1767,7 @@ bool FullyDefinedType(const TypeProto& type_proto) {
   }
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 // function to handle type/shape inferencing of a subgraph.
 // parameters are the Graph instance for the subgraph, the input types from the control flow node that contains
 // the subgraph, and the vector to write the output from the inferencing.
@@ -2352,6 +2385,8 @@ void Graph::InitFunctionBodyForNode(Node& node) {
   }
 }
 
+#endif
+
 void Graph::FindAllSubgraphs(std::vector<Graph*>& subgraphs) {
   for (auto& node : Nodes()) {
     for (auto& subgraph : node.MutableSubgraphs()) {
@@ -2401,13 +2436,17 @@ Status Graph::InitInputsInitializersOutputs() {
     }
   }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   ORT_RETURN_IF_ERROR(SetGraphInputsOutputs());
+#endif
+
   ORT_RETURN_IF_ERROR(VerifyInputAndInitializerNames());
   ORT_RETURN_IF_ERROR(VerifyNoDuplicateName());
 
   return Status::OK();
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 Status Graph::PerformTypeAndShapeInferencing(const ResolveOptions& options) {
   ORT_RETURN_IF_ERROR(TypeCheckInputsAndInitializers());
 
@@ -2427,6 +2466,7 @@ Status Graph::PerformTypeAndShapeInferencing(const ResolveOptions& options) {
 
   return Status::OK();
 }
+#endif
 
 Status Graph::ForThisAndAllSubgraphs(const std::vector<Graph*>& subgraphs, std::function<Status(Graph&)> func) {
   auto status = func(*this);
@@ -2478,10 +2518,12 @@ Status Graph::Resolve(const ResolveOptions& options) {
   auto topo_sort_func = [](Graph& graph) { return graph.PerformTopologicalSortAndCheckIsAcyclic(); };
   ORT_RETURN_IF_ERROR(ForThisAndAllSubgraphs(all_subgraphs, topo_sort_func));
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   // type/shape validation and inferencing on this and any subgraphs
   // recurses into subgraphs via the ONNX checker, which descends into the GraphProto in node attributes
   // which define a subgraph.
   ORT_RETURN_IF_ERROR(PerformTypeAndShapeInferencing(options));
+#endif
 
   // perform the final steps for this graph and all subgraphs
   auto finalize_func = [&options](Graph& graph) {
@@ -2693,6 +2735,7 @@ Node& Graph::AddNode(const Node& other) {
   return new_node;
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 Node& Graph::AddNode(const NodeProto& node_proto,
                      const ArgNameToTypeMap& name_to_type_map) {
   auto input_defs = CreateNodeArgs(node_proto.input(), name_to_type_map);
@@ -2715,6 +2758,7 @@ Node& Graph::AddNode(const NodeProto& node_proto,
                  &attributes,
                  node_proto.domain());
 }
+#endif
 
 std::string Graph::GenerateNodeArgName(const std::string& base_name) {
   std::string new_name = base_name;
@@ -2839,6 +2883,7 @@ bool Graph::AddControlEdge(NodeIndex src_node_index, NodeIndex dst_node_index) {
   return true;
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 const ONNX_NAMESPACE::GraphProto& Graph::ToGraphProto() {
   ORT_ENFORCE(graph_proto_ != &deserialized_proto_data_,
               "Graph was loaded via deserialization and cannot be converted to a GraphProto.");
@@ -2907,6 +2952,7 @@ void Graph::ToGraphProtoInternal(ONNX_NAMESPACE::GraphProto& graph_proto) const 
     p_node->ToProto(*node_proto, /* update_subgraphs */ true);
   }
 }
+#endif
 
 void Graph::CleanUnusedInitializers(const std::unordered_set<std::string>* initializer_names_to_preserve) {
   std::unordered_set<std::string> used_args;
@@ -2978,6 +3024,7 @@ void Graph::CleanUnusedInitializers(const std::unordered_set<std::string>* initi
                 });
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 GSL_SUPPRESS(es .84)  // warning about ignoring return value from insert(...)
 Status Graph::SetGraphInputsOutputs() {
   // If loaded from a model file, we start from the specified inputs and
@@ -3118,6 +3165,7 @@ Status Graph::SetGraphInputsOutputs() {
 
   return Status::OK();
 }
+#endif
 
 void Graph::ComputeOverridableInitializers() {
   graph_overridable_initializers_.clear();
@@ -3173,6 +3221,7 @@ bool Graph::ReleaseNode(NodeIndex index) {
   return true;
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 IOnnxRuntimeOpSchemaCollectionPtr Graph::GetSchemaRegistry() const {
   return schema_registry_;
 }
@@ -3321,6 +3370,7 @@ void Graph::SetNodeArgType(NodeArg& arg, const onnx::TypeProto& type_proto) {
   arg.SetType(type_proto);
   GraphResolveNeeded(true);
 }
+#endif
 
 Graph::~Graph() {
   // nothing to do, but we put it here so we don't need to fully define types in Graph that are held in unique_ptr
@@ -3369,7 +3419,7 @@ and the implementations of various accessor functions in those and related class
 Currently onnx-ml.pb is ~55KiB uncompressed so unknown if the engineering cost of taking that approach is work it.
 
 ***********************/
-
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 Status Graph::Serialize(flexbuffers::Builder& builder) const {
   // TODO: Would need some sort of serialization versioning if we go with flexbuffers over flatbuffers
   // and should store the version number here.
@@ -3441,6 +3491,7 @@ Status Graph::Serialize(flexbuffers::Builder& builder) const {
 
   return Status::OK();
 }
+#endif
 
 Graph::Graph(const Model& owning_model, Graph* parent_graph, const Node* parent_node, const logging::Logger& logger)
     : owning_model_(owning_model),
@@ -3493,6 +3544,7 @@ Status Graph::Deserialize(const flexbuffers::Reference& fbr) {
     std::unique_ptr<Node> node;
     ORT_RETURN_IF_ERROR(Node::Deserialize(nodes[cur], *this, logger_, node));
     nodes_[node->Index()] = std::move(node);
+    ++num_of_nodes_;
   }
 
   auto node_edges = root["node_edges"].AsVector();
@@ -3517,6 +3569,8 @@ Status Graph::Deserialize(const flexbuffers::Reference& fbr) {
       graph_inputs_excluding_initializers_.push_back(input_nodearg);
     }
   }
+
+  ComputeOverridableInitializers();
 
   auto outputs = root["graph_outputs"].AsVector();
   auto num_outputs = outputs.size();

@@ -225,6 +225,11 @@ def parse_arguments():
         "(e.g. macOS or iOS)"
         "This is only supported on MacOS")
 
+    parser.add_argument("--ort_model_format", action='store_true',
+                        help="Only support ORT serialized models. This is a minimal build where an ORT serialized "
+                             "model can be loaded and executed. Any other dependencies may be removed from the build "
+                             "such as the ONNX library.")
+
     # Arguments needed by CI
     parser.add_argument(
         "--cmake_path", default="cmake", help="Path to the CMake program.")
@@ -569,6 +574,8 @@ def generate_build_tree(cmake_path, source_dir, build_dir, cuda_home, cudnn_home
         "-Donnxruntime_BUILD_NODEJS=" + ("ON" if args.build_nodejs else "OFF"),
         "-Donnxruntime_BUILD_SHARED_LIB=" + (
             "ON" if args.build_shared_lib else "OFF"),
+        "-Donnxruntime_ORT_MODEL_FORMAT_ONLY=" + (
+            "ON" if args.ort_model_format else "OFF"),
         "-Donnxruntime_USE_EIGEN_FOR_BLAS=" + (
             "OFF" if args.use_openblas else "ON"),
         "-Donnxruntime_USE_OPENBLAS=" + ("ON" if args.use_openblas else "OFF"),

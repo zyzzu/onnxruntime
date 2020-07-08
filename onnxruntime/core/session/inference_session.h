@@ -110,6 +110,7 @@ class InferenceSession {
   explicit InferenceSession(const SessionOptions& session_options,
                             const Environment& session_env);
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   /**
     Create a new InferenceSession
     @param session_options Session options.
@@ -149,8 +150,9 @@ class InferenceSession {
                    const Environment& session_env,
                    const void* model_data,
                    int model_data_len);
-
+#endif
   // construct instance with session_options and session_env first, then call Deserialize
+  // TODO: Should this just take bytes + length so gsl dependency is internal?
   Status Deserialize(const gsl::span<const uint8_t>& flexbuffer_serialized_bytes);
   Status Deserialize(const std::string& model_uri);
   Status Deserialize(const std::wstring& model_uri);
@@ -166,6 +168,7 @@ class InferenceSession {
     */
   common::Status RegisterExecutionProvider(std::unique_ptr<IExecutionProvider> p_exec_provider) ORT_MUST_USE_RESULT;
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   /**
     * Register a graph transformer. If you've one to register, call this before invoking Initialize().
     * Calling this API is optional.
@@ -231,6 +234,7 @@ class InferenceSession {
     * @return OK if success.
     */
   common::Status Load() ORT_MUST_USE_RESULT;
+#endif
 
   /**
     * Initializes a previously loaded model. Initialization includes but is not
@@ -347,6 +351,7 @@ class InferenceSession {
   std::string EndProfiling();
 
  protected:
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   /**
     * Load an ONNX model.
     * @param protobuf object corresponding to the model file. model_proto will be copied by the API.
@@ -362,6 +367,7 @@ class InferenceSession {
   common::Status Load(std::unique_ptr<ONNX_NAMESPACE::ModelProto> p_model_proto) ORT_MUST_USE_RESULT;
 
   common::Status DoPostLoadProcessing(onnxruntime::Model& model) ORT_MUST_USE_RESULT;
+#endif
 
   /// convenience pointer to logger. should always be the same as session_state_.Logger();
   const logging::Logger* session_logger_;
@@ -390,7 +396,11 @@ class InferenceSession {
   common::Status InitializeImpl(const flexbuffers::Reference* serialized_data = nullptr) ORT_MUST_USE_RESULT;
 
   bool HasLocalSchema() const {
+#if !defined(ORT_MODEL_FORMAT_ONLY)
     return !custom_schema_registries_.empty();
+#else
+    return false;
+#endif
   }
 
   common::Status SaveModelMetadata(const onnxruntime::Model& model) ORT_MUST_USE_RESULT;
@@ -403,9 +413,10 @@ class InferenceSession {
   const logging::Logger& CreateLoggerForRun(const RunOptions& run_options,
                                             std::unique_ptr<logging::Logger>& new_run_logger);
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   common::Status Load(std::function<common::Status(std::shared_ptr<Model>&)> loader,
                       const std::string& event_name) ORT_MUST_USE_RESULT;
-
+#endif
   common::Status TransformGraph(onnxruntime::Graph& graph,
                                 const onnxruntime::GraphTransformerManager& graph_transformer_mgr,
                                 const ExecutionProviders& providers, KernelRegistryManager& kernel_registry_manager,
@@ -431,8 +442,10 @@ class InferenceSession {
 
   common::Status WaitForNotification(Notification* p_executor_done, int64_t timeout_in_ms) ORT_MUST_USE_RESULT;
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   template <typename T>
   common::Status Load(const std::basic_string<T>& model_uri) ORT_MUST_USE_RESULT;
+#endif
 
   template <typename T>
   void StartProfiling(const std::basic_string<T>& file_prefix);
@@ -498,7 +511,9 @@ class InferenceSession {
   bool use_per_session_threads_;
 
   KernelRegistryManager kernel_registry_manager_;
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   std::list<std::shared_ptr<onnxruntime::IOnnxRuntimeOpSchemaCollection>> custom_schema_registries_;
+#endif
 
   ModelMetadata model_metadata_;
   std::unordered_set<std::string> required_inputs_;
@@ -526,9 +541,11 @@ class InferenceSession {
   bool is_inited_ = false;                       // GUARDED_BY(session_mutex_)
   InsertCastTransformer insert_cast_transformer_;
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   //CustomRegistry objects own the corresponding KernelRegistry and OnnxRuntimeOpSchemaRegistry objects.
   //So its lifetime should be same as its constituents. This vector is to extend the lifetime of the owner.
   std::vector<std::shared_ptr<CustomRegistry>> custom_registries_;
+#endif
 
 #ifdef ENABLE_LANGUAGE_INTEROP_OPS
   InterOpDomains interop_domains_;

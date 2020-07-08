@@ -3,6 +3,7 @@
 
 #include "core/graph/schema_registry.h"
 #include "core/common/logging/logging.h"
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 
 namespace onnxruntime {
 // Add customized domain to min/max version.
@@ -263,3 +264,4 @@ void SchemaRegistryManager::GetSchemaAndHistory(
 }
 
 }  // namespace onnxruntime
+#endif
