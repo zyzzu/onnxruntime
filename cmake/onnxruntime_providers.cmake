@@ -129,9 +129,9 @@ if (MSVC AND NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
 endif()
 
 onnxruntime_add_include_to_target(onnxruntime_providers onnxruntime_common onnxruntime_framework onnx_proto protobuf::libprotobuf)
-if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
+#if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
   onnxruntime_add_include_to_target(onnxruntime_providers onnx)
-endif()
+#endif()
 
 
 if (onnxruntime_USE_FEATURIZERS)

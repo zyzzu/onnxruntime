@@ -130,8 +130,6 @@ else()
   )
 endif()
 
-message("${onnxruntime_test_framework_src_patterns}")
-
 file(GLOB onnxruntime_test_training_src
   "${ORTTRAINING_SOURCE_DIR}/test/model/*.cc"
   "${ORTTRAINING_SOURCE_DIR}/test/gradient/*.cc"
@@ -167,10 +165,12 @@ else()
   )
 endif()
 
+if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
 if(NOT onnxruntime_DISABLE_CONTRIB_OPS)
   list(APPEND onnxruntime_test_providers_src_patterns
     "${TEST_SRC_DIR}/contrib_ops/*.h"
     "${TEST_SRC_DIR}/contrib_ops/*.cc")
+endif()
 endif()
 
 if(onnxruntime_USE_FEATURIZERS)
@@ -455,9 +455,9 @@ endif()
 
 onnxruntime_add_include_to_target(onnxruntime_test_utils onnxruntime_common onnxruntime_framework GTest::gtest onnx_proto)
 
-if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
+#if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
   onnxruntime_add_include_to_target(onnxruntime_test_utils onnx)
-endif()
+#endif()
 
 if (onnxruntime_USE_DNNL)
   target_compile_definitions(onnxruntime_test_utils PUBLIC USE_DNNL=1)
@@ -646,9 +646,9 @@ endif()
 onnxruntime_add_include_to_target(onnx_test_runner_common onnxruntime_common onnxruntime_framework
         onnxruntime_test_utils onnx_proto re2::re2)
 
-if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
+#if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
   onnxruntime_add_include_to_target(onnx_test_runner_common onnx)
-endif()
+#endif()
 
 add_dependencies(onnx_test_runner_common onnx_test_data_proto ${onnxruntime_EXTERNAL_DEPENDENCIES})
 target_include_directories(onnx_test_runner_common PRIVATE ${eigen_INCLUDE_DIRS} ${RE2_INCLUDE_DIR}

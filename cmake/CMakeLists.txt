@@ -515,11 +515,11 @@ include(eigen)
 #onnxruntime_EXTERNAL_LIBRARIES could contain onnx, onnx_proto,libprotobuf, cuda/cudnn, jemalloc,
 # dnnl/mklml, openblas, onnxruntime_codegen_tvm, tvm, nnvm_compiler and pthread
 # pthread is always at the last
-if(onnxruntime_ORT_MODEL_FORMAT_ONLY)
-  set(onnxruntime_EXTERNAL_LIBRARIES onnx_proto ${PROTOBUF_LIB} re2::re2)
-else()
+# if(onnxruntime_ORT_MODEL_FORMAT_ONLY)
+#   set(onnxruntime_EXTERNAL_LIBRARIES onnx_proto ${PROTOBUF_LIB} re2::re2)
+# else()
   set(onnxruntime_EXTERNAL_LIBRARIES onnx onnx_proto ${PROTOBUF_LIB} re2::re2)
-endif()
+# endif()
 
 function(onnxruntime_add_include_to_target dst_target)
     foreach(src_target ${ARGN})
@@ -528,11 +528,11 @@ function(onnxruntime_add_include_to_target dst_target)
     endforeach()
 endfunction()
 
-if(onnxruntime_ORT_MODEL_FORMAT_ONLY)
-  set(onnxruntime_EXTERNAL_DEPENDENCIES onnx_proto)
-else()
+# if(onnxruntime_ORT_MODEL_FORMAT_ONLY)
+#   set(onnxruntime_EXTERNAL_DEPENDENCIES onnx_proto)
+# else()
   set(onnxruntime_EXTERNAL_DEPENDENCIES onnx onnx_proto)
-endif()
+# endif()
 
 # ACL
 if (onnxruntime_USE_ACL OR onnxruntime_USE_ACL_1902 OR onnxruntime_USE_ACL_1905 OR onnxruntime_USE_ACL_1908)

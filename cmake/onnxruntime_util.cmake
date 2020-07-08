@@ -23,9 +23,9 @@ if (onnxruntime_USE_CUDA)
 endif()
 
 onnxruntime_add_include_to_target(onnxruntime_util onnxruntime_common onnxruntime_framework onnx_proto protobuf::libprotobuf)
-if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
+#if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
   onnxruntime_add_include_to_target(onnxruntime_util onnx)
-endif()
+#endif()
 
 if(UNIX)
     target_compile_options(onnxruntime_util PUBLIC "-Wno-error=comment")

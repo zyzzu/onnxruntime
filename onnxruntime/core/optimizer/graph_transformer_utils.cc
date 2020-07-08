@@ -161,11 +161,14 @@ std::vector<std::unique_ptr<GraphTransformer>> GenerateTransformers(TransformerL
     } break;
 
     case TransformerLevel::Level3: {
+// TEMP - can enable but need to include the NCHWc files in the build. testing without initially
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 #ifndef DISABLE_CONTRIB_OPS
       // Register the NCHWc layout transformer if supported by the platform.
       if (MlasNchwcGetBlockSize() > 1) {
         transformers.emplace_back(onnxruntime::make_unique<NchwcTransformer>());
       }
+#endif
 #endif
     } break;
 
@@ -185,6 +188,9 @@ std::vector<std::unique_ptr<GraphTransformer>> GenerateTransformers(TransformerL
     return transformers;
   }
 
+  // TEMP - can enable but need to include the relevant files in the build. testing without initially
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+
   // Some transformers have side-effect like result is not exactly same.
   // These transformers could only be enabled by custom transformer list.
 #ifndef DISABLE_CONTRIB_OPS
@@ -192,6 +198,8 @@ std::vector<std::unique_ptr<GraphTransformer>> GenerateTransformers(TransformerL
     std::unordered_set<std::string> cuda_execution_providers = {onnxruntime::kCudaExecutionProvider};
     transformers.emplace_back(onnxruntime::make_unique<GeluApproximation>(cuda_execution_providers));
   }
+#endif
+
 #endif
 
   std::vector<std::unique_ptr<GraphTransformer>> filtered_list;

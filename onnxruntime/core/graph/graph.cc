@@ -3165,6 +3165,7 @@ Status Graph::SetGraphInputsOutputs() {
 
   return Status::OK();
 }
+#endif
 
 void Graph::ComputeOverridableInitializers() {
   graph_overridable_initializers_.clear();
@@ -3188,7 +3189,6 @@ void Graph::ComputeOverridableInitializers() {
     }
   }
 }
-#endif
 
 // calling private ctor
 GSL_SUPPRESS(r .11)
