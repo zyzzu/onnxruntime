@@ -25,7 +25,7 @@ set_target_properties(onnx_proto PROPERTIES FOLDER "External/ONNX")
 
 # Cpp Tests were added and they require googletest
 # since we have our own copy, try using that
-if(onnxruntime_ORT_MODEL_FORMAT_ONLY)
+if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
   file(GLOB_RECURSE onnx_src CONFIGURE_DEPENDS
       "${ONNX_SOURCE_ROOT}/onnx/*.h"
       "${ONNX_SOURCE_ROOT}/onnx/*.cc"
