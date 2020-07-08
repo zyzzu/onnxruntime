@@ -62,6 +62,9 @@
 [submodule "cmake/external/onnx-tensorrt"]
 	path = cmake/external/onnx-tensorrt
 	url = https://github.com/stevenlix/onnx-tensorrt.git
+[submodule "cmake/external/libprotobuf-mutator"]
+	path = cmake/external/libprotobuf-mutator
+	url = https://github.com/google/libprotobuf-mutator.git
 [submodule "cmake/external/flatbuffers"]
 	path = cmake/external/flatbuffers
 	url = https://github.com/google/flatbuffers
