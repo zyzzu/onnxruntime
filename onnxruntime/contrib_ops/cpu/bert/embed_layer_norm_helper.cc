@@ -3,7 +3,6 @@
 
 #include "embed_layer_norm_helper.h"
 #include "core/framework/tensorprotoutils.h"
-#include "onnx/defs/tensor_proto_util.h"
 
 namespace onnxruntime {
 namespace contrib {
@@ -17,7 +16,7 @@ Status CheckInputs(const OpKernelContext* context) {
   const Tensor* segment_embedding = context->Input<Tensor>(4);
   const Tensor* gamma = context->Input<Tensor>(5);
   const Tensor* beta = context->Input<Tensor>(6);
-  const Tensor* mask = context->Input<Tensor>(7); // optional. nullptr if not provided
+  const Tensor* mask = context->Input<Tensor>(7);  // optional. nullptr if not provided
 
   if (input_ids->Shape() != segment_ids->Shape()) {
     return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT,
@@ -28,7 +27,6 @@ Status CheckInputs(const OpKernelContext* context) {
     return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT,
                            "Input 0 and 7 (mask) shall have same shape");
   }
-
 
   const auto& input_dims = input_ids->Shape().GetDims();
   if (input_dims.size() != 2) {

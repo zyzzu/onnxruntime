@@ -17,22 +17,28 @@
 #include "core/framework/tensor_shape.h"
 #include "core/framework/tensorprotoutils.h"
 #include "core/framework/utils.h"
+
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 #include "core/graph/function.h"
 #include "core/graph/function_impl.h"
+#include "onnx/checker.h"
+#endif
+
 #include "core/graph/graph_utils.h"
 #include "core/graph/graph_viewer.h"
 #include "core/graph/indexed_sub_graph.h"
+#include "core/graph/model.h"
 #include "core/graph/schema_registry.h"
 #include "core/graph/op.h"
-
-#include "onnx/checker.h"
 
 #include "safeint/SafeInt.hpp"
 #include "flatbuffers/flexbuffers.h"
 
 using namespace ONNX_NAMESPACE;
 using namespace ONNX_NAMESPACE::Utils;
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 using namespace ONNX_NAMESPACE::checker;
+#endif
 using namespace ::onnxruntime::common;
 
 namespace onnxruntime {

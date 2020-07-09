@@ -10,6 +10,9 @@ if(onnxruntime_DISABLE_ML_OPS)
   list(FILTER onnxruntime_providers_srcs EXCLUDE REGEX ".*/ml/.*")
 endif()
 
+# TODO: Need a way to split out contrib ops that are used by optimizers vs others
+#       Possibly need finer granularity as well.
+#       e.g. could include/exclude based on model type such as BERT or whether NCHWc may apply
 #if (NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
 file(GLOB_RECURSE onnxruntime_cpu_contrib_ops_srcs CONFIGURE_DEPENDS
   "${ONNXRUNTIME_ROOT}/contrib_ops/cpu/*.h"
@@ -22,6 +25,10 @@ file(GLOB_RECURSE onnxruntime_cpu_contrib_ops_srcs CONFIGURE_DEPENDS
 #   "${ONNXRUNTIME_ROOT}/contrib_ops/cpu/activations.*"
 # )
 # endif()
+
+if(onnxruntime_EXCLUDE_TOKENIZER_CONTRIB_OP)
+  LIST(REMOVE_ITEM onnxruntime_cpu_contrib_ops_srcs "${ONNXRUNTIME_ROOT}/contrib_ops/cpu/tokenizer.cc")
+endif()
 
 file(GLOB_RECURSE onnxruntime_cuda_contrib_ops_cc_srcs CONFIGURE_DEPENDS
   "${ONNXRUNTIME_ROOT}/contrib_ops/cuda/*.h"

@@ -15,8 +15,6 @@ class AttributeProto;
 // define some types that would come from the ONNX library if we were building against it.
 #if defined(ORT_MODEL_FORMAT_ONLY)
 using OperatorSetVersion = int;
-//using OpSchema = void;
-//using DataType = const std::string*;
 #endif
 }  // namespace ONNX_NAMESPACE
 

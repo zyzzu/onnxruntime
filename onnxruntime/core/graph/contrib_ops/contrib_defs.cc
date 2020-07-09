@@ -1534,6 +1534,7 @@ Scale and zero point must have same shape. They must be either scalar (per tenso
         updateOutputShape(ctx, 0, input_shape);
       });
 
+#if !defined(EXCLUDE_TOKENIZER_CONTRIB_OP)
   static const char* Tokenizer_ver1_doc = R"DOC(
   Tokenizer divides each string in X into a vector of strings along the last axis. Allowed input shapes are [C] and [N, C].
   If the maximum number of tokens found per input string is D, the output shape would be [N, C, D] when input shape is [N, C].
@@ -1642,6 +1643,7 @@ of [N, 0] then [N, 0].
         }
         updateOutputShape(ctx, 0, output_shape);
       });
+#endif
 
   ONNX_CONTRIB_OPERATOR_SCHEMA(MatMulInteger16)
       .SetDomain(kMSDomain)

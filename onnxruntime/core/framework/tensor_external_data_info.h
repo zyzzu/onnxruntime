@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 #pragma once
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+
 #include <string>
 #include "core/common/status.h"
 #include "core/graph/onnx_protobuf.h"
@@ -36,3 +38,5 @@ class ExternalDataInfo {
                                std::unique_ptr<ExternalDataInfo>& out);
 };
 }  // namespace onnxruntime
+
+#endif

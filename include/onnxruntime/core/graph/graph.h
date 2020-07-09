@@ -1151,9 +1151,8 @@ class Graph {
   std::vector<NodeArg*> CreateNodeArgs(const google::protobuf::RepeatedPtrField<std::string>& names,
                                        const ArgNameToTypeMap& name_to_type_map);
 
-  void AddFunction(const ONNX_NAMESPACE::FunctionProto* func_proto);
-
 #if !defined(ORT_MODEL_FORMAT_ONLY)
+  void AddFunction(const ONNX_NAMESPACE::FunctionProto* func_proto);
   void ToGraphProtoInternal(ONNX_NAMESPACE::GraphProto& graph_proto) const;
 #endif
 
@@ -1258,7 +1257,9 @@ class Graph {
 
   const std::unordered_map<std::string, int> domain_to_version_;
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   std::unordered_map<std::string, const ONNX_NAMESPACE::FunctionProto*> model_functions_;
+  #endif
 
   // Model IR version.
   Version ir_version_{ONNX_NAMESPACE::Version::IR_VERSION};

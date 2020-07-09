@@ -1,6 +1,8 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+
 #include "tensor_external_data_info.h"
 #include "core/common/common.h"
 #include "core/platform/path_lib.h"
@@ -50,3 +52,5 @@ Status ExternalDataInfo::Create(const RepeatedPtrField<StringStringEntryProto>& 
   return Status::OK();
 }
 }  // namespace onnxruntime
+
+#endif

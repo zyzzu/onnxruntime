@@ -36,12 +36,14 @@
 
 #if !defined(ORT_MODEL_FORMAT_ONLY)
 #include "onnx/defs/schema.h"
-#endif
-
-// TEMP
+#else
 #include "onnx/defs/data_type_utils.h"
-#include "onnx/defs/schema.h"
-//////
+//#include "onnx/defs/schema.h"
+
+namespace ONNX_NAMESPACE {
+class OpSchema {};
+}  // namespace ONNX_NAMESPACE
+#endif
 
 #include "onnx/onnx_pb.h"
 

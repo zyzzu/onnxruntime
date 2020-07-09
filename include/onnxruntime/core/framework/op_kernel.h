@@ -16,9 +16,9 @@
 #include "core/framework/tensor.h"
 #include "core/framework/sparse_tensor.h"
 #include "core/graph/constants.h"
+#include "core/graph/onnx_protobuf.h"
 #include "core/graph/graph_viewer.h"
 #include "gsl/gsl"
-#include "onnx/defs/schema.h"
 
 namespace onnxruntime {
 class IExecutionFrame;

@@ -116,3 +116,60 @@ Other notes:
     - e.g. Graph has Hash of unique_ptr<NodeArg> for 552 bytes
     - may not exist in MinSizeRel build
 
+===============================
+New setup:
+
+Commit id from master (2020-07-08, should be ~ORT 1.4 release): 6d6b6b54a544f69fb201a9aab7097358f6a440ff
+Updated: ort.vs19.perf.master, ort.serialize and ort.deserialize are all on the same base commit id
+
+Build flags:
+  Master: --disable_rtti --disable_ml_ops
+  Deserialize: Add --ort_model_format 
+
+MinSizeRel build
+  Base: .\build.bat --parallel --build_shared_lib --build_wheel --cmake_generator="Visual Studio 16 2019" --config=MinSizeRel --disable_rtti --disable_ml_ops --build --update --skip_submodule_sync
+  Deserialize: .\build.bat --parallel --build_shared_lib --build_wheel --cmake_generator="Visual Studio 16 2019" --config=MinSizeRel --ort_model_format --disable_rtti --disable_ml_ops --build --update --skip_submodule_sync
+
+Master
+    RelWithDebInfo  onnxruntime.dll	    5,236,736
+    MinSizeRel      onnxruntime.dll	    4,398,080
+
+Ort.deserialize (RelWithDebInfo.1 folder)
+    RelWithDebInfo  onnxruntime.dll	    3,833,344
+    MinSizeRel      onnxruntime.dll	    3,231,744
+                    onnxruntime.zip	    1,223,231
+=================================
+
+Next steps:
+
+Reduced onnx_proto
+  68KB (-15KB)
+  - no usage of onnx-operators-ml.proto
+  - comment out training related types
+  - fix some places to not directly include schema.h from onnx as that's broken with these changes 
+
+Removed re2 dependency and Tokenizer contrib op
+  -163KB
+
+Removed parsing of json from Model to save json parser cost
+  -70KB (68 in inference_session_utils.obj and a couple in inference_session.obj) 
+
+
+=================================
+Next steps:
+
+- remove optimzer support
+  - can disable a lot more code in Graph as well
+  - can try building with no contrib ops to see what size is possible
+    - however the disable unused ops approach is what would be needed for production given we want to save an optimized model which will require some contrib ops in most cases
+
+- reduce onnx_proto further
+  - could try and remove TensorProto dependency
+    - could cut out ORT code dealing with TensorProto for a good reduction
+      - heavy change to implement though
+    - doing so implies no optimizers as the implementations are currently heavily dependent on working at the TensorProto level
+
+- exclude AVS512 from MLAS 
+
+- make telemetry optional
+  - currently only user of ModelProto metadata as well

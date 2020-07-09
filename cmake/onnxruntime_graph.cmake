@@ -7,29 +7,50 @@ file(GLOB_RECURSE onnxruntime_graph_src CONFIGURE_DEPENDS
   "${ONNXRUNTIME_ROOT}/core/graph/*.cc"
   )
 
+# create empty list for any excludes
+set(onnxruntime_graph_src_exclude_patterns)
+
+if (onnxruntime_ORT_MODEL_FORMAT_ONLY)
+  # remove schema registration from contrib ops
+  list(APPEND onnxruntime_graph_src_exclude_patterns
+    "${ONNXRUNTIME_ROOT}/core/graph/contrib_ops/*defs.h"
+    "${ONNXRUNTIME_ROOT}/core/graph/contrib_ops/*defs.cc"
+  )
+
+  # remove Function related files
+  list(APPEND onnxruntime_graph_src_exclude_patterns
+    "${ONNXRUNTIME_ROOT}/core/graph/function*"
+  )
+endif()
+
 if (onnxruntime_DISABLE_CONTRIB_OPS)
-  list(REMOVE_ITEM onnxruntime_graph_src
+  list(APPEND onnxruntime_graph_src_exclude_patterns
     "${ONNXRUNTIME_ROOT}/core/graph/contrib_ops/*.h"
     "${ONNXRUNTIME_ROOT}/core/graph/contrib_ops/*.cc"
-    )
+  )
+elseif(onnxruntime_ORT_MODEL_FORMAT_ONLY)
+  # exclude Tokenizer to avoid re2 dependency
+  list(APPEND onnxruntime_graph_src_exclude_patterns
+    "${ONNXRUNTIME_ROOT}/core/graph/contrib_ops/tokenizer.*"
+  )
 endif()
 
 if(NOT onnxruntime_USE_FEATURIZERS)
-  file(GLOB_RECURSE featurizers_to_remove_graph_src
+  list(APPEND onnxruntime_graph_src_exclude_patterns
     "${ONNXRUNTIME_ROOT}/core/graph/featurizers_ops/*.h"
     "${ONNXRUNTIME_ROOT}/core/graph/featurizers_ops/*.cc"
-    )
-  foreach(I in ${featurizers_to_remove_graph_src})
-    list(REMOVE_ITEM onnxruntime_graph_src ${I})
-  endforeach()
+  )
 endif()
 
 if(NOT onnxruntime_USE_DML)
-  list(REMOVE_ITEM onnxruntime_graph_src
+  list(APPEND onnxruntime_graph_src_exclude_patterns
     "${ONNXRUNTIME_ROOT}/core/graph/dml_ops/*.h"
     "${ONNXRUNTIME_ROOT}/core/graph/dml_ops/*.cc"
-    )
+  )
 endif()
+
+file(GLOB onnxruntime_graph_src_exclude ${onnxruntime_graph_src_exclude_patterns})
+list(REMOVE_ITEM onnxruntime_graph_src ${onnxruntime_graph_src_exclude})
 
 file(GLOB_RECURSE onnxruntime_ir_defs_src CONFIGURE_DEPENDS
   "${ONNXRUNTIME_ROOT}/core/defs/*.cc"

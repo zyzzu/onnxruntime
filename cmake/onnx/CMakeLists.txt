@@ -5,7 +5,12 @@
 
 set(ONNX_SOURCE_ROOT ${PROJECT_SOURCE_DIR}/external/onnx)
 
-add_library(onnx_proto ${ONNXRUNTIME_ROOT}/core/protobuf/onnx-ml.proto ${ONNXRUNTIME_ROOT}/core/protobuf/onnx-operators-ml.proto)
+#if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
+  add_library(onnx_proto ${ONNXRUNTIME_ROOT}/core/protobuf/onnx-ml.proto ${ONNXRUNTIME_ROOT}/core/protobuf/onnx-operators-ml.proto)
+#else()
+#  add_library(onnx_proto ${ONNXRUNTIME_ROOT}/core/protobuf/onnx-ml.proto)
+#endif()
+
 target_include_directories(onnx_proto PUBLIC $<TARGET_PROPERTY:protobuf::libprotobuf,INTERFACE_INCLUDE_DIRECTORIES> "${CMAKE_CURRENT_BINARY_DIR}/..")
 target_compile_definitions(onnx_proto PUBLIC $<TARGET_PROPERTY:protobuf::libprotobuf,INTERFACE_COMPILE_DEFINITIONS>)
 onnxruntime_protobuf_generate(APPEND_PATH IMPORT_DIRS ${ONNXRUNTIME_ROOT}/core/protobuf TARGET onnx_proto)

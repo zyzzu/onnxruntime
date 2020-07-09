@@ -5,8 +5,6 @@
 #include "core/framework/tensor.h"
 #include "core/framework/op_kernel.h"
 #include "core/graph/onnx_protobuf.h"
-#include "onnx/defs/schema.h"
-
 #include "core/common/utf8_util.h"
 #include "re2/re2.h"
 

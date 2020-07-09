@@ -5,11 +5,10 @@
 #include "core/common/status.h"
 #include "core/common/logging/logging.h"
 #include "core/graph/graph_viewer.h"
+#include "core/graph/onnx_protobuf.h"
 #include "core/graph/op.h"
-#include "onnx/defs/schema.h"
 #include "core/framework/op_kernel.h"
 #include "core/framework/tensorprotoutils.h"
-#include "onnx/defs/schema.h"
 #include "gsl/gsl"
 using namespace ONNX_NAMESPACE;
 using namespace ::onnxruntime::common;
@@ -49,7 +48,7 @@ inline bool HasTyped<GraphProto>(const AttributeProto* attr) {
     if (!attr) {                                                                                   \
       return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "No attribute with name:'", name, "'is defined."); \
     }                                                                                              \
-    if (!HasTyped<T>(attr)) {                                                                \
+    if (!HasTyped<T>(attr)) {                                                                      \
       return Status(ONNXRUNTIME, FAIL, "Attibute name and type don't match");                      \
     } else {                                                                                       \
       *value = static_cast<T>(attr->type());                                                       \
@@ -87,6 +86,7 @@ inline bool HasTyped<GraphProto>(const AttributeProto* attr) {
     return Status::OK();                                                           \
   }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 #define ORT_DEFINE_GET_ATTR_SPECIALIZATIONS(type, list)   \
   ORT_DEFINE_GET_ATTR(ProtoHelperNodeContext, type, list) \
   ORT_DEFINE_GET_ATTR(InferenceContext, type, list)
@@ -94,6 +94,13 @@ inline bool HasTyped<GraphProto>(const AttributeProto* attr) {
 #define ORT_DEFINE_GET_ATTRS_SPECIALIZATIONS(type, list)   \
   ORT_DEFINE_GET_ATTRS(ProtoHelperNodeContext, type, list) \
   ORT_DEFINE_GET_ATTRS(InferenceContext, type, list)
+#else
+#define ORT_DEFINE_GET_ATTR_SPECIALIZATIONS(type, list) \
+  ORT_DEFINE_GET_ATTR(ProtoHelperNodeContext, type, list)
+
+#define ORT_DEFINE_GET_ATTRS_SPECIALIZATIONS(type, list) \
+  ORT_DEFINE_GET_ATTRS(ProtoHelperNodeContext, type, list)
+#endif
 
 ORT_DEFINE_GET_ATTR_SPECIALIZATIONS(float, f)
 ORT_DEFINE_GET_ATTR_SPECIALIZATIONS(int64_t, i)
@@ -172,6 +179,7 @@ bool OpNodeProtoHelper<Impl_t>::HasPrimitiveAttribute(AttributeProto_AttributeTy
 }
 
 template class OpNodeProtoHelper<ProtoHelperNodeContext>;
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 template class OpNodeProtoHelper<InferenceContext>;
-
+#endif
 }  // namespace onnxruntime

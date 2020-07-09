@@ -1,6 +1,8 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+
 #include "core/session/inference_session_utils.h"
 
 namespace onnxruntime {
@@ -220,3 +222,5 @@ Status InferenceSessionUtils::ParseRunOptionsFromModelProto(RunOptions& /*run_op
 }
 
 }  // namespace onnxruntime
+
+#endif

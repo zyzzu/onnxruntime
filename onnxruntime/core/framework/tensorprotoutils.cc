@@ -350,6 +350,7 @@ class AutoDelete {
   }
 };
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 static void DeleteCharArray(void* param) noexcept {
   auto arr = reinterpret_cast<char*>(param);
   delete[] arr;
@@ -383,6 +384,7 @@ static Status GetFileContent(
   raw_buffer = buffer.release();
   return Status::OK();
 }
+#endif
 
 static void MoveOrtCallback(OrtCallback& from, OrtCallback& to) {
   to.f = from.f;
@@ -408,6 +410,11 @@ Status TensorProtoToMLValue(const Env& env, const ORTCHAR_T* tensor_proto_path,
   void* tensor_data;
   {
     if (tensor_proto.data_location() == TensorProto_DataLocation_EXTERNAL) {
+#if defined(ORT_MODEL_FORMAT_ONLY)
+      ORT_UNUSED_PARAMETER(tensor_proto_path);
+      ORT_UNUSED_PARAMETER(env);
+      ORT_THROW("External data is not supported");
+#else
       if (ele_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING)
         return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT, "string tensor can not have raw data");
 
@@ -425,6 +432,7 @@ Status TensorProtoToMLValue(const Env& env, const ORTCHAR_T* tensor_proto_path,
       ORT_RETURN_IF_ERROR(GetFileContent(
           env, full_path.c_str(), external_data_info->GetOffset(), raw_data_len,
           raw_data, deleter_for_file_data.d));
+#endif
     } else if (utils::HasRawData(tensor_proto)) {
       if (ele_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING)
         return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT, "string tensor can not have raw data");

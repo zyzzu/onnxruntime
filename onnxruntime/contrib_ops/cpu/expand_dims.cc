@@ -2,8 +2,7 @@
 // Licensed under the MIT License.
 
 #include "expand_dims.h"
-#include "onnx/defs/schema.h"
-#include "sample.h"
+#include "core/graph/onnx_protobuf.h"
 
 namespace onnxruntime {
 namespace contrib {
@@ -16,5 +15,5 @@ ONNX_CPU_OPERATOR_TYPED_MS_KERNEL(
         .TypeConstraint("T", DataTypeImpl::AllTensorTypes())
         .TypeConstraint("axis", DataTypeImpl::GetTensorType<int32_t>()),
     contrib::ExpandDims);
-} // namespace contrib
+}  // namespace contrib
 }  // namespace onnxruntime

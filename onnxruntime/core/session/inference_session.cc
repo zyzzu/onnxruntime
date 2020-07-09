@@ -97,12 +97,16 @@ static Status FinalizeSessionOptions(const SessionOptions& user_provided_session
                                      const ONNX_NAMESPACE::ModelProto& model_proto,
                                      bool is_model_proto_parsed,
                                      /*out*/ SessionOptions& finalized_session_options) {
+  // default to using user provided session options instance
+  finalized_session_options = user_provided_session_options;
+
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+  bool session_options_from_model = false;
+
   const logging::Logger& default_logger = logging::LoggingManager::DefaultLogger();
 
   // By now the environment should have initialized. (It is enforced prior to this.)
   const Env& env_instance = Env::Default();
-
-  bool session_options_from_model = false;
 
   // Get the value held by the environment variable - kOrtLoadConfigFromModelEnvVar
   const std::string load_config_from_model_env_var_value =
@@ -149,10 +153,11 @@ static Status FinalizeSessionOptions(const SessionOptions& user_provided_session
 
     // use the constructed session options
     finalized_session_options = constructed_session_options;
-  } else {
-    // use user provided session options instance
-    finalized_session_options = user_provided_session_options;
   }
+#else
+  ORT_UNUSED_PARAMETER(is_model_proto_parsed);
+  ORT_UNUSED_PARAMETER(model_proto);
+#endif
 
   return Status::OK();
 }

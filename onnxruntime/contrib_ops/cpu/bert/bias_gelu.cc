@@ -4,7 +4,6 @@
 #include "bias_gelu.h"
 #include "bias_gelu_helper.h"
 #include "core/framework/tensorprotoutils.h"
-#include "onnx/defs/tensor_proto_util.h"
 #include "core/common/safeint.h"
 #include "core/framework/tensor.h"
 #include "core/platform/threadpool.h"

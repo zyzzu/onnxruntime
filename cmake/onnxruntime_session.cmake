@@ -19,7 +19,12 @@ onnxruntime_add_include_to_target(onnxruntime_session onnxruntime_common onnxrun
 if(onnxruntime_ENABLE_INSTRUMENT)
   target_compile_definitions(onnxruntime_session PUBLIC ONNXRUNTIME_ENABLE_INSTRUMENT)
 endif()
-target_include_directories(onnxruntime_session PRIVATE ${ONNXRUNTIME_ROOT} ${PROJECT_SOURCE_DIR}/external/json ${eigen_INCLUDE_DIRS})
+
+target_include_directories(onnxruntime_session PRIVATE ${ONNXRUNTIME_ROOT} ${eigen_INCLUDE_DIRS})
+if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
+  target_include_directories(onnxruntime_session PRIVATE ${PROJECT_SOURCE_DIR}/external/json)
+endif()
+
 add_dependencies(onnxruntime_session ${onnxruntime_EXTERNAL_DEPENDENCIES})
 set_target_properties(onnxruntime_session PROPERTIES FOLDER "ONNXRuntime")
 if (onnxruntime_USE_CUDA)

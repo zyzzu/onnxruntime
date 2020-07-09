@@ -212,6 +212,11 @@ endif()
 
 if(onnxruntime_ORT_MODEL_FORMAT_ONLY)
   add_compile_definitions(ORT_MODEL_FORMAT_ONLY)
+  add_compile_definitions(NO_MODEL_PROTO)
+
+  # remove re2 dependency in case build includes contrib ops for optimizers
+  set(onnxruntime_EXCLUDE_TOKENIZER_CONTRIB_OP ON)
+  add_compile_definitions(EXCLUDE_TOKENIZER_CONTRIB_OP)
 endif()
 
 set(REPO_ROOT ${PROJECT_SOURCE_DIR}/..)
@@ -498,20 +503,22 @@ set(ONNXRUNTIME_INCLUDE_DIR ${REPO_ROOT}/include/onnxruntime)
 
 add_subdirectory(external/date EXCLUDE_FROM_ALL)
 
-if(onnxruntime_PREFER_SYSTEM_LIB)
-  find_package(re2)
+if((NOT onnxruntime_ORT_MODEL_FORMAT_ONLY) OR (NOT onnxruntime_DISABLE_CONTRIB_OPS))
+  if(onnxruntime_PREFER_SYSTEM_LIB)
+      find_package(re2)
+  endif()
+
+  if(NOT TARGET re2::re2)
+      add_subdirectory(external/re2 EXCLUDE_FROM_ALL)
+      set_target_properties(re2 PROPERTIES FOLDER "External/re2")
+      add_library(re2::re2 ALIAS re2)
+      set(RE2_INCLUDE_DIR ${REPO_ROOT}/cmake/external/re2)
+  endif()
 endif()
 
 set(SAFEINT_INCLUDE_DIR ${REPO_ROOT}/cmake/external/SafeInt)
 add_library(safeint_interface INTERFACE)
 target_include_directories(safeint_interface INTERFACE ${SAFEINT_INCLUDE_DIR})
-
-if(NOT TARGET re2::re2)
-  add_subdirectory(external/re2 EXCLUDE_FROM_ALL)
-  set_target_properties(re2 PROPERTIES FOLDER "External/re2")
-  add_library(re2::re2 ALIAS re2)
-  set(RE2_INCLUDE_DIR ${REPO_ROOT}/cmake/external/re2)
-endif()
 
 # bounds checking behavior.
 # throw instead of calling terminate if there's a bounds checking violation.

@@ -2,10 +2,14 @@
 // Licensed under the MIT License.
 
 #pragma once
+
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+
 #include "core/graph/onnx_protobuf.h"
 #include "core/session/inference_session.h"
 #include "core/framework/session_options.h"
 #include "core/common/common.h"
+
 #ifdef _WIN32
 #pragma warning(push)
 #pragma warning(disable : 28020)
@@ -53,3 +57,4 @@ class InferenceSessionUtils {
 };
 
 }  // namespace onnxruntime
+#endif
