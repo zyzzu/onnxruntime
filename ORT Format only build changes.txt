@@ -117,10 +117,14 @@ Other notes:
     - may not exist in MinSizeRel build
 
 ===============================
-New setup:
+Testing setup:
 
 Commit id from master (2020-07-08, should be ~ORT 1.4 release): 6d6b6b54a544f69fb201a9aab7097358f6a440ff
 Updated: ort.vs19.perf.master, ort.serialize and ort.deserialize are all on the same base commit id
+
+NOTE: Sizes for specific savings are based on a RelWithDebInfo build as we need the pdb for SizeBench to work.
+      These need to be roughly adjusted by the difference between that and a MinSizeRel build (~20% smaller so reduce saving by that).
+      Summary includes total size from MinSizeRel build. 
 
 Build flags:
   Master: --disable_rtti --disable_ml_ops
@@ -140,40 +144,110 @@ Ort.deserialize (RelWithDebInfo.1 and MinSizeRel.1 folders)
                     onnxruntime.zip	    1,223,231
 =================================
 
-Next steps:
+Next step:
 
-Reduced onnx_proto
-  68KB (-15KB)
-  - no usage of onnx-operators-ml.proto
-  - comment out training related types
-  - fix some places to not directly include schema.h from onnx as that's broken with these changes 
+  Reduced onnx_proto
+    68KB (-15KB)
+    - no usage of onnx-operators-ml.proto
+    - comment out training related types
+    - fix some places to not directly include schema.h from onnx as that's broken with these changes 
 
-Removed re2 dependency and Tokenizer contrib op
-  -163KB
+  Removed re2 dependency and Tokenizer contrib op
+    -163KB
 
-Removed parsing of json from Model to save json parser cost
-  -70KB (68 in inference_session_utils.obj and a couple in inference_session.obj) 
+  Removed parsing of json from Model to save json parser cost
+    -70KB (68 in inference_session_utils.obj and a couple in inference_session.obj) 
 
-Ort.deserialize (RelWithDebInfo.2 and MinSizeRel.2 folders)
-    RelWithDebInfo  onnxruntime.dll	    3,553,280
-    MinSizeRel      onnxruntime.dll	    3,231,744
-                    onnxruntime.zip	    1,223,231
+  Ort.deserialize (RelWithDebInfo.2 and MinSizeRel.2 folders)
+      RelWithDebInfo  onnxruntime.dll	    3,553,280
+      MinSizeRel      onnxruntime.dll	    2,976,256
+                      onnxruntime.zip	    1,106,631
 
 =================================
-Next steps:
+Next steps (roughly ordered on cost/benefit):
 
-- remove optimzer support
-  - can disable a lot more code in Graph as well
-  - can try building with no contrib ops to see what size is possible
-    - however the disable unused ops approach is what would be needed for production given we want to save an optimized model which will require some contrib ops in most cases
+1.
+  - remove optimzer support
+    - -5KB for InferenceSession::TranformGraph
+    - can disable a lot more code in Graph as well
+    - can try building with no contrib ops to see what size is possible
+      - however the disable unused ops approach is what would be needed for production given we want to save an optimized model which will require some contrib ops in most cases
+    - can fully remove onnxruntime_optimizer (-46.7KB)
+      - memcpy and cast transformers
+      - can be removed if we're not going to change the nodes in the graph
+    - can remove graph_utils (-5.7KB)
+    - guesstimate ~80KB saving
 
-- reduce onnx_proto further
-  - could try and remove TensorProto dependency
-    - could cut out ORT code dealing with TensorProto for a good reduction
-      - heavy change to implement though
-    - doing so implies no optimizers as the implementations are currently heavily dependent on working at the TensorProto level
+2.
+  - excise ML types better
+    - remove from data type utils etc.
+    - remove from C API
+      - C API is currently 100KB which is way too large 
+    - guesstimate ~80KB saving
 
-- exclude AVS512 from MLAS 
+3.
+  - exclude AVS512 from MLAS 
+    - expect -110KB
 
-- make telemetry optional
-  - currently only user of ModelProto metadata as well
+4.
+  - build with no contrib ops
+    - expect -700KB
+    - not totally viable as per above notes - need contrib ops for optimized models but incremental growth to add those
+
+5.
+  - serialize allocation plan
+    - allocation planner is 45KB
+
+5.
+  - make telemetry optional
+    - currently only user of ModelProto metadata as well
+    - and a few KB saving
+
+6.
+  - reduce onnx_proto further
+    - could try and remove TensorProto dependency
+      - could cut out ORT code dealing with TensorProto for a good reduction
+        - heavy change to implement though
+      - doing so implies no optimizers as the implementations are currently heavily dependent on working at the TensorProto level
+
+7.
+  - Completely remove protobuf dependency (-100KB)
+    - Currently (v2) 68KB for onnx_proto and 36KB for libprotobuf-lite
+
+8.
+  - Small cleanups
+    - More parts of SessionState could be excluded (maybe ~10KB saving)
+    - If we didn't have a dependency on TensorProto about 8KB from session_state_utils can go
+    - parallel executor (-17KB)
+
+Other:
+  - pull in changes from android testing to disable exceptions
+    - very large changeset though 
+    - was ~430KB but will be smaller with more things excluded like ONNX type/shape inferencing
+      - guesstimate of -250KB
+
+  - experiment with limited types
+    - can get ballpark figure for a couple of models
+    - assuming this will be on top of per-model/s op reductions
+      - possible we could define a subset of types though to have a smaller binary with no per-model stage of a build
+    - e.g. Cast (79KB), OneHot (35.5KB) and the reduction ops (140.8KB) could be much smaller  with fewer types
+      - Cast can be reworked either way be closer to half the current size
+
+  - use printf formatting for all log messages
+    - TF Lite takes this approach to avoid cost of convenient iostream formatting
+    - onnxruntime::MakeString is a significant cost in various places
+      - use by ORT_MAKE_STATUS and ORT_THROW 
+
+  - Framework is 342KB
+    Should be 100KB saving achievable from small changes
+      25: remove ML support from data types
+      32: serialize allocation plan
+      7: remove debug logging from BFCArena
+      17: remove tensorprotoutils if we just create OrtValue instances from serialized data 
+      17: parallel executor
+      7: session_state_utils support for copying TensorProto to OrtValue
+    ? 8: tensor_allocator (was added for Training, not sure if needed/used in inferencing)
+
+Getting into ballpark of 750KB infrastructure + ops
+  - assuming protobuf depenency can be removed
+  
