@@ -186,7 +186,7 @@ Next steps (roughly ordered on cost/benefit):
     - guesstimate ~80KB saving
 
 3.
-  - exclude AVS512 from MLAS 
+  - exclude AVX512 from MLAS 
     - expect -110KB
 
 4.
@@ -213,12 +213,6 @@ Next steps (roughly ordered on cost/benefit):
 7.
   - Completely remove protobuf dependency (-100KB)
     - Currently (v2) 68KB for onnx_proto and 36KB for libprotobuf-lite
-
-8.
-  - Small cleanups
-    - More parts of SessionState could be excluded (maybe ~10KB saving)
-    - If we didn't have a dependency on TensorProto about 8KB from session_state_utils can go
-    - parallel executor (-17KB)
 
 Other:
   - pull in changes from android testing to disable exceptions
@@ -248,6 +242,6 @@ Other:
       7: session_state_utils support for copying TensorProto to OrtValue
     ? 8: tensor_allocator (was added for Training, not sure if needed/used in inferencing)
 
-Getting into ballpark of 750KB infrastructure + ops
+Getting into ballpark of under 750KB for infrastructure + ops
   - assuming protobuf depenency can be removed
-  
+  - benefit from disabling exceptions will reduce further
