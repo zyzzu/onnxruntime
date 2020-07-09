@@ -134,7 +134,7 @@ Master
     RelWithDebInfo  onnxruntime.dll	    5,236,736
     MinSizeRel      onnxruntime.dll	    4,398,080
 
-Ort.deserialize (RelWithDebInfo.1 folder)
+Ort.deserialize (RelWithDebInfo.1 and MinSizeRel.1 folders)
     RelWithDebInfo  onnxruntime.dll	    3,833,344
     MinSizeRel      onnxruntime.dll	    3,231,744
                     onnxruntime.zip	    1,223,231
@@ -154,6 +154,10 @@ Removed re2 dependency and Tokenizer contrib op
 Removed parsing of json from Model to save json parser cost
   -70KB (68 in inference_session_utils.obj and a couple in inference_session.obj) 
 
+Ort.deserialize (RelWithDebInfo.2 and MinSizeRel.2 folders)
+    RelWithDebInfo  onnxruntime.dll	    3,553,280
+    MinSizeRel      onnxruntime.dll	    3,231,744
+                    onnxruntime.zip	    1,223,231
 
 =================================
 Next steps:
