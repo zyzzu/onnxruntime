@@ -469,17 +469,17 @@ include(protobuf_function.cmake)
 #protobuf end
 
 if(onnxruntime_USE_FEATURIZERS)
-add_compile_definitions(ML_FEATURIZERS)
+  add_definitions(-DML_FEATURIZERS)
   # Fetch and build featurizers
   include(external/featurizers.cmake)
 endif()
 
 if (onnxruntime_DISABLE_CONTRIB_OPS)
-  add_compile_definitions(DISABLE_CONTRIB_OPS)
+  add_definitions(-DDISABLE_CONTRIB_OPS)
 endif()
 
 if (onnxruntime_DISABLE_ML_OPS)
-  add_compile_definitions(DISABLE_ML_OPS)
+  add_definitions(-DDISABLE_ML_OPS)
 endif()
 
 if (onnxruntime_USE_CUDA AND "${onnxruntime_CUDNN_HOME}" STREQUAL "")
@@ -487,7 +487,7 @@ if (onnxruntime_USE_CUDA AND "${onnxruntime_CUDNN_HOME}" STREQUAL "")
 endif()
 
 if (onnxruntime_USE_EIGEN_FOR_BLAS)
-  add_compile_definitions(USE_EIGEN_FOR_BLAS)
+  add_definitions(-DUSE_EIGEN_FOR_BLAS)
 endif()
 
 if (onnxruntime_USE_OPENBLAS AND "${onnxruntime_OPENBLAS_HOME}" STREQUAL "" AND WIN32)
@@ -507,17 +507,16 @@ set(ONNXRUNTIME_INCLUDE_DIR ${REPO_ROOT}/include/onnxruntime)
 
 add_subdirectory(external/date EXCLUDE_FROM_ALL)
 
-if((NOT onnxruntime_ORT_MODEL_FORMAT_ONLY) OR (NOT onnxruntime_DISABLE_CONTRIB_OPS))
-  if(onnxruntime_PREFER_SYSTEM_LIB)
-      find_package(re2)
-  endif()
+# used by Tokenizer contrib op and test code
+if(onnxruntime_PREFER_SYSTEM_LIB)
+    find_package(re2)
+endif()
 
-  if(NOT TARGET re2::re2)
-      add_subdirectory(external/re2 EXCLUDE_FROM_ALL)
-      set_target_properties(re2 PROPERTIES FOLDER "External/re2")
-      add_library(re2::re2 ALIAS re2)
-      set(RE2_INCLUDE_DIR ${REPO_ROOT}/cmake/external/re2)
-  endif()
+if(NOT TARGET re2::re2)
+    add_subdirectory(external/re2 EXCLUDE_FROM_ALL)
+    set_target_properties(re2 PROPERTIES FOLDER "External/re2")
+    add_library(re2::re2 ALIAS re2)
+    set(RE2_INCLUDE_DIR ${REPO_ROOT}/cmake/external/re2)
 endif()
 
 set(SAFEINT_INCLUDE_DIR ${REPO_ROOT}/cmake/external/SafeInt)
@@ -541,7 +540,12 @@ include(eigen)
 # if(onnxruntime_ORT_MODEL_FORMAT_ONLY)
 #   set(onnxruntime_EXTERNAL_LIBRARIES onnx_proto ${PROTOBUF_LIB} re2::re2)
 # else()
-  set(onnxruntime_EXTERNAL_LIBRARIES onnx onnx_proto ${PROTOBUF_LIB} re2::re2)
+set(onnxruntime_EXTERNAL_LIBRARIES onnx onnx_proto ${PROTOBUF_LIB})
+if ((NOT onnxruntime_DISABLE_CONTRIB_OPS) OR (NOT onnxruntime_EXCLUDE_TOKENIZER_CONTRIB_OP))
+  message("### Adding re2 to ORT External libs")
+  list(APPEND onnxruntime_EXTERNAL_LIBRARIES re2::re2)
+endif()
+  
 # endif()
 
 function(onnxruntime_add_include_to_target dst_target)

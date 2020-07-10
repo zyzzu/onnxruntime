@@ -177,8 +177,12 @@ Next step:
 Next step:
 
   Build with no contrib ops
+    - NOTE: This is too extreme for an optimized model as we need things like FusedConv
 
-  
+  Ort.deserialize (RelWithDebInfo.4 and MinSizeRel.4 folders)
+      RelWithDebInfo  onnxruntime.dll	    3,038,720
+      MinSizeRel      onnxruntime.dll	    2,561,536
+                      onnxruntime.zip	    933,805
 
 =================================
 Next steps (roughly ordered on cost/benefit):

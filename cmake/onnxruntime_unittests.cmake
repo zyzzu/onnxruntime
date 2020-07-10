@@ -650,7 +650,7 @@ onnxruntime_add_include_to_target(onnx_test_runner_common onnxruntime_common onn
   onnxruntime_add_include_to_target(onnx_test_runner_common onnx)
 #endif()
 
-add_dependencies(onnx_test_runner_common onnx_test_data_proto ${onnxruntime_EXTERNAL_DEPENDENCIES})
+add_dependencies(onnx_test_runner_common onnx_test_data_proto ${onnxruntime_EXTERNAL_DEPENDENCIES} re2::re2)
 target_include_directories(onnx_test_runner_common PRIVATE ${eigen_INCLUDE_DIRS} ${RE2_INCLUDE_DIR}
         ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_BINARY_DIR}/onnx ${ONNXRUNTIME_ROOT})
 
@@ -660,7 +660,9 @@ set(onnx_test_libs
   onnxruntime_test_utils
   ${ONNXRUNTIME_TEST_LIBS}
   onnx_test_data_proto
-  ${onnxruntime_EXTERNAL_LIBRARIES})
+  ${onnxruntime_EXTERNAL_LIBRARIES}
+  re2::re2
+  )
 
 if (onnxruntime_ENABLE_LANGUAGE_INTEROP_OPS)
   list(APPEND onnx_test_libs onnxruntime_language_interop onnxruntime_pyop)
