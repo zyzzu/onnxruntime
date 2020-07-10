@@ -100,6 +100,7 @@ target_link_libraries(onnxruntime PRIVATE
     onnxruntime_mlas
     ${onnxruntime_EXTERNAL_LIBRARIES})
 
+
 if (onnxruntime_ENABLE_LANGUAGE_INTEROP_OPS)
   target_link_libraries(onnxruntime PRIVATE onnxruntime_language_interop onnxruntime_pyop)
 endif()

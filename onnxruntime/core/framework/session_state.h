@@ -260,8 +260,10 @@ class SessionState {
   concurrency::ThreadPool* GetThreadPool() const noexcept { return thread_pool_; }
   concurrency::ThreadPool* GetInterOpThreadPool() const noexcept { return inter_op_thread_pool_; }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   bool ExportDll() const noexcept { return export_fused_dll_; }
   void SetExportDllFlag(bool flag) noexcept { export_fused_dll_ = flag; }
+#endif
 
   const FuncManager& GetFuncMgr() const noexcept { return fused_funcs_mgr_; }
   FuncManager& GetMutableFuncMgr() noexcept { return fused_funcs_mgr_; }
@@ -270,8 +272,10 @@ class SessionState {
 
   const NodeIndexInfo& GetNodeIndexInfo() const;
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   void UpdateToBeExecutedNodes(const std::vector<int>& fetch_mlvalue_idxs);
   const std::unordered_set<NodeIndex>* GetToBeExecutedNodes(const std::vector<int>& fetch_mlvalue_idxs) const;
+#endif
 
   Status FinalizeSessionState(const std::basic_string<PATH_CHAR_TYPE>& graph_loc,
                               KernelRegistryManager& kernel_registry_manager,
@@ -279,7 +283,9 @@ class SessionState {
                               const flexbuffers::Reference* serialized_data = nullptr,
                               bool remove_initializers = true);
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   Status SerializeKernelCreateInfo(flexbuffers::Builder& builder) const;
+#endif
 
  private:
   ORT_DISALLOW_COPY_ASSIGNMENT_AND_MOVE(SessionState);
@@ -302,7 +308,9 @@ class SessionState {
   // If the node isn't going to be executed by the CPU provider we don't need it.
   void RemoveSubgraphSessionState(onnxruntime::NodeIndex index);
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   Status PopulateKernelCreateInfo(KernelRegistryManager& kernel_registry_manager);
+#endif
   Status DeserializeKernelCreateInfo(const flexbuffers::Reference& fbr,
                                      const KernelRegistryManager& kernel_registry_manager);
 

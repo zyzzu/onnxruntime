@@ -2,34 +2,47 @@
 # Licensed under the MIT License.
 
 if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)
-    file(GLOB onnxruntime_optimizer_srcs CONFIGURE_DEPENDS
-        "${ONNXRUNTIME_INCLUDE_DIR}/core/optimizer/*.h"
-        "${ONNXRUNTIME_ROOT}/core/optimizer/*.h"
-        "${ONNXRUNTIME_ROOT}/core/optimizer/*.cc"
-        )
-else()
-    file(GLOB onnxruntime_optimizer_srcs CONFIGURE_DEPENDS
-        "${ONNXRUNTIME_INCLUDE_DIR}/core/optimizer/*.h"
-        "${ONNXRUNTIME_ROOT}/core/optimizer/graph*.h"
-        "${ONNXRUNTIME_ROOT}/core/optimizer/graph*.cc"
-        "${ONNXRUNTIME_ROOT}/core/optimizer/insert_cast_transformer.h"
-        "${ONNXRUNTIME_ROOT}/core/optimizer/insert_cast_transformer.cc"
-        "${ONNXRUNTIME_ROOT}/core/optimizer/transformer_memcpy.h"
-        "${ONNXRUNTIME_ROOT}/core/optimizer/transformer_memcpy.cc"
+  file(GLOB onnxruntime_optimizer_srcs CONFIGURE_DEPENDS
+    "${ONNXRUNTIME_INCLUDE_DIR}/core/optimizer/*.h"
+    "${ONNXRUNTIME_ROOT}/core/optimizer/*.h"
+    "${ONNXRUNTIME_ROOT}/core/optimizer/*.cc"
     )
+else()
+  if (onnxruntime_NO_TRANSFORMERS)
+    # need at least one file so a library is created
+    # short term hack to minimize build updates to exclude all optimizers
+    file(GLOB onnxruntime_optimizer_srcs CONFIGURE_DEPENDS
+      "${ONNXRUNTIME_INCLUDE_DIR}/core/optimizer/graph_transformer.h"
+      "${ONNXRUNTIME_ROOT}/core/optimizer/graph_transformer.cc"
+    )
+  else()
+    file(GLOB onnxruntime_optimizer_srcs CONFIGURE_DEPENDS
+      "${ONNXRUNTIME_INCLUDE_DIR}/core/optimizer/*.h"
+      "${ONNXRUNTIME_ROOT}/core/optimizer/graph*.h"
+      "${ONNXRUNTIME_ROOT}/core/optimizer/graph*.cc"
+      "${ONNXRUNTIME_ROOT}/core/optimizer/insert_cast_transformer.h"
+      "${ONNXRUNTIME_ROOT}/core/optimizer/insert_cast_transformer.cc"
+      "${ONNXRUNTIME_ROOT}/core/optimizer/transformer_memcpy.h"
+      "${ONNXRUNTIME_ROOT}/core/optimizer/transformer_memcpy.cc"
+    )
+  endif()
 endif()
 
 if (onnxruntime_ENABLE_TRAINING)
-    file(GLOB orttraining_optimizer_srcs CONFIGURE_DEPENDS
-        "${ORTTRAINING_SOURCE_DIR}/core/optimizer/*.h"
-        "${ORTTRAINING_SOURCE_DIR}/core/optimizer/*.cc"
-        )
-    set(onnxruntime_optimizer_srcs ${onnxruntime_optimizer_srcs} ${orttraining_optimizer_srcs})
+  file(GLOB orttraining_optimizer_srcs CONFIGURE_DEPENDS
+    "${ORTTRAINING_SOURCE_DIR}/core/optimizer/*.h"
+    "${ORTTRAINING_SOURCE_DIR}/core/optimizer/*.cc"
+  )
+  set(onnxruntime_optimizer_srcs ${onnxruntime_optimizer_srcs} ${orttraining_optimizer_srcs})
 endif()
 
 source_group(TREE ${REPO_ROOT} FILES ${onnxruntime_optimizer_srcs})
 
 add_library(onnxruntime_optimizer ${onnxruntime_optimizer_srcs})
+if (onnxruntime_NO_TRANSFORMERS)
+set_target_properties(onnxruntime_optimizer PROPERTIES LINKER_LANGUAGE C++) 
+endif()
+
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/../include/onnxruntime/core/optimizer  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/onnxruntime/core)
 onnxruntime_add_include_to_target(onnxruntime_optimizer onnxruntime_common onnxruntime_framework onnx_proto protobuf::libprotobuf)
 #if(NOT onnxruntime_ORT_MODEL_FORMAT_ONLY)

@@ -32,6 +32,8 @@ Status KernelRegistryManager::CreateKernel(const onnxruntime::Node& node,
   }
 
   Status status;
+
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   for (auto& registry : custom_kernel_registries_) {
     status = registry->TryCreateKernel(node, execution_provider, session_state.GetConstantInitializedTensors(),
                                        session_state.GetOrtValueNameIdxMap(), session_state.GetFuncMgr(),
@@ -40,6 +42,7 @@ Status KernelRegistryManager::CreateKernel(const onnxruntime::Node& node,
       return status;
     }
   }
+#endif
 
   KernelRegistry* p = nullptr;
   auto iter = provider_type_to_registry_.find(ep_type);
@@ -49,7 +52,8 @@ Status KernelRegistryManager::CreateKernel(const onnxruntime::Node& node,
 
   if (p != nullptr) {
     status = p->TryCreateKernel(node, execution_provider, session_state.GetConstantInitializedTensors(),
-                                session_state.GetOrtValueNameIdxMap(), session_state.GetFuncMgr(), session_state.GetDataTransferMgr(), op_kernel);
+                                session_state.GetOrtValueNameIdxMap(), session_state.GetFuncMgr(),
+                                session_state.GetDataTransferMgr(), op_kernel);
     if (status.IsOK()) {
       return status;
     }
@@ -90,12 +94,14 @@ Status KernelRegistryManager::RegisterKernels(const ExecutionProviders& executio
   return Status::OK();
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 void KernelRegistryManager::RegisterKernelRegistry(std::shared_ptr<KernelRegistry> kernel_registry) {
   if (nullptr == kernel_registry) {
     return;
   }
   custom_kernel_registries_.push_front(kernel_registry);
 }
+#endif
 
 bool KernelRegistryManager::HasImplementationOf(const KernelRegistryManager& r, const Node& node, const std::string& provider_type) {
   std::vector<const KernelRegistry*> kernel_registries = r.GetKernelRegistriesByProviderType(provider_type);
@@ -104,10 +110,12 @@ bool KernelRegistryManager::HasImplementationOf(const KernelRegistryManager& r, 
   });
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 Status KernelRegistryManager::SearchKernelRegistry(const onnxruntime::Node& node,
                                                    /*out*/ const KernelCreateInfo** kernel_create_info) const {
   return SearchKernelRegistry(node, 0, kernel_create_info);
 }
+#endif
 
 Status KernelRegistryManager::SearchKernelRegistry(const onnxruntime::Node& node,
                                                    uint64_t kernel_def_hash,
@@ -118,12 +126,14 @@ Status KernelRegistryManager::SearchKernelRegistry(const onnxruntime::Node& node
   }
 
   Status status;
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   for (auto& registry : custom_kernel_registries_) {
     status = registry->TryFindKernel(node, std::string(), kernel_def_hash, kernel_create_info);
     if (status.IsOK()) {
       return status;
     }
   }
+#endif
 
   KernelRegistry* p = nullptr;
   auto iter = provider_type_to_registry_.find(ptype);

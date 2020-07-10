@@ -14,13 +14,14 @@ Status GraphTransformer::Apply(Graph& graph, bool& modified, const logging::Logg
   auto status = ApplyImpl(graph, modified, 0, logger);
   ORT_RETURN_IF_ERROR(status);
 
+  // short term hack to include one file in the optimizers library
+  #if !defined(NO_TRANSFORMERS)
   // At least currently, some transformers (InsertCastTransformer and MemcpyTransformer) need this to be called
   // after they complete to put the graph back into a valid state for the next transformer.
   if (modified) {
     status = graph.Resolve();
   }
-
+  #endif
   return status;
 }
-
 }  // namespace onnxruntime

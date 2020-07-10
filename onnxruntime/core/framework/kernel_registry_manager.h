@@ -33,6 +33,7 @@ class KernelRegistryManager {
   // Register kernels from providers
   Status RegisterKernels(const ExecutionProviders& execution_providers) ORT_MUST_USE_RESULT;
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   // The registry passed in this function has highest priority than anything already in this KernelRegistryManager,
   // and anything registered from RegisterKernels
   // For example, if you do:
@@ -41,6 +42,7 @@ class KernelRegistryManager {
   // RegisterKernelRegistry(B);
   // Then B > A > providers
   void RegisterKernelRegistry(std::shared_ptr<KernelRegistry> kernel_registry);
+#endif
 
   // This function assumes the node is already assigned to an execution provider
   // Don't call this function before graph partition is done
@@ -52,10 +54,13 @@ class KernelRegistryManager {
                                          const SessionState& session_state,
                                          const KernelCreateInfo& kernel_create_info) const ORT_MUST_USE_RESULT;
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+
   // This function assumes the node is already assigned to an execution provider
   // Don't call this function before graph partition is done
   Status SearchKernelRegistry(const onnxruntime::Node& node,
                               /*out*/ const KernelCreateInfo** kernel_create_info) const;
+#endif
 
   Status SearchKernelRegistry(const onnxruntime::Node& node, uint64_t kernel_def_hash,
                               /*out*/ const KernelCreateInfo** kernel_create_info) const;
@@ -73,9 +78,11 @@ class KernelRegistryManager {
    */
   std::vector<const KernelRegistry*> GetKernelRegistriesByProviderType(const std::string& type) const {
     std::vector<const KernelRegistry*> result;
+#if !defined(ORT_MODEL_FORMAT_ONLY)
     for (auto& registry : custom_kernel_registries_) {
       result.push_back(registry.get());
     }
+#endif
     auto iter = provider_type_to_registry_.find(type);
     if (iter != provider_type_to_registry_.end()) result.push_back(iter->second.get());
     return result;
@@ -86,8 +93,11 @@ class KernelRegistryManager {
  private:
   // key is provider type. Each kernel registry in this collection only belongs to one specific provider
   std::unordered_map<std::string, std::shared_ptr<KernelRegistry>> provider_type_to_registry_;
+
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   // Each kernel registry may contain kernels from many different providers.
   // in order to search kernels from a specific provider, we have to iterate all its elements
   std::list<std::shared_ptr<KernelRegistry>> custom_kernel_registries_;
+#endif
 };
 }  // namespace onnxruntime

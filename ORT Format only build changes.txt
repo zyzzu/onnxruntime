@@ -21,10 +21,6 @@ High level approach:
 Initial status from RelWithDebInfo build
   - need to build that way to get per-symbol info on Windows. MinSizeRel is signficantly smaller
 
-=====
-TODO: Need better baseline with more equivalent builds that both exclude RTTI and ML ops
-=====
-
 ONNX: 
   26KB (-800KB)
   - Library just includes data type helpers
@@ -70,7 +66,6 @@ Graph:
 
 Providers:
   2.1MB (-427KB)
-  *** this is slightly off as Einsum shows up as significant diff. need equivalent base commit id ***
   - Excluded ML ops which was most of diff
   - Currently includes all contrib ops
     - can split out based on category
@@ -99,22 +94,12 @@ Common:
   - profiler is 7.5KB + some cost in InferenceSession
     - could be made optional
 
-Other:
-  - Exclude RE2
-    - 163KB
-
 -----
-
 Other notes:
   - Still have a dependency on ONNX PB
     - More work to replace though given internal use of *Proto types in many places
     - Current size is 83KB
       - Could probably cut down by excluding training and function related pieces
-
-
-  - Are we paying cost for templatized containers in multiple libs
-    - e.g. Graph has Hash of unique_ptr<NodeArg> for 552 bytes
-    - may not exist in MinSizeRel build
 
 ===============================
 Testing setup:
@@ -142,6 +127,8 @@ Ort.deserialize (RelWithDebInfo.1 and MinSizeRel.1 folders)
     RelWithDebInfo  onnxruntime.dll	    3,833,344
     MinSizeRel      onnxruntime.dll	    3,231,744
                     onnxruntime.zip	    1,223,231
+
+Commits: 2020-07-08 skottmckay/GraphExperiment                  
 =================================
 
 Next step:
@@ -151,6 +138,8 @@ Next step:
     - no usage of onnx-operators-ml.proto
     - comment out training related types
     - fix some places to not directly include schema.h from onnx as that's broken with these changes 
+    - NOTE: This removed OpSchema so wouldn't be able to run an optimizer. 
+      Would need to replace the protobuf based OpSchema with a local struct
 
   Removed re2 dependency and Tokenizer contrib op
     -163KB
@@ -163,11 +152,39 @@ Next step:
       MinSizeRel      onnxruntime.dll	    2,976,256
                       onnxruntime.zip	    1,106,631
 
+Commits: 2020-07-09 skottmckay/GraphExperiment                  
+
+=================================
+
+Next step:
+
+  Removed optimizer support 
+    - testing showed it wasn't possible to just have L3 support easily
+    - removed Graph::Resolve related code 
+  
+  Remove ML types from data types and C API
+
+  Remove a few things from SessionState that weren't using in this build type
+    - e.g. KCI population code and serialization code
+
+  Ort.deserialize (RelWithDebInfo.3 and MinSizeRel.3 folders)
+      RelWithDebInfo  onnxruntime.dll	    3,394,048
+      MinSizeRel      onnxruntime.dll	    2,845,696
+                      onnxruntime.zip	    1,055,203
+
+=================================
+
+Next step:
+
+  Build with no contrib ops
+
+  
+
 =================================
 Next steps (roughly ordered on cost/benefit):
 
 1.
-  - remove optimzer support
+  - remove optimizer support
     - -5KB for InferenceSession::TranformGraph
     - can disable a lot more code in Graph as well
     - can try building with no contrib ops to see what size is possible
@@ -245,3 +262,43 @@ Other:
 Getting into ballpark of under 750KB for infrastructure + ops
   - assuming protobuf depenency can be removed
   - benefit from disabling exceptions will reduce further
+
+
+===================
+Transformer support
+
+ASSUMPTION: L2 can be run prior to deployment. Requires that the EPs that will be used are enabled when running the optimizations and serializing the model
+
+Lot of cost to support L3 transformers in ORT model format build
+  - If you're transforming the graph you need to be able to add new nodes
+  - If adding a new node/s you need 
+    - the OpSchema
+    - the schema registry to store/lookup the schema
+    - the lookup of kernel based on input/output types in SearchKernelRegistry
+    - type/shape inferencing to run (currently has dependency on ONNX running that)
+    - Graph::Resolve to run or the transformer needs to keep the graph edges valid
+    - couldn't serialize allocation plan
+
+  - significant hit to binary size to support that using existing code/approach
+    - brings back in onnx dependency as well as the need for schema related code
+    - ~1MB cost
+  - may be possible to minimize that cost as limited number of L3 transformers (currently only NCHWc)
+    - could avoid the OpSchema registry side of things if the transformer could directly specify the kernel def for the node
+      - appears to be feasible as there's one KernelDef per NCHWc operator
+    - type/shape inferencing has a hard dependency on ONNX
+      - non-trivial to separate. may need to re-implement or calculate in ORT 
+        - existing type/shape info would be available so would possibly only need to augment that. 
+          - unknown if this is viable and if so whether it's trivial or not
+    - keeping the edges valid so Graph::Resolve isn't required should be relatively easy
+
+    
+
+======================
+Not supported
+  - Functions
+  - CustomRegistry
+    - kernel registry and schema tightly bound currently
+  - Optimizers
+
+Other:
+  - Could choose between serializing edges and having code to create edges (Graph::Resolve + BuildConnections)

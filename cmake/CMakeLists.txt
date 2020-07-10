@@ -213,6 +213,10 @@ endif()
 if(onnxruntime_ORT_MODEL_FORMAT_ONLY)
   add_compile_definitions(ORT_MODEL_FORMAT_ONLY)
   add_compile_definitions(NO_MODEL_PROTO)
+  add_compile_definitions(NO_SCHEMA_REGISTRY)
+
+  set(onnxruntime_NO_TRANSFORMERS ON)
+  add_compile_definitions(NO_TRANSFORMERS)
 
   # remove re2 dependency in case build includes contrib ops for optimizers
   set(onnxruntime_EXCLUDE_TOKENIZER_CONTRIB_OP ON)
@@ -465,17 +469,17 @@ include(protobuf_function.cmake)
 #protobuf end
 
 if(onnxruntime_USE_FEATURIZERS)
-  add_definitions(-DML_FEATURIZERS)
+add_compile_definitions(ML_FEATURIZERS)
   # Fetch and build featurizers
   include(external/featurizers.cmake)
 endif()
 
 if (onnxruntime_DISABLE_CONTRIB_OPS)
-  add_definitions(-DDISABLE_CONTRIB_OPS)
+  add_compile_definitions(DISABLE_CONTRIB_OPS)
 endif()
 
 if (onnxruntime_DISABLE_ML_OPS)
-  add_definitions(-DDISABLE_ML_OPS)
+  add_compile_definitions(DISABLE_ML_OPS)
 endif()
 
 if (onnxruntime_USE_CUDA AND "${onnxruntime_CUDNN_HOME}" STREQUAL "")
@@ -483,7 +487,7 @@ if (onnxruntime_USE_CUDA AND "${onnxruntime_CUDNN_HOME}" STREQUAL "")
 endif()
 
 if (onnxruntime_USE_EIGEN_FOR_BLAS)
-  add_definitions(-DUSE_EIGEN_FOR_BLAS)
+  add_compile_definitions(USE_EIGEN_FOR_BLAS)
 endif()
 
 if (onnxruntime_USE_OPENBLAS AND "${onnxruntime_OPENBLAS_HOME}" STREQUAL "" AND WIN32)

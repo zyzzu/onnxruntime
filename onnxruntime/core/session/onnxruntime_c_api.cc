@@ -925,12 +925,15 @@ static ORT_STATUS_PTR OrtGetValueCountImpl(const OrtValue* value, size_t* out) {
     if (type->IsTensorSequenceType()) {
       return OrtGetNumSequenceElements<TensorSeq>(v, out);
     } else {
+#if !defined(DISABLE_ML_OPS)
       utils::ContainerChecker c_checker(type);
       if (c_checker.IsSequenceOf<std::map<std::string, float>>()) {
         return OrtGetNumSequenceElements<VectorMapStringToFloat>(v, out);
       } else if (c_checker.IsSequenceOf<std::map<int64_t, float>>()) {
         return OrtGetNumSequenceElements<VectorMapInt64ToFloat>(v, out);
-      } else {
+      } else
+#endif
+      {
         return OrtApis::CreateStatus(ORT_FAIL, "Input is not of one of the supported sequence types.");
       }
     }
@@ -945,6 +948,7 @@ ORT_API_STATUS_IMPL(OrtApis::GetValueCount, _In_ const OrtValue* value, _Out_ si
   API_IMPL_END
 }
 
+#if !defined(DISABLE_ML_OPS)
 ///////////////////
 // OrtGetValueImplSeqOfMap
 template <typename T>
@@ -963,6 +967,7 @@ static ORT_STATUS_PTR OrtGetValueImplSeqOfMap(const OrtValue* p_ml_value, int in
   *out = value.release();
   return nullptr;
 }
+#endif
 
 ORT_STATUS_PTR PopulateTensorWithData(_Inout_ OrtValue* oval, _In_ const void* data_elem, size_t num_elems,
                                       size_t elem_size) {
@@ -1041,17 +1046,21 @@ static ORT_STATUS_PTR OrtGetValueImplSeq(_In_ const OrtValue* value, int index, 
   if (type->IsTensorSequenceType()) {
     return OrtGetValueImplSeqOfTensors(p_ml_value, index, allocator, out);
   } else {
+#if !defined(DISABLE_ML_OPS)
     utils::ContainerChecker c_checker(type);
     if (c_checker.IsSequenceOf<std::map<std::string, float>>()) {
       return OrtGetValueImplSeqOfMap<VectorMapStringToFloat>(p_ml_value, index, out);
     } else if (c_checker.IsSequenceOf<std::map<int64_t, float>>()) {
       return OrtGetValueImplSeqOfMap<VectorMapInt64ToFloat>(p_ml_value, index, out);
-    } else {
+    } else
+#endif
+    {
       return OrtApis::CreateStatus(ORT_FAIL, "Input is not of one of the supported sequence types.");
     }
   }
 }
 
+#if !defined(DISABLE_ML_OPS)
 template <typename T>
 static ORT_STATUS_PTR OrtGetValueImplMapHelper(_In_ const OrtValue* p_ml_value, int index,
                                                _Inout_ OrtAllocator* allocator, _Outptr_ OrtValue** out) {
@@ -1116,17 +1125,21 @@ static ORT_STATUS_PTR OrtGetValueImplMap(_In_ const OrtValue* value, int index, 
       return OrtGetValueImplMapHelper<MapInt64ToDouble>(p_ml_value, index, allocator, out);
     }
   }
+
   return OrtApis::CreateStatus(ORT_FAIL, "Input is not of one of the supported map types.");
 }
+#endif
 
 static ORT_STATUS_PTR OrtGetValueImpl(_In_ const OrtValue* value, int index, _Inout_ OrtAllocator* allocator,
                                       _Outptr_ OrtValue** out) {
   ONNXType value_type;
   if (auto status = OrtApis::GetValueType(value, &value_type))
     return status;
+#if !defined(DISABLE_ML_OPS)
   if (value_type == ONNX_TYPE_MAP) {
     return OrtGetValueImplMap(value, index, allocator, out);
   }
+#endif
   if (value_type == ONNX_TYPE_SEQUENCE) {
     return OrtGetValueImplSeq(value, index, allocator, out);
   } else {
@@ -1143,6 +1156,7 @@ ORT_API_STATUS_IMPL(OrtApis::GetValue, _In_ const OrtValue* value, int index, _I
 
 ///////////////////
 // OrtCreateValue
+#if !defined(DISABLE_ML_OPS)
 template <typename T>
 static OrtStatus* OrtCreateValueImplSeqHelperMap(const OrtValue* const* in, size_t num_values,
                                                  _Outptr_ OrtValue** out) {
@@ -1162,6 +1176,7 @@ static OrtStatus* OrtCreateValueImplSeqHelperMap(const OrtValue* const* in, size
   *out = value.release();
   return nullptr;
 }
+#endif
 
 template <typename TensorElemType>
 static OrtStatus* OrtCreateValueImplSeqHelperTensor(const Tensor& tensor,
@@ -1267,10 +1282,12 @@ static ORT_STATUS_PTR OrtCreateValueImplSeq(_In_reads_(num_values) const OrtValu
   }
 
   // finally create the output vector/MLValue
-  auto first_mlvalue = reinterpret_cast<const OrtValue*>(ovfirst);
   if (first_value_type == ONNX_TYPE_TENSOR) {
     return OrtCreateValueImplSeqHelper(in, num_values, out);
-  } else if (first_value_type == ONNX_TYPE_MAP) {
+  }
+#if !defined(DISABLE_ML_OPS)
+  else if (first_value_type == ONNX_TYPE_MAP) {
+    auto first_mlvalue = reinterpret_cast<const OrtValue*>(ovfirst);
     auto map_type = first_mlvalue->Type();
     utils::ContainerChecker c_checker(map_type);
     if (c_checker.IsMapOf<std::string, float>()) {
@@ -1281,11 +1298,14 @@ static ORT_STATUS_PTR OrtCreateValueImplSeq(_In_reads_(num_values) const OrtValu
     } else {
       return OrtApis::CreateStatus(ORT_FAIL, "Input is not of one of the supported map types.");
     }
-  } else {
+  }
+#endif
+  else {
     return OrtApis::CreateStatus(ORT_FAIL, "Unsupported input type");
   }
 }
 
+#if !defined(DISABLE_ML_OPS)
 template <typename KeyType, typename ValueType>
 static OrtStatus* OrtCreateMapMLValue(const Tensor& key_tensor, const Tensor& value_tensor, _Outptr_ OrtValue** out) {
   using MapType = std::map<KeyType, ValueType>;
@@ -1369,15 +1389,20 @@ static ORT_STATUS_PTR OrtCreateValueImplMap(const OrtValue* const* in, size_t nu
   }
   return OrtApis::CreateStatus(ORT_FAIL, "Key type is not supported yet.");
 }
+#endif
 
 static ORT_STATUS_PTR OrtCreateValueImpl(_In_reads_(num_values) const OrtValue* const* in, size_t num_values,
                                          enum ONNXType value_type, _Outptr_ OrtValue** out) {
   if (num_values <= 0) {
     return OrtApis::CreateStatus(ORT_FAIL, "Number of values should be at least 1.");
   }
+
+#if !defined(DISABLE_ML_OPS)
   if (value_type == ONNX_TYPE_MAP) {
     return OrtCreateValueImplMap(in, num_values, out);
   }
+#endif
+
   if (value_type == ONNX_TYPE_SEQUENCE) {
     return OrtCreateValueImplSeq(in, num_values, out);
   }

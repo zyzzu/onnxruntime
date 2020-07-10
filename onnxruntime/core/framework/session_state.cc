@@ -121,6 +121,7 @@ void SessionState::CreateGraphInfo() {
   LOGS(logger_, VERBOSE) << "Done saving OrtValue mappings.";
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 Status SessionState::PopulateKernelCreateInfo(KernelRegistryManager& kernel_registry_manager) {
   for (auto& node : graph_.Nodes()) {
     // save kernel create info for the node so we don't have to keep looking it up
@@ -138,6 +139,7 @@ Status SessionState::PopulateKernelCreateInfo(KernelRegistryManager& kernel_regi
 
   return Status::OK();
 }
+#endif
 
 Status SessionState::CreateKernels(const KernelRegistryManager& kernel_registry_manager) {
   const GraphNodes& nodes = graph_viewer_->Nodes();
@@ -538,6 +540,7 @@ const NodeIndexInfo& SessionState::GetNodeIndexInfo() const {
   return *node_index_info_;
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 void SessionState::UpdateToBeExecutedNodes(const std::vector<int>& fetch_mlvalue_idxs) {
   std::vector<int> sorted_idxs = fetch_mlvalue_idxs;
   std::sort(sorted_idxs.begin(), sorted_idxs.end());
@@ -570,6 +573,7 @@ const std::unordered_set<NodeIndex>* SessionState::GetToBeExecutedNodes(
   auto it = to_be_executed_nodes_.find(sorted_idxs);
   return (it != to_be_executed_nodes_.end()) ? &it->second : nullptr;
 }
+#endif
 
 Status SessionState::FinalizeSessionState(const std::basic_string<PATH_CHAR_TYPE>& graph_location,
                                           KernelRegistryManager& kernel_registry_manager,
@@ -593,7 +597,11 @@ Status SessionState::FinalizeSessionStateImpl(const std::basic_string<PATH_CHAR_
     if (serialized_data) {
       ORT_RETURN_IF_ERROR(DeserializeKernelCreateInfo(*serialized_data, kernel_registry_manager));
     } else {
+#if !defined(ORT_MODEL_FORMAT_ONLY)
       ORT_RETURN_IF_ERROR(PopulateKernelCreateInfo(kernel_registry_manager));
+#else
+      ORT_THROW("Not supported in this build.");
+#endif
     }
   }
 
@@ -691,6 +699,7 @@ Status SessionState::FinalizeSessionStateImpl(const std::basic_string<PATH_CHAR_
   return Status::OK();
 }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 Status SessionState::SerializeKernelCreateInfo(flexbuffers::Builder& builder) const {
   using Entry = std::pair<std::string, const SessionState*>;
 
@@ -752,6 +761,7 @@ Status SessionState::SerializeKernelCreateInfo(flexbuffers::Builder& builder) co
 
   return Status::OK();
 }
+#endif
 
 Status SessionState::DeserializeKernelCreateInfo(const flexbuffers::Reference& fbr,
                                                  const KernelRegistryManager& kernel_registry_manager) {

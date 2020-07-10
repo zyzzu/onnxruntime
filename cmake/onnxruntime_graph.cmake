@@ -21,6 +21,12 @@ if (onnxruntime_ORT_MODEL_FORMAT_ONLY)
   list(APPEND onnxruntime_graph_src_exclude_patterns
     "${ONNXRUNTIME_ROOT}/core/graph/function*"
   )
+
+  if (onnxruntime_NO_TRANSFORMERS)
+    list(APPEND onnxruntime_graph_src_exclude_patterns
+      "${ONNXRUNTIME_ROOT}/core/graph/graph_utils.*"
+    )
+  endif()
 endif()
 
 if (onnxruntime_DISABLE_CONTRIB_OPS)
@@ -28,7 +34,7 @@ if (onnxruntime_DISABLE_CONTRIB_OPS)
     "${ONNXRUNTIME_ROOT}/core/graph/contrib_ops/*.h"
     "${ONNXRUNTIME_ROOT}/core/graph/contrib_ops/*.cc"
   )
-elseif(onnxruntime_ORT_MODEL_FORMAT_ONLY)
+elseif(onnxruntime_EXCLUDE_TOKENIZER_CONTRIB_OP)
   # exclude Tokenizer to avoid re2 dependency
   list(APPEND onnxruntime_graph_src_exclude_patterns
     "${ONNXRUNTIME_ROOT}/core/graph/contrib_ops/tokenizer.*"

@@ -32,9 +32,13 @@
 #include "core/framework/tensorprotoutils.h"
 #include "core/framework/tensor_type_and_shape.h"
 #include "core/framework/utils.h"
+#if !defined(NO_TRANSFORMERS)
 #include "core/optimizer/transformer_memcpy.h"
 #include "core/optimizer/graph_transformer.h"
 #include "core/optimizer/insert_cast_transformer.h"
+#include "core/optimizer/rule_based_graph_transformer.h"
+#include "core/optimizer/graph_transformer_utils.h"
+#endif
 #include "core/providers/cpu/controlflow/utils.h"
 #include "core/providers/cpu/cpu_execution_provider.h"
 #ifdef USE_DML  // TODO: This is necessary for the workaround in TransformGraph
@@ -43,8 +47,6 @@
 #include "core/session/IOBinding.h"
 #include "core/session/custom_ops.h"
 #include "core/util/protobuf_parsing_utils.h"
-#include "core/optimizer/rule_based_graph_transformer.h"
-#include "core/optimizer/graph_transformer_utils.h"
 #include "core/util/thread_utils.h"
 #include "core/session/inference_session_utils.h"
 #include "core/platform/ort_mutex.h"
@@ -172,8 +174,11 @@ void InferenceSession::ConstructorCommon(const SessionOptions& session_options,
   // after the invocation of FinalizeSessionOptions.
   InitLogger(logging_manager_);  // this sets session_logger_ so that it can be used for logging after this point.
 
+#if !defined(NO_TRANSFORMERS)
   // Update the number of steps for the graph transformer manager using the "finalized" session options
   ORT_ENFORCE(graph_transformation_mgr_.SetSteps(session_options_.max_num_graph_transformation_steps).IsOK());
+#endif
+
   use_per_session_threads_ = session_options.use_per_session_threads;
 
   if (use_per_session_threads_) {
@@ -226,9 +231,12 @@ void InferenceSession::ConstructorCommon(const SessionOptions& session_options,
 }
 
 InferenceSession::InferenceSession(const SessionOptions& session_options, const Environment& session_env)
-    : graph_transformation_mgr_(session_options.max_num_graph_transformation_steps),
-      logging_manager_(session_env.GetLoggingManager()),
-      insert_cast_transformer_("CastFloat16Transformer") {
+    :
+#if !defined(NO_TRANSFORMERS)
+      graph_transformation_mgr_(session_options.max_num_graph_transformation_steps),
+      insert_cast_transformer_("CastFloat16Transformer"),
+#endif
+      logging_manager_(session_env.GetLoggingManager()) {
   // Initialize assets of this session instance
   ConstructorCommon(session_options, session_env);
 }
@@ -661,6 +669,7 @@ common::Status InferenceSession::Load() {
 }
 #endif
 
+#if !defined(NO_TRANSFORMERS)
 common::Status InferenceSession::TransformGraph(onnxruntime::Graph& graph,
                                                 const onnxruntime::GraphTransformerManager& graph_transformer_mgr,
                                                 const ExecutionProviders& providers,
@@ -765,6 +774,7 @@ common::Status InferenceSession::TransformGraph(onnxruntime::Graph& graph,
 
   return common::Status::OK();
 }
+#endif
 
 /// Create SessionState instance for each subgraph as we need that for the GraphPartitioner
 /// This will be initialized by InitializeSubgraphSessions.
@@ -785,8 +795,10 @@ common::Status InferenceSession::CreateSubgraphSessionState(Graph& graph, Sessio
           *session_logger_,
           session_profiler_);
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
       // Pass fused function manager to subgraph
       subgraph_session_state->GetMutableFuncMgr().SetFusedFuncs(session_state.GetFuncMgr());
+#endif
 
       // recurse
       ORT_RETURN_IF_ERROR_SESSIONID_(CreateSubgraphSessionState(*subgraph, *subgraph_session_state));
@@ -916,10 +928,6 @@ common::Status InferenceSession::InitializeImpl(const flexbuffers::Reference* se
       return status;
     }
 
-    // add predefined transformers
-    AddPredefinedTransformers(graph_transformation_mgr_, session_options_.graph_optimization_level,
-                              transformers_to_enable_);
-
     onnxruntime::Graph& graph = model_->MainGraph();
 
     // Collect the kernel registries from execution provider instances;
@@ -935,8 +943,10 @@ common::Status InferenceSession::InitializeImpl(const flexbuffers::Reference* se
     // create SessionState for subgraphs as it's needed by the transformers
     ORT_RETURN_IF_ERROR_SESSIONID_(CreateSubgraphSessionState(graph, *session_state_));
 
-    // TEMP TESTING if TransformGraph can still run
-    //if (serialized_data == nullptr) {
+#if !defined(NO_TRANSFORMERS)
+    // add predefined transformers
+    AddPredefinedTransformers(graph_transformation_mgr_, session_options_.graph_optimization_level,
+                              transformers_to_enable_);
 
     // apply any transformations to the main graph and any subgraphs
     ORT_RETURN_IF_ERROR_SESSIONID_(TransformGraph(graph, graph_transformation_mgr_,
@@ -946,12 +956,7 @@ common::Status InferenceSession::InitializeImpl(const flexbuffers::Reference* se
 
     // now that all the transforms are done, call Resolve on the main graph. this will recurse into the subgraphs.
     ORT_RETURN_IF_ERROR_SESSIONID_(graph.Resolve());
-
-    //} else {
-    //  // Graph is fully partitioned and resolved and all transforms should have been done previously.
-    //  // This is to minimize binary size so we don't have any ONNX dependencies (Graph::Resolve calls
-    //  // ONNX type/shape inferencing)
-    //}
+#endif
 
     bool keep_initializers = !session_options_.optimized_model_filepath.empty();
 
@@ -1275,9 +1280,12 @@ Status InferenceSession::Run(const RunOptions& run_options,
       ORT_CHECK_AND_SET_RETVAL(start_func());
     }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
     if (run_options.only_execute_path_to_fetches) {
       session_state_->UpdateToBeExecutedNodes(feeds_fetches_manager.GetFeedsFetchesInfo().fetches_mlvalue_idxs);
     }
+#endif
+
     // execute the graph
     ORT_CHECK_AND_SET_RETVAL(utils::ExecuteGraph(*session_state_, feeds_fetches_manager, feeds, *p_fetches,
                                                  session_options_.execution_mode, run_options.terminate, run_logger,
@@ -1583,6 +1591,7 @@ void InferenceSession::InitLogger(logging::LoggingManager* logging_manager) {
   }
 }
 
+#if !defined(NO_TRANSFORMERS)
 // Registers all the predefined transformers with transformer manager
 void InferenceSession::AddPredefinedTransformers(GraphTransformerManager& transformer_manager,
                                                  TransformerLevel graph_optimization_level,
@@ -1607,6 +1616,7 @@ void InferenceSession::AddPredefinedTransformers(GraphTransformerManager& transf
     }
   }
 }
+#endif
 
 common::Status InferenceSession::WaitForNotification(Notification* p_executor_done, int64_t timeout_in_ms) {
   if (timeout_in_ms > 0) {

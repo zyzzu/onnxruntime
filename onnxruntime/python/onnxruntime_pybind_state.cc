@@ -259,6 +259,7 @@ void AddNonTensorAsPyObj(const OrtValue& val, std::vector<py::object>& pyobjs, c
   if (val_type->IsTensorSequenceType()) {
     AddNonTensor<TensorSeq>(val, pyobjs, data_transfer_manager);
   } else {
+#if !defined(DISABLE_ML_OPS)
     utils::ContainerChecker c_checker(val_type);
     if (c_checker.IsMap()) {
       if (c_checker.IsMapOf<std::string, std::string>()) {
@@ -287,6 +288,9 @@ void AddNonTensorAsPyObj(const OrtValue& val, std::vector<py::object>& pyobjs, c
         throw std::runtime_error("Output is a non-tensor type which is not supported.");
       }
     }
+#else
+    throw std::runtime_error("Output is a non-tensor type which is not supported in this build.");
+#endif
   }
 }
 

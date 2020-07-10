@@ -169,10 +169,12 @@ class Node {
     return ConstPointerContainer<std::vector<NodeArg*>>(definitions_.input_defs);
   }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   /** Gets a modifiable collection of the Node's input definitions. */
   std::vector<NodeArg*>& MutableInputDefs() noexcept {
     return definitions_.input_defs;
   }
+#endif
 
   /** Gets the implicit inputs to this Node.
   If this Node contains a subgraph, these are the NodeArg's that are implicitly consumed by Nodes within that
@@ -181,10 +183,12 @@ class Node {
     return ConstPointerContainer<std::vector<NodeArg*>>(definitions_.implicit_input_defs);
   }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   /** Gets a modifiable collection of the Node's implicit input definitions. */
   std::vector<NodeArg*>& MutableImplicitInputDefs() noexcept {
     return definitions_.implicit_input_defs;
   }
+#endif
 
   /** Gets the Node's output definitions.
   @remarks requires ConstPointerContainer wrapper to apply const to the NodeArg pointers so access is read-only. */
@@ -192,10 +196,12 @@ class Node {
     return ConstPointerContainer<std::vector<NodeArg*>>(definitions_.output_defs);
   }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   /** Gets a modifiable collection of the Node's output definitions. */
   std::vector<NodeArg*>& MutableOutputDefs() noexcept {
     return definitions_.output_defs;
   }
+#endif
 
   /** Struct to provide sorting between EdgeEnd instances based on NodeIndex first, and NodeArg::Name second. */
   struct EdgeEndCompare {
@@ -287,12 +293,15 @@ class Node {
   ADD_ATTR_INTERFACES(ONNX_NAMESPACE::GraphProto)
   ADD_ATTR_INTERFACES(ONNX_NAMESPACE::SparseTensorProto)
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   /** Remove the specified attribute from this Node */
   bool ClearAttribute(const std::string& attr_name);
+#endif
 
   /** Gets the Node's attributes. */
   const NodeAttributes& GetAttributes() const noexcept;
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   /** Gets the Node's mutable attributes. */
   NodeAttributes& GetMutableAttributes() noexcept;
 
@@ -307,6 +316,7 @@ class Node {
   @returns nullptr if the Graph instance has not been instantiated or attribute does not contain a GraphProto.
   */
   Graph* GetMutableGraphAttribute(const std::string& attr_name);
+#endif
 
   /** Checks if the Node contains at least one subgraph (this is the case for control flow operators, such as If, Scan, Loop).
   @returns true if the Node contains a subgraph.
@@ -350,10 +360,12 @@ class Node {
   void ForEachDef(std::function<void(const onnxruntime::NodeArg&, bool is_input)> func,
                   bool include_missing_optional_defs = false) const;
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   /** Replaces any matching definitions in the Node's explicit inputs or explicit outputs.
   @param replacements Map of current NodeArg to replacement NodeArg.
   */
   void ReplaceDefs(const std::map<const onnxruntime::NodeArg*, onnxruntime::NodeArg*>& replacements);
+#endif
 
   /**
   @class Definitions
@@ -445,7 +457,6 @@ class Node {
   // TODO: we could change the edge to have NodeIndex so this wasn't necessary if there's no perf hit from doing so
   Status Serialize(flexbuffers::Builder& builder, ProtobufSerializer& protobuf_serializer) const;
   void SerializeEdges(flexbuffers::Builder& builder) const;
-#endif
 
   void Init(const std::string& name,
             const std::string& op_type,
@@ -463,10 +474,12 @@ class Node {
 
   // internal only method to allow selected classes to directly alter the links between nodes.
   Relationships& MutableRelationships() noexcept;
+#endif
 
   const std::vector<std::unique_ptr<Graph>>& MutableSubgraphs() noexcept { return subgraphs_; }
 
 #if !defined(ORT_MODEL_FORMAT_ONLY)
+  //#if !defined(ORT_MODEL_FORMAT_ONLY)
   void SetNodeType(Node::Type node_type) noexcept;
 
   // Function currently has a hard dependency on onnx::OpSchema. If we can remove that it could potentially be
@@ -535,23 +548,31 @@ class Graph {
   /** Gets the Graph name. */
   const std::string& Name() const noexcept;
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   /** Sets the Graph name. */
   void SetName(const std::string& name);
+#endif
 
   /** Gets the Graph description. */
   const std::string& Description() const noexcept;
+
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   /** Gets the Graph description. */
   void SetDescription(const std::string& description);
+#endif
 
   /** Gets the path of the owning model, if any. */
   const Path& ModelPath() const;
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   /** Add an initializer tensor to the Graph. */
   void AddInitializedTensor(const ONNX_NAMESPACE::TensorProto& tensor_proto);
+#endif
 
   /** Remove the initializer tensor with the provided name from the Graph. */
   void RemoveInitializedTensor(const std::string& tensor_name);
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   /** Replaces the initializer tensor with the same name as the given initializer tensor.
   The replacement initializer tensor must have the same type and shape as the existing initializer tensor.
 
@@ -559,6 +580,7 @@ class Graph {
   how initializer tensors are stored and tracked.
   */
   common::Status ReplaceInitializedTensor(const ONNX_NAMESPACE::TensorProto& new_initializer);
+#endif
 
   /** Gets an initializer tensor with the provided name.
   @param[out] value Set to the TensorProto* if the initializer is found, or nullptr if not.
@@ -574,6 +596,13 @@ class Graph {
 
   /** Returns true if an initializer value can be overridden by a graph input with the same name. */
   bool CanOverrideInitializer() const noexcept { return ir_version_ >= 4; }
+
+  /** returns the initializer's TensorProto if 'name' is an initializer, is constant and 
+  cannot be overridden at runtime. If the initializer is not found or is not constant, a nullptr is returned.
+  @param check_outer_scope If true and the graph is a subgraph, 
+         check ancestor graph/s for 'name' if not found in 'graph'.
+  */
+  const ONNX_NAMESPACE::TensorProto* GetConstantInitializer(const std::string& name, bool check_outer_scope) const;
 
   /** Gets the Graph inputs excluding initializers.
   These are the required inputs to the Graph as the initializers can be optionally overridden via graph inputs.
@@ -628,7 +657,9 @@ class Graph {
   @remarks Contains no nullptr values. */
   const std::vector<const NodeArg*>& GetValueInfo() const noexcept;
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   void AddValueInfo(const NodeArg* new_value_info);
+#endif
 
   /** Gets the Node with the specified node index.
   @returns Node instance if found. nullptr if node_index is invalid or node has been freed.
@@ -688,6 +719,7 @@ class Graph {
     return *(result.first->second);
   }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   /** Generate a unique name.in this Graph for a NodeArg */
   std::string GenerateNodeArgName(const std::string& base_name);
 
@@ -754,7 +786,7 @@ class Graph {
   destination Node must execute after the source node. The control edge allows this ordering to occur.
   */
   bool AddControlEdge(NodeIndex src_node_index, NodeIndex dst_node_index);
-
+#endif
   /** Mark the Graph as needing Resolve() to be called.
   This should be done after modifying any aspect of the Graph that changes the Nodes or relationships between them. */
   Graph& SetGraphResolveNeeded() noexcept {
@@ -879,6 +911,7 @@ class Graph {
   /** Returns the mutable parent graph if this is a subgraph */
   Graph* MutableParentGraph() { return parent_graph_; }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   /** Sets the type of a NodeArg, replacing existing type/shape if any */
   void SetNodeArgType(NodeArg& arg, const onnx::TypeProto& type_proto);
 
@@ -918,12 +951,10 @@ class Graph {
     }
   }
 
-#if !defined(ORT_MODEL_FORMAT_ONLY)
   /** During constant folding it may become possible to infer the shape for a node.
       To avoid running a full Resolve allow an individual node to have the shape inferencing re-run.
   */
   Status UpdateShapeInference(Node& node);
-#endif
 
   // Options to control Graph::Resolve.
   struct ResolveOptions {
@@ -954,6 +985,10 @@ class Graph {
     ResolveOptions default_options;
     return Resolve(default_options);
   }
+#else
+  // minimal version to setup info needed in resolve_context_
+  common::Status SetupResolveContext();
+#endif
 
   /** Returns the Node containing the GraphProto for this Graph instance if IsSubgraph is true */
   const Node* ParentNode() const { return parent_node_; }
@@ -964,7 +999,6 @@ class Graph {
   }
 
 #if !defined(ORT_MODEL_FORMAT_ONLY)
-
   /** Construct a Graph instance for a subgraph that is created from a GraphProto attribute in a Node.
   Inherits some properties from the parent graph.
   @param parent_graph The Graph containing the Node that has the GraphProto attribute.
@@ -1038,6 +1072,7 @@ class Graph {
     return ir_version_;
   }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   Graph& GraphResolveNeeded(bool needed) noexcept {
     graph_resolve_needed_ = needed;
     return *this;
@@ -1047,6 +1082,7 @@ class Graph {
     graph_proto_sync_needed_ = needed;
     return *this;
   }
+#endif
 
   // During the Resolve of a Graph it is necessary to recursively descend into subgraphs (created from GraphProto
   // Node attributes in the Graph) if present.
@@ -1084,6 +1120,7 @@ class Graph {
   // so they can be used to resolve outer scope dependencies when running BuildConnections for the subgraphs.
   common::Status SetOuterScopeNodeArgs(const std::unordered_set<std::string>& outer_scope_node_args);
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   // Build and verify node connection (edges).
   // Verify NodeArg name/type/shape matching correctly.
   common::Status BuildConnections(std::unordered_set<std::string>& outer_scope_node_args_consumed);
@@ -1096,7 +1133,6 @@ class Graph {
   // order if <Status> returned is "OK", otherwise it's undefined.
   common::Status PerformTopologicalSortAndCheckIsAcyclic();
 
-#if !defined(ORT_MODEL_FORMAT_ONLY)
   common::Status PerformTypeAndShapeInferencing(const ResolveOptions& options);
 
   common::Status InferAndVerifyTypeMatch(Node& node, const ONNX_NAMESPACE::OpSchema& op, const ResolveOptions& options);
@@ -1120,11 +1156,11 @@ class Graph {
   // Compute set of input and initializer names and checking for duplicate names
   common::Status VerifyInputAndInitializerNames();
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   // Infer and set type information across <*this> graph if needed, and verify type/attribute
   // information matches between node and op.
   common::Status VerifyNodeAndOpMatch(const ResolveOptions& options);
 
-#if !defined(ORT_MODEL_FORMAT_ONLY)
   // Set graph inputs/outputs when resolving a graph..
   common::Status SetGraphInputsOutputs();
 #endif
@@ -1132,11 +1168,13 @@ class Graph {
   // Clear all unused initializers
   void CleanUnusedInitializers(const std::unordered_set<std::string>* initializer_names_to_preserve = nullptr);
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   gsl::not_null<Node*> AllocateNode();
 
   // Release the node.
   // @returns false if node_index was invalid.
   bool ReleaseNode(NodeIndex node_index);
+#endif
 
   Node* NodeAtIndexImpl(NodeIndex node_index) const {
     // if we are trying to access a node that doesn't exist there's (most
@@ -1148,13 +1186,12 @@ class Graph {
     return nodes_[node_index].get();
   }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   std::vector<NodeArg*> CreateNodeArgs(const google::protobuf::RepeatedPtrField<std::string>& names,
                                        const ArgNameToTypeMap& name_to_type_map);
 
-#if !defined(ORT_MODEL_FORMAT_ONLY)
   void AddFunction(const ONNX_NAMESPACE::FunctionProto* func_proto);
   void ToGraphProtoInternal(ONNX_NAMESPACE::GraphProto& graph_proto) const;
-#endif
 
   template <typename TInstance>
   static auto GetProducerNodeImpl(
@@ -1180,6 +1217,7 @@ class Graph {
     }
     return results;
   }
+#endif
 
   const Model& owning_model_;
 
@@ -1195,9 +1233,11 @@ class Graph {
 
   InitializedTensorSet name_to_initial_tensor_;
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   IOnnxRuntimeOpSchemaCollectionPtr schema_registry_;
 
   std::vector<std::unique_ptr<onnxruntime::Function>> function_container_;
+#endif
 
   // Graph nodes.
   // Element in <nodes_> may be nullptr due to graph optimization.
@@ -1238,6 +1278,7 @@ class Graph {
   // Graph value_info.
   std::vector<const NodeArg*> value_info_;
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   // Strings which have been used as node names.
   // New node name should not conflict with this set.
   std::unordered_set<std::string> generated_node_names_;
@@ -1245,21 +1286,24 @@ class Graph {
   // Strings which have been used as node_arg names.
   // New node_arg name should not conflict this this set.
   std::unordered_set<std::string> generated_node_arg_names_;
+#endif
 
   // All node args owned by <*this> graph. Key is node arg name.
   std::unordered_map<std::string, std::unique_ptr<NodeArg>> node_args_;
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   // node arg to its producer node
   std::unordered_map<std::string, NodeIndex> node_arg_to_producer_node_;
 
   // node arg to its consumer nodes
   std::unordered_map<std::string, std::unordered_set<NodeIndex>> node_arg_to_consumer_nodes_;
+#endif
 
   const std::unordered_map<std::string, int> domain_to_version_;
 
 #if !defined(ORT_MODEL_FORMAT_ONLY)
   std::unordered_map<std::string, const ONNX_NAMESPACE::FunctionProto*> model_functions_;
-  #endif
+#endif
 
   // Model IR version.
   Version ir_version_{ONNX_NAMESPACE::Version::IR_VERSION};
@@ -1267,7 +1311,9 @@ class Graph {
   // Is model using latest ONNX opset
   bool using_latest_onnx_opset_{false};
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   int name_generator_ = 0;
+#endif
 
   ResolveContext resolve_context_;
 
@@ -1289,6 +1335,8 @@ class Graph {
   const bool is_loaded_from_model_file_;
 };
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
 std::ostream& operator<<(std::ostream& out, const Graph& graph);
+#endif
 
 }  // namespace onnxruntime

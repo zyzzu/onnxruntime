@@ -16,9 +16,11 @@
 #include "core/framework/kernel_registry_manager.h"
 #include "core/framework/session_state.h"
 #include "core/graph/basic_types.h"
+#if !defined(NO_TRANSFORMERS)
 #include "core/optimizer/graph_transformer_level.h"
 #include "core/optimizer/graph_transformer_mgr.h"
 #include "core/optimizer/insert_cast_transformer.h"
+#endif
 #include "core/framework/session_options.h"
 #ifdef ENABLE_LANGUAGE_INTEROP_OPS
 #include "core/language_interop_ops/language_interop_ops.h"
@@ -422,17 +424,20 @@ class InferenceSession {
   common::Status Load(std::function<common::Status(std::shared_ptr<Model>&)> loader,
                       const std::string& event_name) ORT_MUST_USE_RESULT;
 #endif
+
+#if !defined(NO_TRANSFORMERS)
   common::Status TransformGraph(onnxruntime::Graph& graph,
                                 const onnxruntime::GraphTransformerManager& graph_transformer_mgr,
                                 const ExecutionProviders& providers, KernelRegistryManager& kernel_registry_manager,
                                 const InsertCastTransformer& insert_cast_transformer,
                                 SessionState& session_state) ORT_MUST_USE_RESULT;
 
-  common::Status CreateSubgraphSessionState(Graph& graph, SessionState& session_state) ORT_MUST_USE_RESULT;
-
   virtual void AddPredefinedTransformers(GraphTransformerManager& transformer_manager,
                                          TransformerLevel graph_optimization_level,
                                          const std::vector<std::string>& custom_list);
+#endif
+
+  common::Status CreateSubgraphSessionState(Graph& graph, SessionState& session_state) ORT_MUST_USE_RESULT;
 
   void InitLogger(logging::LoggingManager* logging_manager);
 
@@ -457,12 +462,16 @@ class InferenceSession {
 
   SessionOptions session_options_;
 
+#if !defined(NO_TRANSFORMERS)
   onnxruntime::GraphTransformerManager graph_transformation_mgr_;
 
   // List of transformers to run. When this list is not empty only the transformers in this list
   // will be run regardless of the level set.
   // .i.e This list overrides both SessionOptions.graph_optimization_level and predefined transformers.
   std::vector<std::string> transformers_to_enable_;
+
+  InsertCastTransformer insert_cast_transformer_;
+#endif
 
   /// Logging manager if provided.
   logging::LoggingManager* const logging_manager_;
@@ -544,7 +553,6 @@ class InferenceSession {
   mutable onnxruntime::OrtMutex session_mutex_;  // to ensure only one thread can invoke Load/Initialize
   bool is_model_loaded_ = false;                 // GUARDED_BY(session_mutex_)
   bool is_inited_ = false;                       // GUARDED_BY(session_mutex_)
-  InsertCastTransformer insert_cast_transformer_;
 
 #if !defined(ORT_MODEL_FORMAT_ONLY)
   //CustomRegistry objects own the corresponding KernelRegistry and OnnxRuntimeOpSchemaRegistry objects.
