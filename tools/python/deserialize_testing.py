@@ -6,19 +6,23 @@ from ort_test_dir_utils import run_test_dir
 
 test_models = {
     r'D:\src\github\ORT test models\20190729\opset10\yolov3\yolov3.onnx': 'yolov3.ort',
+    r'D:\src\github\ORT test models\20190729\opset8\tf_mobilenet_v2_1.4_224\model.onnx': 'tf_mobilenet_v2_1.4_224.ort',
     r'D:\src\github\ORT test models\20190729\opset10\mlperf_ssd_mobilenet_300\ssd_mobilenet_v1_coco_2018_01_28.onnx':
         'mlperf_ssd_mobilenet_300.ort',
-    r'D:\src\github\ORT test models\20190729\opset8\tf_mobilenet_v2_1.4_224\model.onnx': 'tf_mobilenet_v2_1.4_224.ort'
     # r'C:\Users\scmckay\Desktop\TFNet\singleframe_optimized_hidden_layers.onnx' : 'tfnet.ort',
     # r'C:\Users\scmckay\Desktop\OnnxFootprint\quantized.onnx' : 'bert_nlu.ort',
 }
 
 
-def run(create):
+def run(create=None):
 
-    if create:
+    if create == 'ORT':
         so = ort.SessionOptions()
         so.serialized_model_format = ort.capi.onnxruntime_pybind11_state.SerializationFormat.ORT
+        so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED
+
+    if create == 'ONNX':
+        so = ort.SessionOptions()
         so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED
 
     for model, target in test_models.items():
@@ -26,6 +30,9 @@ def run(create):
         target_path = os.path.join(model_dir, target)
 
         if create:
+            if create == 'ONNX':
+                target_path = model.replace('.onnx', '.optimized.onnx')
+
             so.optimized_model_filepath = target_path
 
             # so.intra_op_num_threads = num_threads
@@ -48,4 +55,6 @@ def run(create):
         #    print(i.name)
 
 
-run(False)
+# run('ONNX')
+# run('ORT')
+run()

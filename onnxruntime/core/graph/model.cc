@@ -528,12 +528,15 @@ Status Model::Serialize(flexbuffers::Builder& builder) const {
     builder.String("domain", model_proto_.domain());
     builder.String("doc_string", model_proto_.doc_string());
 
+    /* depending on how the Model instance was constructed, things may have been added to the opset import 
+      in the model proto. The Graph instance has the most complete set of info, so de/serialize it there
     builder.Vector("opset_import", [&builder, this]() {
       for (const auto& entry : model_proto_.opset_import()) {
         builder.String(entry.domain());
         builder.Int(entry.version());
       }
     });
+    */
   });
 
   auto graph_start = builder.StartMap("graph");
@@ -560,17 +563,16 @@ Status Model::Deserialize(const flexbuffers::Reference& fbr,
   model->model_proto_.set_domain(attribs["domain"].AsString().c_str());
   model->model_proto_.set_doc_string(attribs["doc_string"].AsString().c_str());
 
-  auto opset_imports = attribs["opset_import"].AsVector();
-  for (size_t cur = 0, end = opset_imports.size(); cur < end;) {
-    auto domain = opset_imports[cur++].AsString();
-    auto version = opset_imports[cur++].AsInt64();
-    auto* new_opset_import = model->model_proto_.add_opset_import();
-    new_opset_import->set_domain(domain.c_str());
-    new_opset_import->set_version(version);
-  }
-
   auto serialized_graph = m["graph"];
-  ORT_RETURN_IF_ERROR(Graph::Deserialize(serialized_graph, *model, logger, model->graph_));
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+  ORT_RETURN_IF_ERROR(Graph::Deserialize(serialized_graph, *model,
+                                         std::make_shared<SchemaRegistryManager>(),
+                                         logger, model->graph_));
+#else
+  ORT_RETURN_IF_ERROR(Graph::Deserialize(serialized_graph, *model,
+                                         logger, model->graph_));
+
+#endif
 
   return Status::OK();
 }
