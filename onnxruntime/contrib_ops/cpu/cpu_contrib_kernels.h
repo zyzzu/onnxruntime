@@ -9,5 +9,12 @@
 namespace onnxruntime {
 namespace contrib {
 Status RegisterCpuContribKernels(KernelRegistry& kernel_registry);
-} // namespace contrib
+
+template <>
+inline KernelCreateInfo BuildKernelCreateInfo<void>() {
+  KernelCreateInfo info;
+  return info;
+}
+
+}  // namespace contrib
 }  // namespace onnxruntime
