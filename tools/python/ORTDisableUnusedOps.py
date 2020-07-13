@@ -209,15 +209,15 @@ def process_file(domain_opset_ops, input_filename, is_contrib_ops=False):
 
 if __name__ == "__main__":
     # r'C:\Users\scmckay\Desktop\OnnxFootprint\quantized.optimized_level2.onnx',
-    model_paths = \
-        [
-         r'D:\src\github\ORT test models\20190729\opset10\yolov3\yolov3.optimized.onnx',
-         r'D:\src\github\ORT test models\20190729\opset8\tf_mobilenet_v2_1.4_224\model.optimized.onnx',
-         r'D:\src\github\ORT test models\20190729\opset10\mlperf_ssd_mobilenet_300\ssd_mobilenet_v1_coco_2018_01_28.optimized.onnx'  # noqa
-        ]
+    # model_paths = \
+    #     [
+    #      r'D:\src\github\ORT test models\20190729\opset10\yolov3\yolov3.optimized.onnx',
+    #      r'D:\src\github\ORT test models\20190729\opset8\tf_mobilenet_v2_1.4_224\model.optimized.onnx',
+    #      r'D:\src\github\ORT test models\20190729\opset10\mlperf_ssd_mobilenet_300\ssd_mobilenet_v1_coco_2018_01_28.optimized.onnx'  # noqa
+    #     ]
 
-    # r'D:\temp\law_LM\law_LM.onnx',
-    # r'C:\Users\scmckay\Desktop\share_with_frank\fluency_v2_opt.quantized.onnx',
+    model_paths = [r'D:\temp\law_LM\law_LM.onnx',
+                   r'C:\Users\scmckay\Desktop\share_with_frank\fluency_v2_opt.quantized.onnx']
 
     # {domain: {opset:[list of ops used]}}
     # map of domain to a list of ops used in each opset enabled for that domain
