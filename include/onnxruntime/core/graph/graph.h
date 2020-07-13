@@ -441,6 +441,7 @@ class Node {
   // TODO: See if we want a separate #define to exclude this from the default full build as well
   static Status Deserialize(const flexbuffers::Reference& fbr, Graph& graph, const logging::Logger& logger,
                             std::unique_ptr<Node>& node);
+
   Status Deserialize(const flexbuffers::Map& map, const logging::Logger& logger);
 
   void DeserializeEdges(const flexbuffers::Map& map, const Graph& graph);
@@ -1018,6 +1019,9 @@ class Graph {
 
   // deserialize the main graph
   static Status Deserialize(const flexbuffers::Reference& fbr, const Model& owning_model,
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+                            IOnnxRuntimeOpSchemaCollectionPtr schema_registry,
+#endif
                             const logging::Logger& logger, std::unique_ptr<Graph>& graph);
 
   // deserialize a subgraph
@@ -1036,8 +1040,15 @@ class Graph {
   //
   // create empty Graph instance to re-create from serialized data.
   // as the deserialize is more likely to be error prone we're preferring returning a Status from that than throwing
-  Graph(const Model& owning_model, Graph* parent_graph, const Node* parent_node, const logging::Logger& logger);
-  Status Deserialize(const flexbuffers::Reference& fbr);
+  Graph(const Model& owning_model,
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+        IOnnxRuntimeOpSchemaCollectionPtr schema_registry,
+#endif
+        const std::unordered_map<std::string, int>& domain_to_version,
+        Graph* parent_graph, const Node* parent_node,
+        const logging::Logger& logger);
+
+  Status Deserialize(const flexbuffers::Map& root);
 
 #if !defined(ORT_MODEL_FORMAT_ONLY)
   // Constructor: Given a <GraphProto> loaded from model file, construct

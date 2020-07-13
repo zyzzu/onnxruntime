@@ -588,11 +588,11 @@ void Node::Init(const std::string& name,
 
     for (auto& name_to_attr : attributes_) {
       if (utils::HasGraph(name_to_attr.second)) {
-        //#if !defined(ORT_MODEL_FORMAT_ONLY)
+#if !defined(ORT_MODEL_FORMAT_ONLY)
         CreateSubgraph(name_to_attr.first);
-        //#else
+#else
         ORT_THROW("Unsupported: Cannot create subgraph from GraphProto");
-        //#endif
+#endif
       }
     }
   }
@@ -632,6 +632,17 @@ Status Node::CreateSubgraph(const std::string& attr_name, const flexbuffers::Map
 
   attr_to_subgraph_map_.insert({std::string(attr_name), gsl::not_null<Graph*>{subgraph.get()}});
   subgraphs_.push_back(std::move(subgraph));
+
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+  // add empty GraphProto to make the checker happy
+  AttributeProto a;
+  a.set_name(attr_name);
+  a.set_type(AttributeProto_AttributeType::AttributeProto_AttributeType_GRAPH);
+  // create empty GraphProto with required name field
+  a.mutable_g()->set_name("Empty graph proto from deserialization of ORT format model");
+
+  attributes_[attr_name] = a;
+#endif
 
   return Status::OK();
 }
@@ -2486,6 +2497,7 @@ Status Graph::ForThisAndAllSubgraphs(const std::vector<Graph*>& subgraphs, std::
   return status;
 }
 
+#if defined(ORT_MODEL_FORMAT_ONLY)
 Status Graph::SetupResolveContext() {
   if (parent_graph_) {
     // Resolve must start at the top level graph in-order to handle outer scope
@@ -2518,6 +2530,7 @@ Status Graph::SetupResolveContext() {
 
   return Status::OK();
 }
+#endif
 
 #if !defined(ORT_MODEL_FORMAT_ONLY)
 Status Graph::Resolve(const ResolveOptions& options) {
@@ -3546,6 +3559,12 @@ Status Graph::Serialize(flexbuffers::Builder& builder) const {
                   [&builder](const NodeArg* entry) { builder.String(entry->Name()); });
   };
 
+  builder.Map("domain_versions", [this, &builder]() {
+    for (const auto& entry : domain_to_version_) {
+      builder.Int(entry.first.c_str(), entry.second);
+    }
+  });
+
   builder.Vector("initializers", add_initializers);
   builder.Vector("node_args", add_node_args);
 
@@ -3567,9 +3586,18 @@ Status Graph::Serialize(flexbuffers::Builder& builder) const {
 }
 #endif
 
-Graph::Graph(const Model& owning_model, Graph* parent_graph, const Node* parent_node, const logging::Logger& logger)
+Graph::Graph(const Model& owning_model,
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+             IOnnxRuntimeOpSchemaCollectionPtr schema_registry,
+#endif
+             const std::unordered_map<std::string, int>& domain_to_version,
+             Graph* parent_graph, const Node* parent_node, const logging::Logger& logger)
     : owning_model_(owning_model),
       graph_proto_(&deserialized_proto_data_),
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+      schema_registry_(schema_registry),
+#endif
+      domain_to_version_(domain_to_version),
       parent_graph_(parent_graph),
       parent_node_(parent_node),
       logger_(logger),
@@ -3577,28 +3605,53 @@ Graph::Graph(const Model& owning_model, Graph* parent_graph, const Node* parent_
 }
 
 Status Graph::Deserialize(const flexbuffers::Reference& fbr, const Model& owning_model,
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+                          IOnnxRuntimeOpSchemaCollectionPtr schema_registry,
+#endif
                           const logging::Logger& logger, std::unique_ptr<Graph>& graph) {
-  graph.reset(new Graph(owning_model, nullptr, nullptr, logger));
+  auto root = fbr.AsMap();
+  std::unordered_map<std::string, int> domain_to_version;
 
-  auto status = graph->Deserialize(fbr);
+  auto domain_version_entries = root["domain_versions"].AsMap();
+  auto keys = domain_version_entries.Keys();
+  auto values = domain_version_entries.Values();
 
+  for (size_t cur = 0, end = keys.size(); cur < end; ++cur) {
+    domain_to_version[keys[cur].ToString()] = values[cur].AsInt32();
+  }
+
+  graph.reset(new Graph(owning_model,
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+                        schema_registry,
+#endif
+                        domain_to_version, nullptr, nullptr, logger));
+
+  auto status = graph->Deserialize(root);
+
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+  ORT_RETURN_IF_ERROR(graph->Resolve());
+#else
   ORT_RETURN_IF_ERROR(graph->SetupResolveContext());
-
+#endif
   return status;
 }
 
 Status Graph::Deserialize(const flexbuffers::Reference& fbr, Graph& parent_graph, const Node& parent_node,
                           const logging::Logger& logger, std::unique_ptr<Graph>& graph) {
   // can't use make_unique as we're calling a private ctor
-  graph.reset(new Graph(parent_graph.owning_model_, &parent_graph, &parent_node, logger));
-  auto status = graph->Deserialize(fbr);
+  graph.reset(new Graph(parent_graph.owning_model_,
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+                        parent_graph.schema_registry_,
+#endif
+                        parent_graph.domain_to_version_, &parent_graph, &parent_node,
+                        logger));
+
+  auto status = graph->Deserialize(fbr.AsMap());
 
   return status;
 }
 
-Status Graph::Deserialize(const flexbuffers::Reference& fbr) {
-  auto root = fbr.AsMap();
-
+Status Graph::Deserialize(const flexbuffers::Map& root) {
   auto initializers = root["initializers"].AsVector();
   for (size_t cur = 0, end = initializers.size(); cur < end; ++cur) {
     TensorProto* value = deserialized_proto_data_.add_initializer();

@@ -956,6 +956,9 @@ common::Status InferenceSession::InitializeImpl(const flexbuffers::Reference* se
 
     // now that all the transforms are done, call Resolve on the main graph. this will recurse into the subgraphs.
     ORT_RETURN_IF_ERROR_SESSIONID_(graph.Resolve());
+
+    // if we ran any transformers the serialized KernelCreateInfo is no longer valid
+    serialized_data = nullptr;
 #endif
 
     bool keep_initializers = !session_options_.optimized_model_filepath.empty();

@@ -246,6 +246,12 @@ KernelCreateInfo BuildKernelCreateInfo();
 namespace ml {
 template <typename T>
 KernelCreateInfo BuildKernelCreateInfo();
+
+template <>
+inline KernelCreateInfo BuildKernelCreateInfo<void>() {
+  KernelCreateInfo info;
+  return info;
+}
 }  // namespace ml
 
 namespace contrib {

@@ -75,7 +75,7 @@ def process_block(domain_opset_ops, is_contrib_ops, block, is_typed, is_versione
 
     domain = domain_map[pieces[1]]
     start = pieces[2]
-    type = ''
+    # type = ''
 
     if not is_versioned and not is_typed:
         end = 999
@@ -85,38 +85,36 @@ def process_block(domain_opset_ops, is_contrib_ops, block, is_typed, is_versione
         op = pieces[4]
     elif is_typed and not is_versioned:
         end = 999
-        type = pieces[3]
+        # type = pieces[3]
         op = pieces[4]
     else:
         assert(is_typed and is_versioned)
         end = pieces[3]
-        type = pieces[4]
+        # type = pieces[4]
         op = pieces[5]
 
     # check if enabled
-    if domain not in domain_opset_ops:
-        print(f"MISSING DOMAIN: Found {domain} in ops but it wasn't found in the info read from the opset imports")
-        return
-
     enabled = False
 
-    for opset, ops in domain_opset_ops[domain].items():
-        if int(start) <= opset and int(end) >= opset and op in ops:
-            enabled = True
-            break
+    # if domain wasn't found in the model opset imports, it is disabled by default
+    if domain in domain_opset_ops:
+        for opset, ops in domain_opset_ops[domain].items():
+            if int(start) <= opset and int(end) >= opset and op in ops:
+                enabled = True
+                break
 
-        # todo: if the build is going to have optimizers that run during initialization we need to whitelist
-        # any ops that may be needed by the optimizers
+            # todo: if the build is going to have optimizers that run during initialization we need to whitelist
+            # any ops that may be needed by the optimizers
 
     # print(f'{enabled} domain={domain} start={start} end={end} type={type} op={op}')
 
-    for l in orig_lines:
+    for line in orig_lines:
         if not enabled:
             out.write('// ')
-        out.write(l)
+        out.write(line)
 
     # add closing brace if we just commented out the last line in the kernel registry table
-    if not enabled and orig_lines[-1].endswith('>};'):
+    if not enabled and block.endswith('>};'):
         out.write('  };')
 
 
@@ -211,8 +209,15 @@ def process_file(domain_opset_ops, input_filename, is_contrib_ops=False):
 
 if __name__ == "__main__":
     # r'C:\Users\scmckay\Desktop\OnnxFootprint\quantized.optimized_level2.onnx',
-    model_paths = [r'D:\temp\law_LM\law_LM.onnx',
-                   r'C:\Users\scmckay\Desktop\share_with_frank\fluency_v2_opt.quantized.onnx']
+    model_paths = \
+        [
+         r'D:\src\github\ORT test models\20190729\opset10\yolov3\yolov3.optimized.onnx',
+         r'D:\src\github\ORT test models\20190729\opset8\tf_mobilenet_v2_1.4_224\model.optimized.onnx',
+         r'D:\src\github\ORT test models\20190729\opset10\mlperf_ssd_mobilenet_300\ssd_mobilenet_v1_coco_2018_01_28.optimized.onnx'  # noqa
+        ]
+
+    # r'D:\temp\law_LM\law_LM.onnx',
+    # r'C:\Users\scmckay\Desktop\share_with_frank\fluency_v2_opt.quantized.onnx',
 
     # {domain: {opset:[list of ops used]}}
     # map of domain to a list of ops used in each opset enabled for that domain
