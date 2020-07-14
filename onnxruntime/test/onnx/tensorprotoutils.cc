@@ -33,14 +33,14 @@ inline void MakeStringInternal(std::ostringstream& ss, const T& t) noexcept {
 
 template <typename T, typename... Args>
 inline void MakeStringInternal(std::ostringstream& ss, const T& t, const Args&... args) noexcept {
-  ::onnxruntime::MakeStringInternal(ss, t);
-  ::onnxruntime::MakeStringInternal(ss, args...);
+  MakeStringInternal(ss, t);
+  MakeStringInternal(ss, args...);
 }
 
 template <typename... Args>
 std::string MakeString(const Args&... args) {
   std::ostringstream ss;
-  ::onnxruntime::MakeStringInternal(ss, args...);
+  MakeStringInternal(ss, args...);
   return std::string(ss.str());
 }
 

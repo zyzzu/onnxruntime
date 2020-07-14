@@ -188,7 +188,47 @@ void LogRuntimeError(uint32_t session_id, const common::Status& status, const ch
 #define GSL_SUPPRESS(tag)
 #endif
 
-inline void MakeStringInternal(std::ostringstream& /*ss*/) noexcept {
+#if defined(TEST_AVOID_MAKESTRING)
+#define ORT_THROW2(...) \
+  throw ::onnxruntime::OnnxRuntimeException(ORT_WHERE_WITH_STACK, (std::ostringstream() << __VA_ARGS__).str())
+
+#define ORT_ENFORCE2(condition, ...)                                          \
+  if (!(condition))                                                           \
+  throw ::onnxruntime::OnnxRuntimeException(ORT_WHERE_WITH_STACK, #condition, \
+                                            (std::ostringstream() << __VA_ARGS__).str())
+#define ORT_MAKE_STATUS2(category, code, ...)                    \
+  ::onnxruntime::common::Status(::onnxruntime::common::category, \
+                                ::onnxruntime::common::code,     \
+                                (std::ostringstream() << __VA_ARGS__).str())
+#define ORT_RETURN_IF2(condition, ...)                                                         \
+  if (condition) {                                                                             \
+    return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL,                                                  \
+                           "Satisfied, but should not be: " #condition "\n",                   \
+                           ORT_WHERE.ToString(), (std::ostringstream() << __VA_ARGS__).str()); \
+  }
+
+inline void MakeStringInternalVoid() noexcept {
+}
+
+template <typename T>
+inline void MakeStringInternalVoid(const T&) noexcept {
+}
+
+template <typename T, typename... Args>
+inline void MakeStringInternalVoid(const T& t, const Args&... args) noexcept {
+  ::onnxruntime::MakeStringInternalVoid(t);
+  ::onnxruntime::MakeStringInternalVoid(args...);
+}
+
+template <typename... Args>
+std::string MakeString(const Args&... args) {
+  ::onnxruntime::MakeStringInternalVoid(args...);
+  return "MakeStringVoid";
+}
+
+#else
+
+inline void MakeStringInternal(std::ostringstream&) noexcept {
 }
 
 template <typename T>
@@ -208,6 +248,7 @@ std::string MakeString(const Args&... args) {
   ::onnxruntime::MakeStringInternal(ss, args...);
   return std::string(ss.str());
 }
+#endif
 
 // Specializations for already-a-string types.
 template <>

@@ -192,11 +192,12 @@ Next step:
       MinSizeRel      onnxruntime.dll	    2,845,696  (-127.5KB)
                       onnxruntime.zip	    1,055,203
 
+Commits: 2020-07-10 skottmckay/GraphExperiment
 =================================
 
 Next step:
 
-  Build with no contrib ops just to get a data point
+  Build with no contrib ops just to get a data point    
     - NOTE: This is too extreme for an optimized model as we need things like FusedConv
 
   Ort.deserialize (RelWithDebInfo.4 and MinSizeRel.4 folders)
@@ -204,6 +205,7 @@ Next step:
       MinSizeRel      onnxruntime.dll	    2,561,536  (-277.5KB)
                       onnxruntime.zip	    933,805
 
+Commits: Same as v3. Just using flag to disable contrib ops
 =================================
 
 Next step:
@@ -227,8 +229,8 @@ Next step:
   Ran operator removal script using both the OXO models as input
     - with that minimized build:
       Ort.deserialize (RelWithDebInfo.5 and MinSizeRel.5 folders)
-          RelWithDebInfo  onnxruntime.dll	    1,540,608  (-14653KB)
-          MinSizeRel      onnxruntime.dll	    1,307,648  (-1224.5KB)
+          RelWithDebInfo  onnxruntime.dll	    1,540,608  (-1463.0KB vs v4, -1810 vs v3)
+          MinSizeRel      onnxruntime.dll	    1,307,648  (-1224.5KB vs v4, -1502 vs v3)
                           onnxruntime.zip	      496,832  
 
   Providers: 
@@ -264,6 +266,32 @@ Next step:
       - only includes data_type_utils
         - could exclude ML types if disabled in build
 
+Commits: 2020-07-13 skottmckay/GraphExperiment
+
+Build commands
+  > rel_build --ort_model_format --disable_rtti --disable_ml_ops --build --skip_submodule_sync --update;
+  > .\build.bat --parallel --build_shared_lib --build_wheel --cmake_generator="Visual Studio 16 2019" --config=MinSizeRel --ort_model_format --disable_rtti --disable_ml_ops --build --update --skip_submodule_sync
+
+=================================
+Next step:
+
+  Investigate cost of MakeString as it shows up in a few places due to the template unpack approach
+
+  6a: Hacked MakeString to return a constant string to get an estimate of total size taken by that
+      Note: this excludes the actual error message strings from the build as well so is total cost not just MakeString implementation cost
+          RelWithDebInfo  onnxruntime.dll	    1,507,328  (-32.5KB) 
+          MinSizeRel      onnxruntime.dll	    1,292,800  (-14KB)
+
+  6b: Noted that session_state.obj decreased by 3.9KB in 6a (largest change in framework library). 
+      rnn_helpers.obj decreased by 2.7KB
+
+      Tested re-instating error messages using ORT_MAKE_STATUS2 and ORT_ENFORCE2 which uses
+      ostringstream directly instead of going via template unpacking.
+
+      Re-instating those added 2.3KB to session_state.obj and 2.3KB to rnn_helpers.obj. Wide variance
+      but looks like rnn_helpers is first usage of some of the ostream<< operators in that library.
+      Even if you hope everything is like session_state.obj the saving is at best 40% of 14KB in a MinSizeRel build
+      so 5.6KB benefit for massive code change. 
 
 =================================
 Potential next steps:
@@ -338,6 +366,9 @@ Potential next steps:
       7: session_state_utils support for copying TensorProto to OrtValue
     ? 8: tensor_allocator (was added for Training, not sure if needed/used in inferencing)
 
+11.
+  - Op specific reductions
+    - rework Cast 
 
 L1. LONG TERM
   - Completely remove protobuf dependency (>100KB)
