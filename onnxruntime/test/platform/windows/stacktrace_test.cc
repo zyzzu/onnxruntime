@@ -29,6 +29,7 @@ TEST(StacktraceTests, BasicTests) {
     // creates the stack trace
     EXPECT_THAT(result[0], HasSubstr("BasicTests"));
 
+#if !defined(ORT_NO_EXCEPTIONS)
   try {
     ORT_THROW("Testing");
   } catch (const OnnxRuntimeException& ex) {
@@ -42,6 +43,7 @@ TEST(StacktraceTests, BasicTests) {
       // otherwise just make sure we captured where the throw was from
       EXPECT_THAT(msg, HasSubstr("BasicTests"));
   }
+#endif
 }
 #endif
 }  // namespace test

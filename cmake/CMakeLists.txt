@@ -200,6 +200,21 @@ if(onnxruntime_USE_NNAPI_BUILTIN AND onnxruntime_USE_NNAPI_DNNLIBRARY)
   message(FATAL_ERROR "Please use only one of onnxruntime_USE_NNAPI_BUILTIN, onnxruntime_USE_NNAPI_DNNLIBRARY")
 endif()
 
+if(onnxruntime_ORT_MODEL_FORMAT_ONLY)
+  add_compile_definitions(ORT_MODEL_FORMAT_ONLY)
+  add_compile_definitions(NO_MODEL_PROTO)
+  add_compile_definitions(NO_SCHEMA_REGISTRY)
+
+  set(onnxruntime_NO_EXCEPTIONS ON)
+  
+  set(onnxruntime_NO_TRANSFORMERS ON)
+  add_compile_definitions(NO_TRANSFORMERS)
+
+  # remove re2 dependency in case build includes contrib ops for optimizers
+  set(onnxruntime_EXCLUDE_TOKENIZER_CONTRIB_OP ON)
+  add_compile_definitions(EXCLUDE_TOKENIZER_CONTRIB_OP)
+endif()
+
 if(onnxruntime_DISABLE_RTTI)
   add_compile_definitions(ORT_NO_RTTI GOOGLE_PROTOBUF_NO_RTTI)
   if(MSVC)
@@ -210,17 +225,20 @@ if(onnxruntime_DISABLE_RTTI)
   endif()
 endif()
 
-if(onnxruntime_ORT_MODEL_FORMAT_ONLY)
-  add_compile_definitions(ORT_MODEL_FORMAT_ONLY)
-  add_compile_definitions(NO_MODEL_PROTO)
-  add_compile_definitions(NO_SCHEMA_REGISTRY)
-
-  set(onnxruntime_NO_TRANSFORMERS ON)
-  add_compile_definitions(NO_TRANSFORMERS)
-
-  # remove re2 dependency in case build includes contrib ops for optimizers
-  set(onnxruntime_EXCLUDE_TOKENIZER_CONTRIB_OP ON)
-  add_compile_definitions(EXCLUDE_TOKENIZER_CONTRIB_OP)
+# If this is only enabled in an onnxruntime_ORT_MODEL_FORMAT_ONLY build we don't need ONNX changes
+# as we (currently) only pull in data_type_utils.cc/h which doesn't throw
+if (onnxruntime_NO_EXCEPTIONS)
+  add_compile_definitions("ORT_NO_EXCEPTIONS")
+  if(MSVC)
+    string(REGEX REPLACE "/EHsc" "/EHs-c-" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    # Eigen throw_std_bad_alloc calls 'new' instead of throwing which results in a nodiscard warning.
+    # It also has unreachable code as there's no good way to avoid EIGEN_EXCEPTIONS being set in macros.h
+    # TODO: see if we can limit the code this is disabled for.
+    string(APPEND CMAKE_CXX_FLAGS " /wd4834 /wd4702")
+    add_compile_definitions("_HAS_EXCEPTIONS=0")
+  else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions")
+  endif()
 endif()
 
 set(REPO_ROOT ${PROJECT_SOURCE_DIR}/..)
@@ -280,8 +298,10 @@ if (MSVC)
     set(gtest_force_shared_crt ON CACHE BOOL "Use shared (DLL) run-time lib for gtest" FORCE)
   endif()
   #Always enable exception handling, even for Windows ARM
-  string(APPEND CMAKE_CXX_FLAGS " /EHsc /wd26812")
-  string(APPEND CMAKE_C_FLAGS " /EHsc /wd26812")
+  if(NOT onnxruntime_NO_EXCEPTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " /EHsc /wd26812")
+    string(APPEND CMAKE_C_FLAGS " /EHsc /wd26812")
+  endif()
   if(onnxruntime_USE_AVX)
     string(APPEND CMAKE_CXX_FLAGS " /arch:AVX")
     string(APPEND CMAKE_C_FLAGS " /arch:AVX")

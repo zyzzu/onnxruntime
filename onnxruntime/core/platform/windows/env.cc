@@ -90,12 +90,16 @@ class WindowsThread : public EnvThread {
     }
 
     unsigned ret = 0;
-    try {
+    ORT_TRY {
       ret = p->start_address(p->index, p->param);
-    } catch (std::exception&) {
+    }
+#if !defined(ORT_NO_EXCEPTIONS)
+    catch (const std::exception&) {
       p->param->Cancel();
       ret = 1;
     }
+#endif
+
     return ret;
   }
   unsigned threadID = 0;

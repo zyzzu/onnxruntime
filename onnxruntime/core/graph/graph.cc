@@ -70,9 +70,11 @@ static bool UsingLatestOnnxOpset(const DomainToVersionMap& opset_versions) {
 static Status MergeShapeInfo(const std::string& output_name,
                              const TypeProto_Tensor& source, TypeProto_Tensor& target,
                              bool strict, const logging::Logger& logger) {
-  try {
+  ORT_TRY {
     ONNX_NAMESPACE::mergeInShapeInfo(source, target);
-  } catch (const ONNX_NAMESPACE::InferenceError& ex) {
+  }
+#if !defined(ORT_NO_EXCEPTIONS)
+  catch (const ONNX_NAMESPACE::InferenceError& ex) {
     // if this model was not created with the latest onnx version, allow the shape inferencing failure (strict == false).
     // we do this to have strict testing of the latest inferencing to detect bugs, but lenient shape inferencing for
     // older models in case later changes to the ONNX shape inferencing or ORT break them.
@@ -89,6 +91,7 @@ static Status MergeShapeInfo(const std::string& output_name,
       return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Output:", output_name, " ", ex.what());
     }
   }
+#endif
 
   return Status::OK();
 }
@@ -2101,11 +2104,14 @@ Status Graph::InferAndVerifyTypeMatch(Node& node, const OpSchema& op, const Reso
   SubgraphInferencingFunc func(Graph::InferAndVerifySubgraphTypes);
   InferenceContextImpl context(node, func, *this, options);
 
-  try {
+  ORT_TRY {
     context.RunInferencing();
-  } catch (const std::exception& ex) {
+  }
+#if !defined(ORT_NO_EXCEPTIONS)
+  catch (const std::exception& ex) {
     return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Node (", node.Name(), ") Op (", node.OpType(), ") ", ex.what());
   }
+#endif
 
   const auto& onnx_inferred_types(context.InferredOutputTypes());
 
@@ -2314,11 +2320,14 @@ Status Graph::VerifyNodeAndOpMatch(const ResolveOptions& options) {
     }
 
     if (!node.Op()) {
-      try {
+      ORT_TRY {
         checker::check_node(node_proto, ctx, lsc);
-      } catch (const std::exception& ex) {
+      }
+#if !defined(ORT_NO_EXCEPTIONS)
+      catch (const std::exception& ex) {
         return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_GRAPH, "This is an invalid model. Error in Node:", node_name, " : ", ex.what());
       }
+#endif
 
       auto maxInclusiveVersion = DomainToVersionMap().find(domain)->second;
       node.op_ = schema_registry_->GetSchema(node.OpType(), maxInclusiveVersion, node.Domain());

@@ -50,12 +50,17 @@ struct OrtDefaultAllocator : OrtAllocatorImpl {
   OrtMemoryInfo* cpu_memory_info;
 };
 
+#if !defined(ORT_NO_EXCEPTIONS)
 #define API_IMPL_BEGIN try {
 #define API_IMPL_END                                                \
   }                                                                 \
-  catch (std::exception & ex) {                                     \
+  catch (const std::exception& ex) {                                \
     return OrtApis::CreateStatus(ORT_RUNTIME_EXCEPTION, ex.what()); \
   }
+#else
+#define API_IMPL_BEGIN {
+#define API_IMPL_END }
+#endif
 
 ORT_API_STATUS_IMPL(OrtApis::GetAllocatorWithDefaultOptions, _Outptr_ OrtAllocator** out) {
   API_IMPL_BEGIN

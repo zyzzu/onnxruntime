@@ -243,12 +243,15 @@ int real_main(int argc, char* argv[], Ort::Env& env) {
     return -1;
   }
 
-  try {
+  ORT_TRY {
     env = Ort::Env{logging_level, "Default"};
-  } catch (std::exception& ex) {
+  }
+#if !defined(ORT_NO_EXCEPTIONS)
+  catch (const std::exception& ex) {
     fprintf(stderr, "Error creating environment: %s \n", ex.what());
     return -1;
   }
+#endif
 
   std::vector<std::basic_string<PATH_CHAR_TYPE>> data_dirs;
   TestResultStat stat;
@@ -881,12 +884,16 @@ int main(int argc, char* argv[]) {
 #endif
   Ort::Env env{nullptr};
   int retval = -1;
-  try {
+  ORT_TRY {
     retval = real_main(argc, argv, env);
-  } catch (std::exception& ex) {
+  }
+#if !defined(ORT_NO_EXCEPTIONS)
+  catch (const std::exception& ex) {
     fprintf(stderr, "%s\n", ex.what());
     retval = -1;
   }
+#endif
+
   ::google::protobuf::ShutdownProtobufLibrary();
   return retval;
 }

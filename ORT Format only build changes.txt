@@ -268,7 +268,8 @@ Next step:
 
 Commits: 2020-07-13 skottmckay/GraphExperiment
 
-Build commands
+Build commands:
+  > dev_build --skip_submodule_sync --ort_model_format --disable_rtti --disable_ml_ops --build; if ($LASTEXITCODE -eq 0) { pip install -U .\build\Windows\Debug\Debug\dist\onnxruntime-1.3.1-cp37-cp37m-win_amd64.whl } else { "Build failed. Skipping pip install" }
   > rel_build --ort_model_format --disable_rtti --disable_ml_ops --build --skip_submodule_sync --update;
   > .\build.bat --parallel --build_shared_lib --build_wheel --cmake_generator="Visual Studio 16 2019" --config=MinSizeRel --ort_model_format --disable_rtti --disable_ml_ops --build --update --skip_submodule_sync
 
@@ -292,6 +293,18 @@ Next step:
       but looks like rnn_helpers is first usage of some of the ostream<< operators in that library.
       Even if you hope everything is like session_state.obj the saving is at best 40% of 14KB in a MinSizeRel build
       so 5.6KB benefit for massive code change. 
+
+=================================
+Next step:
+
+  Disable exceptions. We know this provides a good benefit.
+
+  - pybind11 has hard dependency on exceptions so can't build wheel
+    - if you need python bindings you have to pay the price of exception handling
+  - If we limit this to a build for just the ORT format model and have excluded most of ONNX we don't need
+    any changes there to handle exceptions being disabled
+  - BFCArena fallback if attempted allocation is too large may not work as it's built around exceptions being
+    thrown if the requested buffer is too large
 
 =================================
 Potential next steps:
@@ -320,6 +333,7 @@ Potential next steps:
     - expect -110KB
     - non-trivial to do as the setup doesn't easily allow disabling AVX512
       - estimate for saving should be accurate though as the AVX512 code is in separate files
+    - TODO: See if overriding onnxruntime_USE_AVX512 in CMakeLists.txt is sufficient
 
 4. DONE 
   - build with no contrib ops
