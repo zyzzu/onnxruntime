@@ -18,8 +18,11 @@ High level approach:
   - Currently serializing a few things using a protobuf blob
     - done for expediency as we currently have a hard dependency on the protobuf types
 
+Step 1
+
 Initial status from RelWithDebInfo build
   - need to build that way to get per-symbol info on Windows. MinSizeRel is signficantly smaller
+
 
 ONNX: 
   26KB (-800KB)
@@ -102,6 +105,8 @@ Other notes:
       - Could probably cut down by excluding training and function related pieces
 
 ===============================
+Step 1
+
 Testing setup:
 
 Commit id from master (2020-07-08, should be ~ORT 1.4 release): 6d6b6b54a544f69fb201a9aab7097358f6a440ff
@@ -130,8 +135,7 @@ Ort.deserialize (RelWithDebInfo.1 and MinSizeRel.1 folders)
 
 Commits: 2020-07-08 skottmckay/GraphExperiment                  
 =================================
-
-Next step:
+Step 2:
 
   Reduced onnx_proto
     68KB (-15KB)
@@ -155,8 +159,7 @@ Next step:
 Commits: 2020-07-09 skottmckay/GraphExperiment                  
 
 =================================
-
-Next step:
+Step 3:
 
   Removed optimizer support 
     - removed usage of all things in optimizer library
@@ -194,11 +197,10 @@ Next step:
 
 Commits: 2020-07-10 skottmckay/GraphExperiment
 =================================
-
-Next step:
+Step 4:
 
   Build with no contrib ops just to get a data point    
-    - NOTE: This is too extreme for an optimized model as we need things like FusedConv
+    - NOTE: This is too extreme for an optimized model as we need things like FusedConv 
 
   Ort.deserialize (RelWithDebInfo.4 and MinSizeRel.4 folders)
       RelWithDebInfo  onnxruntime.dll	    3,038,720  (-347.0KB)
@@ -206,9 +208,11 @@ Next step:
                       onnxruntime.zip	    933,805
 
 Commits: Same as v3. Just using flag to disable contrib ops
-=================================
 
-Next step:
+Backing out this change from future testing as we'll switch to just enabling required ops.
+
+=================================
+Step 5:
 
   Re-enable contrib ops 
   Setup build with just the ops used
@@ -229,11 +233,11 @@ Next step:
   Ran operator removal script using both the OXO models as input
     - with that minimized build:
       Ort.deserialize (RelWithDebInfo.5 and MinSizeRel.5 folders)
-          RelWithDebInfo  onnxruntime.dll	    1,540,608  (-1463.0KB vs v4, -1810 vs v3)
-          MinSizeRel      onnxruntime.dll	    1,307,648  (-1224.5KB vs v4, -1502 vs v3)
-                          onnxruntime.zip	      496,832  
+          RelWithDebInfo  onnxruntime.dll	    1,523,712  (-1,826.5KB vs. v3)
+          MinSizeRel      onnxruntime.dll	    1,297,408  (-1,512.0KB vs. v3)
+                          onnxruntime.zip	      493,205  
 
-  Providers: 
+  Providers:
     400KB
       - Cast is still fairly large
       - Reducing types supported can be considered
@@ -274,7 +278,7 @@ Build commands:
   > .\build.bat --parallel --build_shared_lib --build_wheel --cmake_generator="Visual Studio 16 2019" --config=MinSizeRel --ort_model_format --disable_rtti --disable_ml_ops --build --update --skip_submodule_sync
 
 =================================
-Next step:
+Step 6:
 
   Investigate cost of MakeString as it shows up in a few places due to the template unpack approach
 
@@ -294,10 +298,15 @@ Next step:
       Even if you hope everything is like session_state.obj the saving is at best 40% of 14KB in a MinSizeRel build
       so 5.6KB benefit for massive code change. 
 
-=================================
-Next step:
+Conclusion:
+  Very little benefit to replacing usage of MakeString given the high cost of implementing that change.
+  Backing out this change from future testing.
 
-  Disable exceptions. We know this provides a good benefit.
+=================================
+Step 7:
+
+  Disable exceptions. 
+  Build on top of changes up to step 5.
 
   - pybind11 has hard dependency on exceptions so can't build wheel
     - if you need python bindings you have to pay the price of exception handling
@@ -306,7 +315,44 @@ Next step:
   - BFCArena fallback if attempted allocation is too large may not work as it's built around exceptions being
     thrown if the requested buffer is too large
 
+
+  Ort.deserialize (RelWithDebInfo.7 and MinSizeRel.7 folders)
+      RelWithDebInfo  onnxruntime.dll	    1,469,952  (-52.5KB vs. v5)
+      MinSizeRel      onnxruntime.dll	    1,198,080  (-97.0KB vs. v5) ??? unexpectedly large vs RelWithDebInfo
+                      onnxruntime.zip	      455,823  
+
+
+Build commands:
+  > .\build.bat --parallel --build_shared_lib --cmake_generator="Visual Studio 16 2019" --skip_submodule_sync --ort_model_format --disable_rtti --disable_ml_ops --build; if ($LASTEXITCODE -eq 0) { pip install -U .\build\Windows\Debug\Debug\dist\onnxruntime-1.3.1-cp37-cp37m-win_amd64.whl } else { "Build failed. Skipping pip install" }
+
+  > .\build.bat --parallel --build_shared_lib --cmake_generator="Visual Studio 16 2019" --config=RelWithDebInfo --ort_model_format --disable_rtti --disable_ml_ops --build --skip_submodule_sync --update;
+
+  > .\build.bat --parallel --build_shared_lib --cmake_generator="Visual Studio 16 2019" --config=MinSizeRel --ort_model_format --disable_rtti --disable_ml_ops --build --update --skip_submodule_sync
+
 =================================
+Step 8:
+
+  Manual type reduction of ops used.
+
+  Current ops required by both models:
+    Domain: ai.onnx
+      9:Softmax,Identity,Transpose,Gemm,Cast,Gather,LSTM,Reshape
+      11:Sin,Transpose,Slice,MatMulInteger,ArgMax,Mul,DynamicQuantizeLinear,Shape,Unsqueeze,Reshape,Squeeze,Not,Cast,Relu,Equal,Sub,Add,Softmax,Identity,DequantizeLinear,Gather,Neg,LogSoftmax,Loop,Concat,Sigmoid,InstanceNormalization,ConstantOfShape
+    Domain: com.microsoft
+      1:DynamicQuantizeMatMul,FusedGemm,MatMulIntegerToFloat
+
+  Given number of ops used, start with a build that only supports law_LM model.
+  Manually update ops to limit to types used.
+
+  law_LM ops:
+    Domain: ai.onnx
+      9:LSTM,Gather,Cast,Identity,Reshape,Softmax,Transpose,Gemm
+    Domain: com.microsoft
+      1:FusedGemm
+
+      
+=================================
+
 Potential next steps:
 
 1. DONE
@@ -338,13 +384,11 @@ Potential next steps:
 4. DONE 
   - build with no contrib ops
     - not totally viable as per above notes - need contrib ops for optimized models but incremental growth to add those
-    - saving: 
+    - see step 6 above
 
-5.
+5. DONE
   - pull in changes from android testing to disable exceptions
-    - very large changeset though 
-    - was ~430KB but will be smaller with more things excluded like ONNX type/shape inferencing
-      - guesstimate of -250KB
+    - see step 7 above
 
 6.
   - experiment with limited types
@@ -354,15 +398,15 @@ Potential next steps:
     - e.g. Cast (79KB), OneHot (35.5KB) and the reduction ops (140.8KB) could be much smaller  with fewer types
       - Cast can be reworked either way be closer to half the current size
 
-7.
+7. 
   - use printf formatting for all log messages
     - TF Lite takes this approach to avoid cost of convenient iostream formatting
-    - onnxruntime::MakeString is a significant cost in various places
-      - use by ORT_MAKE_STATUS and ORT_THROW 
+    - onnxruntime::MakeString shows up as a cost in various places, but step 6 showed that cost to be relatively small
+      - MakeString is used by ORT_MAKE_STATUS and ORT_THROW 
 
 8.
   - serialize allocation plan
-    - allocation planner is 45KB
+    - allocation planner was 45KB in early build but down to 30.8KB after step 7.
 
 9.
   - make telemetry optional
@@ -370,8 +414,8 @@ Potential next steps:
     - and a few KB saving
 
 10.
-  - Framework is 342KB
-    Should be ~100KB saving achievable from small changes
+  - Framework was 342KB 
+    ~100KB saving achievable from small changes
       25: remove ML support from data types   - DONE based on #define for disabling ML ops
       32: serialize allocation plan
       7: remove debug logging from BFCArena
@@ -379,6 +423,10 @@ Potential next steps:
       17: parallel executor
       7: session_state_utils support for copying TensorProto to OrtValue
     ? 8: tensor_allocator (was added for Training, not sure if needed/used in inferencing)
+
+    - down to 318.4KB after step 7 but that including removing ML support
+      - few less KB in the various parts from other changes
+
 
 11.
   - Op specific reductions
