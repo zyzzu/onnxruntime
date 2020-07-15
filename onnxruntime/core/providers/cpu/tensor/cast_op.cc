@@ -26,6 +26,7 @@ inline void CastData(const Tensor& in, Tensor& out, const TensorShape& shape) {
   output_vector = in_vector.template cast<DstType>();
 }
 
+#ifdef CAST_FLOAT16_ENABLED
 template <>
 inline void CastData<float, MLFloat16>(const Tensor& in, Tensor& out, const TensorShape& shape) {
   auto out_data = out.MutableData<MLFloat16>();
@@ -48,7 +49,9 @@ inline void CastData<MLFloat16, float>(const Tensor& in, Tensor& out, const Tens
   output_vector = in_vector.template cast<float>();
 #endif
 }
+#endif
 
+#ifdef CAST_STRING_ENABLED
 template <typename SrcType>
 typename std::enable_if<std::is_floating_point<SrcType>::value, void>::type
 CastToStringData(const Tensor& in, Tensor& out, const TensorShape& shape) {
@@ -153,6 +156,8 @@ void CastFromStringData(const Tensor& in, Tensor& out, const TensorShape& shape)
     ORT_THROW("Unsupported type in cast op: from String to ", typeid(DstType).name());
   }
 }
+#endif
+
 }  // namespace
 
 class Cast final : public OpKernel {
@@ -226,8 +231,9 @@ template <typename TSrc>
 struct Cast::SrcDispatcher {
   Status operator()(int32_t to, const Tensor& src, Tensor& dst, const TensorShape& shape) {
     utils::MLTypeCallDispatcherRetWithCarriedType<Status, TSrc, Cast::Dispatcher,
-                                                  float, double, int8_t, uint8_t, int16_t, uint16_t,
-                                                  int32_t, uint32_t, int64_t, uint64_t, bool>
+                                                  //float, double, int8_t, uint8_t, int16_t, uint16_t,
+                                                  int32_t  //,uint32_t, int64_t, uint64_t, bool
+                                                  >
         t_disp(to);
 
     auto status = t_disp.Invoke(src, dst, shape);
@@ -236,6 +242,7 @@ struct Cast::SrcDispatcher {
   }
 };
 
+#ifdef CAST_STRING_ENABLED
 template <typename T>
 struct Cast::StringDispatcher {
   Status operator()(bool to_string, const Tensor& src, Tensor& dst, const TensorShape& shape) {
@@ -248,6 +255,7 @@ struct Cast::StringDispatcher {
     return Status::OK();
   }
 };
+#endif
 
 Status Cast::Compute(OpKernelContext* context) const {
   const Tensor* X = context->Input<Tensor>(0);
@@ -267,6 +275,7 @@ Status Cast::Compute(OpKernelContext* context) const {
     return status;
   }
 
+#ifdef CAST_STRING_ENABLED
   // special case strings
   if (from == ONNX_NAMESPACE::TensorProto_DataType_STRING ||
       to_ == ONNX_NAMESPACE::TensorProto_DataType_STRING) {
@@ -274,20 +283,25 @@ Status Cast::Compute(OpKernelContext* context) const {
 
     utils::MLTypeCallDispatcherRet<Status, StringDispatcher,
                                    float, double, MLFloat16, /*BFloat16,*/
-                                   int8_t, uint8_t, int16_t, uint16_t, int32_t, uint32_t, int64_t, uint64_t, bool>
+                                   int8_t, uint8_t, int16_t, uint16_t, int32_t, uint32_t, int64_t, uint64_t,
+                                   bool>
         t_disp(to_string ? from : to_);
 
     status = t_disp.Invoke(to_string, *X, *Y, shape);
-  } else {
+  }
+#endif
+  else {
     auto do_cast = [](int32_t from, int32_t to, const Tensor& src, Tensor& dst, const TensorShape& shape) {
       utils::MLTypeCallDispatcherRet<Status, SrcDispatcher,
-                                     float, double,  // MLFloat16 is special cased below
-                                     int8_t, uint8_t, int16_t, uint16_t, int32_t, uint32_t, int64_t, uint64_t, bool>
+                                     float  //, double,  // MLFloat16 is special cased below
+                                     //int8_t, uint8_t, int16_t, uint16_t, int32_t, uint32_t, int64_t, uint64_t, bool
+                                     >
           t_disp(from);
 
       return t_disp.Invoke(to, src, dst, shape);
     };
 
+#ifdef CAST_FLOAT16_ENABLED
     // MLFloat16  needs special handling
     if (from == ONNX_NAMESPACE::TensorProto_DataType_FLOAT16) {
       if (to_ == ONNX_NAMESPACE::TensorProto_DataType_FLOAT) {
@@ -315,7 +329,9 @@ Status Cast::Compute(OpKernelContext* context) const {
         ORT_RETURN_IF_ERROR(do_cast(from, ONNX_NAMESPACE::TensorProto_DataType_FLOAT, *X, tmp_tensor, shape));
         CastData<float, MLFloat16>(tmp_tensor, *Y, shape);
       }
-    } else {
+    } else
+#endif
+    {
       status = do_cast(from, to_, *X, *Y, shape);
     }
   }
