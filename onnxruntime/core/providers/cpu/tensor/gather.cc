@@ -54,18 +54,16 @@ Status GatherBase::PrepareForCompute(OpKernelContext* context, Prepare& p) const
   return Status::OK();
 }
 
-template <typename Tin>
-Status GatherCopyData(const Tensor* indices_tensor, const uint8_t* src_base, uint8_t* dst_base, bool is_string_type,
+Status GatherCopyData(const std::function<int64_t(int64_t)>& get_index,
+                      const uint8_t* src_base, uint8_t* dst_base, bool is_string_type,
                       const size_t element_bytes, const int64_t block_size, const int64_t M,
                       const int64_t N, const int64_t data_batch_bytes, const int64_t gathered_batch_bytes,
                       const TensorShape& input_data_shape, const int64_t axis, concurrency::ThreadPool* tp) {
-  const Tin* indices_data = indices_tensor->template Data<Tin>();
-
   // Check the indices first in case there's a out of bound index.
   auto axis_dim_limit = input_data_shape[axis];
 
   for (int64_t i = 0; i < N; ++i) {
-    Tin idx = indices_data[i];
+    int64_t idx = get_index(i);
     if (idx < -axis_dim_limit || idx >= axis_dim_limit) {
       return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT,
                              "indices element out of data bounds, idx=", idx,
@@ -79,8 +77,8 @@ Status GatherCopyData(const Tensor* indices_tensor, const uint8_t* src_base, uin
 
     const int64_t src_offset_batch = batch * data_batch_bytes;
     const int64_t dst_offset_batch = batch * gathered_batch_bytes;
-    Tin idx = indices_data[i];
-    idx = idx < 0 ? idx + static_cast<Tin>(axis_dim_limit) : idx;
+    int64_t idx = get_index(i);
+    idx = idx < 0 ? idx + axis_dim_limit : idx;
     const int64_t src_offset = src_offset_batch + idx * block_size;
     const int64_t dst_offset = dst_offset_batch + i * block_size;
 
@@ -91,12 +89,13 @@ Status GatherCopyData(const Tensor* indices_tensor, const uint8_t* src_base, uin
       memcpy(dst_base + dst_offset, src_base + src_offset, block_size);
     }
   };
-  concurrency::ThreadPool::TryParallelFor(tp, M * N, static_cast<double>(block_size),
-                                          [&lambda](ptrdiff_t first, ptrdiff_t last) {
-                                            for (int index = static_cast<int>(first), end = static_cast<int>(last); index < end; ++index) {
-                                              lambda(index);
-                                            }
-                                          });
+  concurrency::ThreadPool::TryParallelFor(
+      tp, M * N, static_cast<double>(block_size),
+      [&lambda](ptrdiff_t first, ptrdiff_t last) {
+        for (int index = static_cast<int>(first), end = static_cast<int>(last); index < end; ++index) {
+          lambda(index);
+        }
+      });
 
   return Status::OK();
 }
@@ -123,12 +122,17 @@ Status Gather::Compute(OpKernelContext* context) const {
   concurrency::ThreadPool* tp = context->GetOperatorThreadPool();
 
   if (p.indices_tensor->IsDataType<int32_t>()) {
-    return GatherCopyData<int32_t>(p.indices_tensor, src_base, dst_base, is_string_type, element_bytes,
-                                   block_size, M, N, data_batch_bytes, gathered_batch_bytes, input_data_shape, p.axis, tp);
+    const auto indices_data = p.indices_tensor->DataAsSpan<int32_t>();
+    return GatherCopyData([&indices_data](int64_t idx) { return static_cast<int64_t>(indices_data[idx]); },
+                          src_base, dst_base, is_string_type, element_bytes,
+                          block_size, M, N, data_batch_bytes, gathered_batch_bytes, input_data_shape, p.axis, tp);
   }
+
   if (p.indices_tensor->IsDataType<int64_t>()) {
-    return GatherCopyData<int64_t>(p.indices_tensor, src_base, dst_base, is_string_type, element_bytes,
-                                   block_size, M, N, data_batch_bytes, gathered_batch_bytes, input_data_shape, p.axis, tp);
+    const auto indices_data = p.indices_tensor->DataAsSpan<int64_t>();
+    return GatherCopyData([&indices_data](int64_t idx) { return indices_data[idx]; },
+                          src_base, dst_base, is_string_type, element_bytes,
+                          block_size, M, N, data_batch_bytes, gathered_batch_bytes, input_data_shape, p.axis, tp);
   }
 
   return ORT_MAKE_STATUS(ONNXRUNTIME, NOT_IMPLEMENTED, "Type for Tind not supported yet in Gather.");

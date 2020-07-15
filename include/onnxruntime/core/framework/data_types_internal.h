@@ -341,6 +341,22 @@ class MLTypeCallDispatcherRet {
   }
 };
 
+template <class Ret, typename TCarried, template <typename, typename> class Fn, typename... Types>
+class MLTypeCallDispatcherRetWithCarriedType {
+  int32_t dt_type_;
+
+ public:
+  explicit MLTypeCallDispatcherRetWithCarriedType(int32_t dt_type) noexcept : dt_type_(dt_type) {}
+
+  template <typename... Args>
+  Ret Invoke(Args&&... args) const {
+    mltype_dispatcher_internal::CallableDispatchableRetHelper<Ret> helper(dt_type_);
+    int results[] = {0, helper.template Invoke<Types>(Fn<TCarried, Types>(), std::forward<Args>(args)...)...};
+    ORT_UNUSED_PARAMETER(results);
+    return helper.Get();
+  }
+};
+
 namespace data_types_internal {
 
 enum class ContainerType : uint16_t {
