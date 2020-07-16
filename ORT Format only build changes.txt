@@ -1,10 +1,17 @@
 ORT Format only build changes
 
-High level approach:
+====================
+
+Step 1
+
+  - Use flexbuffer ro serialize to 'ORT format'
+    - schema-less flatbuffer
+    - slightly less efficient, but saved time of creating schema
+      - should be easy to take implementation and convert back to schema though
+      
   - Serialize Graph instance including Node instances and initializers
     - subgraphs are serialized the same way
-    - current assumption is that EPs to be used in deployed version should be known, and L1 and L2 transformers can be run ahead of time 
-      - we can add in transformers if this isn't the case though, but cost will vary depending on what's required
+    - assumption that EPs to be used in deployed version should be known, and L1 and L2 transformers can be run ahead of time 
     - needed to add storage of SinceVersion in Node so ONNX OpSchema isn't required 
   - Serialize SessionState
     - currently this is just the KernelCreateInfo
@@ -18,120 +25,114 @@ High level approach:
   - Currently serializing a few things using a protobuf blob
     - done for expediency as we currently have a hard dependency on the protobuf types
 
-Step 1
-
 Initial status from RelWithDebInfo build
   - need to build that way to get per-symbol info on Windows. MinSizeRel is signficantly smaller
 
+  ONNX: 
+    26KB (-800KB)
+    - Library just includes data type helpers
 
-ONNX: 
-  26KB (-800KB)
-  - Library just includes data type helpers
+  Optimizers: 
+    45KB (-277KB)
+    Kept ones required post-transform (required if we enable NCHW)
+      - graph tranformer, insert cast, memcpy
+      - Excluded all others
+      - could remove all if no transformations after load
 
-Optimizers: 
-  45KB (-277KB)
-  Kept ones required post-transform (required if we enable NCHW)
-    - graph tranformer, insert cast, memcpy
-    - Excluded all others
-    - could remove all if no transformations after load
-
-Framework:
-  346KB (-50KB)
-  - Removed Custom op support
-    - currently no good separation between just getting the kernel defs and the schemas
-  - Removed implementation of GraphPartitioner
-    - serialized model must be partitioned first
-  - Remove VerifyKernelDef
-  Can save in a few places:
-    - 49KB in data_types and a lot of that is for ML types
-    - 31KB for allocation planner: could serialize
-    - 16KB parallel executor: could exclude
-    - 7KB BFCArena::DumpMemoryLog + DebugString could be excluded
-    - 7KB dealing with TensorProto to OrtValue - could just create OrtValue from offset in flatbuffer/flexbuffer     
-      - probably a few other places where doing so would save multiple KB
+  Framework:
+    346KB (-50KB)
+    - Removed Custom op support
+      - currently no good separation between just getting the kernel defs and the schemas
+    - Removed implementation of GraphPartitioner
+      - serialized model must be partitioned first
+    - Remove VerifyKernelDef
+    Can save in a few places:
+      - 49KB in data_types and a lot of that is for ML types
+      - 31KB for allocation planner: could serialize
+      - 16KB parallel executor: could exclude
+      - 7KB BFCArena::DumpMemoryLog + DebugString could be excluded
+      - 7KB dealing with TensorProto to OrtValue - could just create OrtValue from offset in flatbuffer/flexbuffer     
+        - probably a few other places where doing so would save multiple KB
 
 
-Graph:
-  88KB (-210KB)
-  - Cut out initial set of obvious methods that weren't required. 
-    - e.g. ctors used for load from proto (Model and Graph), ToProto, Serialization, Node::Op (returns onnx::OpSchema instance), OnnxRuntimeOpSchemaRegistry
-  - Pieces required for transformers are still supported but could be removed
-    - Could save about 20KB from that
-      - e.g. Resolve, AddNode, AddEdge, RemoveEdge, etc. 
-  - No support for Function 
-    - tightly bound to OpSchema class in ONNX 
-      - can't bring in in schema.cc from ONNX without splitting that up more
-      - TBD if Function support is required
-  - Can remove some training related code for some minor savings
-    - consumer/provider info
-  - Can remove graph_utils if no transformer support
-    - only 5.6KB though
+  Graph:
+    88KB (-210KB)
+    - Cut out initial set of obvious methods that weren't required. 
+      - e.g. ctors used for load from proto (Model and Graph), ToProto, Serialization, Node::Op (returns onnx::OpSchema instance), OnnxRuntimeOpSchemaRegistry
+    - Pieces required for transformers are still supported but could be removed
+      - Could save about 20KB from that
+        - e.g. Resolve, AddNode, AddEdge, RemoveEdge, etc. 
+    - No support for Function 
+      - tightly bound to OpSchema class in ONNX 
+        - can't bring in in schema.cc from ONNX without splitting that up more
+        - TBD if Function support is required
+    - Can remove some training related code for some minor savings
+      - consumer/provider info
+    - Can remove graph_utils if no transformer support
+      - only 5.6KB though
 
-Providers:
-  2.1MB (-427KB)
-  - Excluded ML ops which was most of diff
-  - Currently includes all contrib ops
-    - can split out based on category
-      - Experimental/NCHWc/Optimizer related (inc. BERT specific)/
-  
+  Providers:
+    2.1MB (-427KB)
+    - Excluded ML ops which was most of diff
+    - Currently includes all contrib ops
+      - can split out based on category
+        - Experimental/NCHWc/Optimizer related (inc. BERT specific)/
+    
 
-Session:
-  280KB (-40KB)
-  - Excluded custom ops and ctors involving loading ModelProto
-  - Can remove support for config in model and exclude JSON parser 
-    - Saving: 65KB (remove inference_session_utils.*)
-  - C API could be minimized
-    Currently 100KB
-      - probably a lot we can remove to minimized
-      - lot of cost to support ML types such as Map that could be removed based on --disable_ml_ops
+  Session:
+    280KB (-40KB)
+    - Excluded custom ops and ctors involving loading ModelProto
+    - Can remove support for config in model and exclude JSON parser 
+      - Saving: 65KB (remove inference_session_utils.*)
+    - C API could be minimized
+      Currently 100KB
+        - probably a lot we can remove to minimized
+        - lot of cost to support ML types such as Map that could be removed based on --disable_ml_ops
 
-MLAS:
-  260KB
-  - Not sure what ARM size will be
-  - AVX512 support is expensive. could make that optional
-    - Saving ~110KB
+  MLAS:
+    260KB
+    - Not sure what ARM size will be
+    - AVX512 support is expensive. could make that optional
+      - Saving ~110KB
 
-Common:
-  79KB
-  - telemetry is 6.6KB + some cost in InferenceSession
-  - profiler is 7.5KB + some cost in InferenceSession
-    - could be made optional
+  Common:
+    79KB
+    - telemetry is 6.6KB + some cost in InferenceSession
+    - profiler is 7.5KB + some cost in InferenceSession
+      - could be made optional
 
------
 Other notes:
   - Still have a dependency on ONNX PB
     - More work to replace though given internal use of *Proto types in many places
     - Current size is 83KB
       - Could probably cut down by excluding training and function related pieces
 
-===============================
-Step 1
 
 Testing setup:
 
-Commit id from master (2020-07-08, should be ~ORT 1.4 release): 6d6b6b54a544f69fb201a9aab7097358f6a440ff
-Updated: ort.vs19.perf.master, ort.serialize and ort.deserialize are all on the same base commit id
+  Commit id from master (2020-07-08, should be ~ORT 1.4 release): 6d6b6b54a544f69fb201a9aab7097358f6a440ff
+  Updated: ort.vs19.perf.master, ort.serialize and ort.deserialize are all on the same base commit id
 
-NOTE: Sizes for specific savings are based on a RelWithDebInfo build as we need the pdb for SizeBench to work.
-      These need to be roughly adjusted by the difference between that and a MinSizeRel build (~20% smaller so reduce saving by that).
-      Summary includes total size from MinSizeRel build. 
+  NOTE: Sizes for specific savings are based on a RelWithDebInfo build as we need the pdb for SizeBench to work.
+        These need to be roughly adjusted by the difference between that and a MinSizeRel build (~20% smaller so reduce saving by that).
+        Summary includes total size from MinSizeRel build. 
 
-Build flags:
-  Master: --disable_rtti --disable_ml_ops
-  Deserialize: Add --ort_model_format 
+  Build flags:
+    Master: --disable_rtti --disable_ml_ops
+    Deserialize: Add --ort_model_format 
 
-MinSizeRel build
-  Base: .\build.bat --parallel --build_shared_lib --build_wheel --cmake_generator="Visual Studio 16 2019" --config=MinSizeRel --disable_rtti --disable_ml_ops --build --update --skip_submodule_sync
-  Deserialize: .\build.bat --parallel --build_shared_lib --build_wheel --cmake_generator="Visual Studio 16 2019" --config=MinSizeRel --ort_model_format --disable_rtti --disable_ml_ops --build --update --skip_submodule_sync
+  MinSizeRel build
+    Base: .\build.bat --parallel --build_shared_lib --build_wheel --cmake_generator="Visual Studio 16 2019" --config=MinSizeRel --disable_rtti --disable_ml_ops --build --update --skip_submodule_sync
+    Deserialize: .\build.bat --parallel --build_shared_lib --build_wheel --cmake_generator="Visual Studio 16 2019" --config=MinSizeRel --ort_model_format --disable_rtti --disable_ml_ops --build --update --skip_submodule_sync
 
-Master
-    RelWithDebInfo  onnxruntime.dll	    5,236,736
-    MinSizeRel      onnxruntime.dll	    4,398,080
+  Master
+      RelWithDebInfo  onnxruntime.dll	    5,236,736
+      MinSizeRel      onnxruntime.dll	    4,398,080
 
-Ort.deserialize (RelWithDebInfo.1 and MinSizeRel.1 folders)
-    RelWithDebInfo  onnxruntime.dll	    3,833,344
-    MinSizeRel      onnxruntime.dll	    3,231,744
-                    onnxruntime.zip	    1,223,231
+  Ort.deserialize (RelWithDebInfo.1 and MinSizeRel.1 folders)
+      RelWithDebInfo  onnxruntime.dll	    3,833,344
+      MinSizeRel      onnxruntime.dll	    3,231,744
+                      onnxruntime.zip	    1,223,231
 
 Commits: 2020-07-08 skottmckay/GraphExperiment                  
 =================================
@@ -327,6 +328,8 @@ Build commands:
   > .\build.bat --parallel --build_shared_lib --cmake_generator="Visual Studio 16 2019" --ort_model_format --disable_rtti --disable_ml_ops --skip_submodule_sync --build --update --config=RelWithDebInfo;
   > .\build.bat --parallel --build_shared_lib --cmake_generator="Visual Studio 16 2019" --ort_model_format --disable_rtti --disable_ml_ops --skip_submodule_sync --build --update --config=MinSizeRel
 
+Commits: 2020-07-14 skottmckay/GraphExperiment
+
 =================================
 Step 8:
 
@@ -394,6 +397,78 @@ Step 8:
   > .\build.bat --parallel --build_shared_lib --build_wheel --cmake_generator="Visual Studio 16 2019" --ort_model_format --disable_rtti --disable_ml_ops --skip_submodule_sync --build --update --config=RelWithDebInfo;
   > .\build.bat --parallel --build_shared_lib --build_wheel --cmake_generator="Visual Studio 16 2019" --ort_model_format --disable_rtti --disable_ml_ops --skip_submodule_sync --build --update --config=MinSizeRel
 
+Commits: 2020-07-15 skottmckay/GraphExperiment
+
+=================================
+Step 9:
+
+  Build BERT-NLU for data point. 
+
+  Limited ops to just required ones.
+  Exceptions disabled.
+  Don't have test input/output so can't validate correctness.
+  All Cast types except std::string and float16 were enabled
+    - std::string and float16 are both special cased. Disabling those types reduces from 60.8KB to 30.8KB
+    - model doesn't use either
+  No other type specific reductions
+
+    Ort.deserialize (RelWithDebInfo.9a and MinSizeRel.9a folders)
+        RelWithDebInfo  onnxruntime.dll	    1,783,296  (-1532KB vs 9b below)
+        MinSizeRel      onnxruntime.dll	    1,461,248  (-1197KB)
+                        onnxruntime.zip	      522,209  == 510KB
+
+  For comparison, build without reducing to required ops. ML ops disabled. All contrib ops included.
+  No type specific reductions. Exceptions disabled.
+    Ort.deserialize (RelWithDebInfo.9b and MinSizeRel.9b folders)
+        RelWithDebInfo  onnxruntime.dll	    3,351,040  
+        MinSizeRel      onnxruntime.dll	    2,686,976  
+                        onnxruntime.zip	    1,002,507  
+
+===================================
+Step 10:
+  Couple more data points regarding exceptions:
+
+  ML ops disabled. All other ops included. Exception code disabled but compile flags allow exceptions. (Same as 9b apart from change to compile flags)
+    Setup would allow using python bindings
+  
+    Ort.deserialize (RelWithDebInfo.10a and MinSizeRel.10a folders)
+        RelWithDebInfo  onnxruntime.dll	    3,476,480  (+122.5KB vs 9b)
+        MinSizeRel      onnxruntime.dll	    2,906,112  (+214KB)
+                        onnxruntime.zip	    1,082,746  
+
+  Same but with exception code enabled. Diff is saving from not catching exceptions but still allowing them to be thrown
+
+    Ort.deserialize (RelWithDebInfo.10b and MinSizeRel.10b folders)
+        RelWithDebInfo  onnxruntime.dll	    3,372,544  (-101.5KB vs 10a) *** unexpectedly worse than 10a ***
+        MinSizeRel      onnxruntime.dll	    2,834,432  (-70KB)
+                        onnxruntime.zip	    1,049,019  
+
+Rebuilt all 3 setups from scratch to double check numbers but output was consistent.
+
+  10c: Rebuild with exceptions - matches 10b
+      RelWithDebInfo  onnxruntime.dll	3,372,544
+      MinSizeRel      onnxruntime.dll	2,834,432
+
+  10d: Rebuild without exceptions at all - matches 9b
+      RelWithDebInfo  onnxruntime.dll	3,351,040  -21KB
+      MinSizeRel      onnxruntime.dll	2,686,976  -144KB
+
+  10e: Rebuild with exceptions enabled but ORT_NO_EXCEPTIONS set - matches 10a
+      *** Size is bigger than with the 'catch' blocks enabled ***
+      RelWithDebInfo  onnxruntime.dll	3,476,480 
+      MinSizeRel      onnxruntime.dll	2,906,112
+
+      Providers grows by 107KB
+        - .rdata +69KB, 
+          .text +71.5KB, 
+          .pdata -18KB (no catch blocks so probably shorter unwind info)
+        - Tested converting the one ORT_THROW in Tile to returning ORT_MAKE_STATUS and it undid most of the growth
+          - Not sure why this is the case though. The exception disabled version of ORT_THROW logs ex.what() so maybe 
+            we log more consistently?
+        - Maybe use of abort() generates more code when unwind is enabled
+
+Significant reductions if exceptions are completely disabled. If not, they should be completely enabled.
+
 =================================
 One-liners to build everything:
 
@@ -401,6 +476,9 @@ With exceptions and update
   .\build.bat --parallel --build_shared_lib --build_wheel --cmake_generator="Visual Studio 16 2019" --ort_model_format --disable_rtti --disable_ml_ops --skip_submodule_sync --build --update;.\build.bat --parallel --build_shared_lib --build_wheel --cmake_generator="Visual Studio 16 2019" --ort_model_format --disable_rtti --disable_ml_ops --skip_submodule_sync --build --update --config=RelWithDebInfo;.\build.bat --parallel --build_shared_lib --build_wheel --cmake_generator="Visual Studio 16 2019" --ort_model_format --disable_rtti --disable_ml_ops --skip_submodule_sync --build --update --config=MinSizeRel
 Without exceptions 
   .\build.bat --parallel --build_shared_lib --cmake_generator="Visual Studio 16 2019" --ort_model_format --disable_rtti --disable_ml_ops --skip_submodule_sync --build --update;.\build.bat --parallel --build_shared_lib --cmake_generator="Visual Studio 16 2019" --ort_model_format --disable_rtti --disable_ml_ops --skip_submodule_sync --build --update --config=RelWithDebInfo;.\build.bat --parallel --build_shared_lib --cmake_generator="Visual Studio 16 2019" --ort_model_format --disable_rtti --disable_ml_ops --skip_submodule_sync --build --update --config=MinSizeRel
+
+Remove CMakeCache.txt for clean build
+  gci .\build\Windows\ -Filter CMakeCache.txt -Recurse |% { rm $_.FullName}
 
 =================================
 
@@ -520,14 +598,13 @@ Lot of cost to support L3 transformers in ORT model format build
           - unknown if this is viable and if so whether it's trivial or not
     - keeping the edges valid so Graph::Resolve isn't required should be relatively easy
 
-    
-
 ======================
 Not supported
   - Functions
   - CustomRegistry
     - kernel registry and schema tightly bound currently
   - Optimizers
+    - no ONNX schema for adding new ops    
 
 Other:
   - Could choose between serializing edges and having code to create edges (Graph::Resolve + BuildConnections)
@@ -535,25 +612,36 @@ Other:
 
 =====================
 
-Other questions:
+Questions/Notes:
 
   - Clarify goal/priorities
-    - is it fine to not have optimizers in this build, or do we need to support those as an optional addition?
-    - do we want to setup a mechanism to discover/limit types needed?
-      - significant savings if we do
-      - could gradually update op implementations once we define a mechanism for doing this in a fairly automated manner
-      - need type info for all values to be available
-        - could update onnx model to add type info in value info
-        - could do type info discovery based on ORT format model
-        - could make type info accessible in python from an InferenceSession
-    - how configurable should creating a minimal build be?
-      - what aspects are scenario dependent? 
-      - what aspects can be universally enabled?
-      - how much thought do we need to give to configuring such a build?
-        - adding lots of build flags may not scale well and add confusion
-    - need to figure out how best to test a build with reduced ops/types
-    - do we want to consider removing all dependencies on protobuf
-      - would impact all builds not just a minimal one though
-    - do we want to consider updating to setup all the Graph pieces to be able to point to data in a flatbuffer/flexbuffer
-      - maybe depends on memory usage requirements and priorities
+    - as small as possible (very model specific) vs. generic as possible (less model specific but not as small)?
+      - related: limited build config to keep small vs. 'choose what you need' with more options
+
+  - is it fine to not have optimizers in this build, or do we need to support those as an optional addition?
+
+  - do we want to setup a mechanism to discover/limit types needed?
+    - significant savings available in some operators if types are limited
+    - could gradually update op implementations once we define a mechanism for doing this in a fairly automated manner
+    - need type info for all values to be available
+      - could update onnx model to add type info in value info
+      - could do type info discovery based on ORT format model
+      - could make type info accessible in python from an InferenceSession
+
+  - how configurable should creating a minimal build be?
+    - what aspects are scenario dependent? 
+      - e.g. if you need python bindings you can't disable exceptions
+    - what aspects can be universally enabled?
+    - how much thought do we need to give to configuring such a build?
+      - adding lots of build flags may not scale well and add confusion
+
+  - need to figure out how best to test a build with reduced ops/types
+
+  - do we need/want to consider removing all dependencies on protobuf
+    - provides biggest remaining potential reduction but cost is high
+    - would impact all builds not just a minimal one though
+
+  - do we want to consider updating to setup all the Graph pieces to be able to point to data in a flatbuffer/flexbuffer
+    - maybe depends on memory usage requirements and priorities
+    - assuming refactored approach would also need to support protobuf based usage as well
 
