@@ -4,7 +4,7 @@ ORT Format only build changes
 
 Step 1
 
-  - Use flexbuffer ro serialize to 'ORT format'
+  - Use flexbuffer to serialize to 'ORT format'
     - schema-less flatbuffer
     - slightly less efficient, but saved time of creating schema
       - should be easy to take implementation and convert back to schema though
@@ -236,7 +236,7 @@ Step 5:
       Ort.deserialize (RelWithDebInfo.5 and MinSizeRel.5 folders)
           RelWithDebInfo  onnxruntime.dll	    1,523,712  (-1,826.5KB vs. v3)
           MinSizeRel      onnxruntime.dll	    1,297,408  (-1,512.0KB vs. v3)
-                          onnxruntime.zip	      493,205  
+                          onnxruntime.zip	      493,205  == 482KB
 
   Providers:
     400KB
@@ -386,7 +386,7 @@ Step 8:
       MLAS: 218.3KB (-5KB)
       Util: 1.6KB (-11.27KB)
 
-  Build with reduced types and exceptions disable
+  Build with reduced types and exceptions disabled
     Ort.deserialize (RelWithDebInfo.8d and MinSizeRel.8d folders)
         RelWithDebInfo  onnxruntime.dll	    1,138,176  (-62KB vs. v8c)
         MinSizeRel      onnxruntime.dll	      941,056  (-96KB vs. v8c)
@@ -470,6 +470,43 @@ Rebuilt all 3 setups from scratch to double check numbers but output was consist
 Significant reductions if exceptions are completely disabled. If not, they should be completely enabled.
 
 =================================
+Step 11:
+
+  BERT-NLU with exceptions.
+
+  Given we have some room under the 2MB goal, build with exceptions enabled to get a size as that setup should be fairly production friendly.
+
+    Ort.deserialize (RelWithDebInfo.11 and MinSizeRel.11 folders)
+        RelWithDebInfo  onnxruntime.dll	    1,855,488  
+        MinSizeRel      onnxruntime.dll	    1,589,248  
+                        onnxruntime.zip	      586,909  
+
+=================================
+Step 12:
+
+  Test if we still see reduction from commenting out kernel registration when not building a shared lib
+
+  12a - build with reduced ops based on BERT-NLU  
+  12b - build with full ops                       
+
+  RelWithDebInfo  12a onnx_test_runner.exe	2,369,536
+                  12b onnx_test_runner.exe	3,880,448
+
+  MinSizeRel      12a onnx_test_runner.exe	2,076,160
+                  12b onnx_test_runner.exe	3,345,408
+
+  Op removal via commenting out kernel registration works for either build type
+
+=================================
+Support for other EPs
+
+  - can we serialize enough info post-partitioning for an EP to be able to re-create the setup required to run
+    - could give EP a flexbuffer to add whatever it needs for a given subgraph 
+  - what do we need to add back into the build to support this?
+    - EP based Function nodes in the Graph
+
+=================================
+
 One-liners to build everything:
 
 With exceptions and update
