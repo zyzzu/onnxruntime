@@ -489,11 +489,11 @@ Step 12:
   12a - build with reduced ops based on BERT-NLU  
   12b - build with full ops                       
 
-  RelWithDebInfo  12a onnx_test_runner.exe	2,369,536
-                  12b onnx_test_runner.exe	3,880,448
+    RelWithDebInfo  12a onnx_test_runner.exe	2,369,536
+                    12b onnx_test_runner.exe	3,880,448
 
-  MinSizeRel      12a onnx_test_runner.exe	2,076,160
-                  12b onnx_test_runner.exe	3,345,408
+    MinSizeRel      12a onnx_test_runner.exe	2,076,160
+                    12b onnx_test_runner.exe	3,345,408
 
   Op removal via commenting out kernel registration works for either build type
 
@@ -630,9 +630,8 @@ Lot of cost to support L3 transformers in ORT model format build
     - could avoid the OpSchema registry side of things if the transformer could directly specify the kernel def for the node
       - appears to be feasible as there's one KernelDef per NCHWc operator
     - type/shape inferencing has a hard dependency on ONNX
-      - non-trivial to separate. may need to re-implement or calculate in ORT 
-        - existing type/shape info would be available so would possibly only need to augment that. 
-          - unknown if this is viable and if so whether it's trivial or not
+      - non-trivial to separate. optimizer would have to set type/shape info for any new nodes it added 
+        - existing type/shape info would be available for optimizer to use
     - keeping the edges valid so Graph::Resolve isn't required should be relatively easy
 
 ======================
@@ -648,7 +647,6 @@ Other:
     - moot point if we don't support L3 transformers and we don't need Graph::Resolve
 
 =====================
-
 Questions/Notes:
 
   - Clarify goal/priorities
