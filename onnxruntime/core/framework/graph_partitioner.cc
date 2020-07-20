@@ -88,11 +88,10 @@ static Node* PlaceNode(Graph& graph, std::unique_ptr<IndexedSubGraph> capability
     }
   } else {
     // The <provider> can run a fused <sub_graph> in the <graph>.
-    ORT_ENFORCE(nullptr != capability->GetMetaDef());
     // Check whether any node in the <sub_graph> was already assigned.
     bool sub_graph_available_for_assignment = true;
     for (auto node_index : capability->nodes) {
-      auto node = graph.GetNode(node_index);
+      auto* node = graph.GetNode(node_index);
       if (nullptr == node || !node->GetExecutionProviderType().empty()) {
         // The node was fused or assigned, so that the whole sub-graph will not be assigned to this <provider>
         // The assumption is that this <provider> can only run the sub-graph as a whole unit.
@@ -100,6 +99,7 @@ static Node* PlaceNode(Graph& graph, std::unique_ptr<IndexedSubGraph> capability
         break;
       }
     }
+
     if (sub_graph_available_for_assignment) {
       std::ostringstream oss;
       oss << provider_type << "_" << capability->GetMetaDef()->name << "_" << count++;

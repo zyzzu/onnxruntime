@@ -30,6 +30,85 @@ class InferenceSessionGetGraphWrapper : public InferenceSession {
 };
 
 namespace test {
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+TEST(OrtModelOnlyTests, SerializeToFlexBuffer) {
+  const auto output_file = ORT_TSTR("ort_github_issue_4031.onnx.ort");
+  SessionOptions so;
+  so.session_logid = "SerializeToFlexBuffer";
+  so.optimized_model_filepath = output_file;
+  so.optimized_model_format = ORT_INTERNAL_FORMAT;
+
+  InferenceSessionGetGraphWrapper session_object{so, GetEnvironment()};
+
+  // create .ort file
+  ASSERT_STATUS_OK(session_object.Load(ORT_TSTR("testdata/ort_github_issue_4031.onnx")));
+  ASSERT_STATUS_OK(session_object.Initialize());
+
+  // create inputs
+  OrtValue ml_value;
+  CreateMLValue<float>(TestCPUExecutionProvider()->GetAllocator(0, OrtMemTypeDefault), {1}, {123.f},
+                       &ml_value);
+  NameMLValMap feeds;
+  feeds.insert(std::make_pair("state_var_in", ml_value));
+
+  // prepare outputs
+  std::vector<std::string> output_names{"state_var_out"};
+  std::vector<OrtValue> fetches;
+
+  ASSERT_STATUS_OK(session_object.Run(feeds, output_names, &fetches));
+
+  // load serialized version
+  InferenceSessionGetGraphWrapper session_object2{so, GetEnvironment()};
+
+  ASSERT_STATUS_OK(session_object2.Deserialize(output_file));
+
+  // compare contents on Graph instances
+  const auto& graph = session_object.GetGraph();
+  const auto& graph2 = session_object2.GetGraph();
+
+  const auto& i1 = graph.GetAllInitializedTensors();
+  const auto& i2 = graph2.GetAllInitializedTensors();
+  ASSERT_EQ(i1.size(), i2.size());
+
+  for (const auto& pair : i1) {
+    auto iter = i2.find(pair.first);
+    ASSERT_NE(iter, i2.cend());
+
+    const TensorProto& left = *pair.second;
+    const TensorProto& right = *iter->second;
+    std::string left_data;
+    std::string right_data;
+    left.SerializeToString(&left_data);
+    right.SerializeToString(&right_data);
+    ASSERT_EQ(left_data, right_data);
+  }
+
+  // check all node args are fine
+  for (const auto& input : graph.GetInputsIncludingInitializers()) {
+    const auto& left = *graph.GetNodeArg(input->Name());
+    const auto* right = graph2.GetNodeArg(input->Name());
+    ASSERT_TRUE(right != nullptr);
+    std::string left_data;
+    std::string right_data;
+    left.ToProto().SerializeToString(&left_data);
+    right->ToProto().SerializeToString(&right_data);
+    ASSERT_EQ(left_data, right_data);
+  }
+
+  // check results match
+  std::vector<OrtValue> fetches2;
+  ASSERT_STATUS_OK(session_object2.Run(feeds, output_names, &fetches2));
+
+  const auto& output = fetches[0].Get<Tensor>();
+  ASSERT_TRUE(output.Shape().Size() == 1);
+  ASSERT_TRUE(output.Data<float>()[0] == 125.f);
+
+  const auto& output2 = fetches2[0].Get<Tensor>();
+  ASSERT_TRUE(output2.Shape().Size() == 1);
+  ASSERT_TRUE(output2.Data<float>()[0] == 125.f);
+}
+#endif
+
 // test that we can deserialize and run a model
 TEST(OrtModelOnlyTests, DeserializeToFlexBuffer) {
   const auto output_file = ORT_TSTR("ort_github_issue_4031.onnx.ort");
