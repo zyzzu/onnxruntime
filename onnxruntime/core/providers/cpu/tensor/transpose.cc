@@ -100,19 +100,19 @@ static void DoTransposeEltWise(int64_t num_axes, const std::vector<int64_t>& tar
   std::vector<int64_t> target_index(num_axes, 0);
 
   switch (element_size) {
-    //case sizeof(uint64_t):
-    //  for (size_t i = 0; i < num_blocks; ++i) {
-    //    // convert target_index into an offset in source data
-    //    size_t source_offset = ComputeOffset(target_index, stride, num_axes);
+    case sizeof(uint64_t):
+      for (size_t i = 0; i < num_blocks; ++i) {
+        // convert target_index into an offset in source data
+        size_t source_offset = ComputeOffset(target_index, stride, num_axes);
 
-    //    // copy
-    //    CopyPrim<uint64_t>(target, source + (source_offset * element_size));
+        // copy
+        CopyPrim<uint64_t>(target, source + (source_offset * element_size));
 
-    //    // increment target_index:
-    //    IncrementIndex(target_index, target_dims, num_axes);
-    //    target += element_size;
-    //  }
-    //  break;
+        // increment target_index:
+        IncrementIndex(target_index, target_dims, num_axes);
+        target += element_size;
+      }
+      break;
     case sizeof(uint32_t):
       for (size_t i = 0; i < num_blocks; ++i) {
         // convert target_index into an offset in source data
@@ -126,32 +126,32 @@ static void DoTransposeEltWise(int64_t num_axes, const std::vector<int64_t>& tar
         target += element_size;
       }
       break;
-    //case sizeof(uint16_t):
-    //  for (size_t i = 0; i < num_blocks; ++i) {
-    //    // convert target_index into an offset in source data
-    //    size_t source_offset = ComputeOffset(target_index, stride, num_axes);
+    case sizeof(uint16_t):
+      for (size_t i = 0; i < num_blocks; ++i) {
+        // convert target_index into an offset in source data
+        size_t source_offset = ComputeOffset(target_index, stride, num_axes);
 
-    //    // copy
-    //    CopyPrim<uint16_t>(target, source + (source_offset * element_size));
+        // copy
+        CopyPrim<uint16_t>(target, source + (source_offset * element_size));
 
-    //    // increment target_index:
-    //    IncrementIndex(target_index, target_dims, num_axes);
-    //    target += element_size;
-    //  }
-    //  break;
-    //case sizeof(uint8_t):
-    //  for (size_t i = 0; i < num_blocks; ++i) {
-    //    // convert target_index into an offset in source data
-    //    size_t source_offset = ComputeOffset(target_index, stride, num_axes);
+        // increment target_index:
+        IncrementIndex(target_index, target_dims, num_axes);
+        target += element_size;
+      }
+      break;
+    case sizeof(uint8_t):
+      for (size_t i = 0; i < num_blocks; ++i) {
+        // convert target_index into an offset in source data
+        size_t source_offset = ComputeOffset(target_index, stride, num_axes);
 
-    //    // copy
-    //    *target = *(source + (source_offset * element_size));
+        // copy
+        *target = *(source + (source_offset * element_size));
 
-    //    // increment target_index:
-    //    IncrementIndex(target_index, target_dims, num_axes);
-    //    target += element_size;
-    //  }
-    //  break;
+        // increment target_index:
+        IncrementIndex(target_index, target_dims, num_axes);
+        target += element_size;
+      }
+      break;
     default:
       assert(false);
   }
@@ -312,29 +312,29 @@ static void TransposeSingleAxisOutwards(const std::vector<size_t>& permutations,
   const int64_t bytes_per_write = block_size * element_size;
 
   switch (bytes_per_write) {
-    //case (sizeof(uint8_t)): {
-    //  SimpleTransposeSingleAxisOutwards(input_data, output_data,
-    //                                    num_loops, num_writers, writes_per_loop, writes_per_writer_per_loop);
-    //  break;
-    //}
-    //case (sizeof(uint16_t)): {
-    //  SimpleTransposeSingleAxisOutwards(reinterpret_cast<const uint16_t*>(input_data),
-    //                                    reinterpret_cast<uint16_t*>(output_data),
-    //                                    num_loops, num_writers, writes_per_loop, writes_per_writer_per_loop);
-    //  break;
-    //}
+    case (sizeof(uint8_t)): {
+      SimpleTransposeSingleAxisOutwards(input_data, output_data,
+                                        num_loops, num_writers, writes_per_loop, writes_per_writer_per_loop);
+      break;
+    }
+    case (sizeof(uint16_t)): {
+      SimpleTransposeSingleAxisOutwards(reinterpret_cast<const uint16_t*>(input_data),
+                                        reinterpret_cast<uint16_t*>(output_data),
+                                        num_loops, num_writers, writes_per_loop, writes_per_writer_per_loop);
+      break;
+    }
     case (sizeof(uint32_t)): {
       SimpleTransposeSingleAxisOutwards(reinterpret_cast<const uint32_t*>(input_data),
                                         reinterpret_cast<uint32_t*>(output_data),
                                         num_loops, num_writers, writes_per_loop, writes_per_writer_per_loop);
       break;
     }
-    //case (sizeof(uint64_t)): {
-    //  SimpleTransposeSingleAxisOutwards(reinterpret_cast<const uint64_t*>(input_data),
-    //                                    reinterpret_cast<uint64_t*>(output_data),
-    //                                    num_loops, num_writers, writes_per_loop, writes_per_writer_per_loop);
-    //  break;
-    //}
+    case (sizeof(uint64_t)): {
+      SimpleTransposeSingleAxisOutwards(reinterpret_cast<const uint64_t*>(input_data),
+                                        reinterpret_cast<uint64_t*>(output_data),
+                                        num_loops, num_writers, writes_per_loop, writes_per_writer_per_loop);
+      break;
+    }
     default: {
       // we need to use memcpy for each block
       for (int64_t l = 0; l < num_loops; ++l) {
@@ -404,29 +404,29 @@ static void TransposeSingleAxisInwards(const std::vector<size_t>& permutations, 
   const int64_t bytes_per_read = block_size * element_size;
 
   switch (bytes_per_read) {
-    //case (sizeof(uint8_t)): {
-    //  SimpleTransposeSingleAxisInwards(input_data, output_data,
-    //                                   num_loops, num_readers, reads_per_loop, reads_per_reader_per_loop);
-    //  break;
-    //}
-    //case (sizeof(uint16_t)): {
-    //  SimpleTransposeSingleAxisInwards(reinterpret_cast<const uint16_t*>(input_data),
-    //                                   reinterpret_cast<uint16_t*>(output_data),
-    //                                   num_loops, num_readers, reads_per_loop, reads_per_reader_per_loop);
-    //  break;
-    //}
+    case (sizeof(uint8_t)): {
+      SimpleTransposeSingleAxisInwards(input_data, output_data,
+                                       num_loops, num_readers, reads_per_loop, reads_per_reader_per_loop);
+      break;
+    }
+    case (sizeof(uint16_t)): {
+      SimpleTransposeSingleAxisInwards(reinterpret_cast<const uint16_t*>(input_data),
+                                       reinterpret_cast<uint16_t*>(output_data),
+                                       num_loops, num_readers, reads_per_loop, reads_per_reader_per_loop);
+      break;
+    }
     case (sizeof(uint32_t)): {
       SimpleTransposeSingleAxisInwards(reinterpret_cast<const uint32_t*>(input_data),
                                        reinterpret_cast<uint32_t*>(output_data),
                                        num_loops, num_readers, reads_per_loop, reads_per_reader_per_loop);
       break;
     }
-    //case (sizeof(uint64_t)): {
-    //  SimpleTransposeSingleAxisInwards(reinterpret_cast<const uint64_t*>(input_data),
-    //                                   reinterpret_cast<uint64_t*>(output_data),
-    //                                   num_loops, num_readers, reads_per_loop, reads_per_reader_per_loop);
-    //  break;
-    //}
+    case (sizeof(uint64_t)): {
+      SimpleTransposeSingleAxisInwards(reinterpret_cast<const uint64_t*>(input_data),
+                                       reinterpret_cast<uint64_t*>(output_data),
+                                       num_loops, num_readers, reads_per_loop, reads_per_reader_per_loop);
+      break;
+    }
     default: {
       // we need to use memcpy for each block
       for (int64_t l = 0; l < num_loops; ++l) {

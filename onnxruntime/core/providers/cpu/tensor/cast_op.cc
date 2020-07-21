@@ -14,8 +14,8 @@
 #include "core/mlas/inc/mlas.h"
 #endif
 
-#define CAST_STRING_ENABLED
 #define CAST_FLOAT16_ENABLED
+#define CAST_STRING_ENABLED
 
 using namespace ONNX_NAMESPACE;
 namespace onnxruntime {
@@ -199,8 +199,13 @@ const std::vector<MLDataType> castOpTypeConstraints{
     DataTypeImpl::GetTensorType<int16_t>(),
     DataTypeImpl::GetTensorType<int32_t>(),
     DataTypeImpl::GetTensorType<int64_t>(),
+#ifdef CAST_FLOAT16_ENABLED
     DataTypeImpl::GetTensorType<MLFloat16>(),
-    DataTypeImpl::GetTensorType<std::string>()};
+#endif
+#ifdef CAST_STRING_ENABLED
+    DataTypeImpl::GetTensorType<std::string>(),
+#endif
+};
 
 ONNX_CPU_OPERATOR_VERSIONED_KERNEL(
     Cast,
@@ -284,7 +289,10 @@ Status Cast::Compute(OpKernelContext* context) const {
     bool to_string = to_ == ONNX_NAMESPACE::TensorProto_DataType_STRING;
 
     utils::MLTypeCallDispatcherRet<Status, StringDispatcher,
-                                   float, double, MLFloat16, /*BFloat16,*/
+                                   float, double,
+#ifdef CAST_FLOAT16_ENABLED
+                                   MLFloat16, /*BFloat16,*/
+#endif
                                    int8_t, uint8_t, int16_t, uint16_t, int32_t, uint32_t, int64_t, uint64_t,
                                    bool>
         t_disp(to_string ? from : to_);

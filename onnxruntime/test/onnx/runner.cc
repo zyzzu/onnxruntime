@@ -534,9 +534,9 @@ void RunSingleTestCase(const ITestCase& info, Ort::Env& env, const Ort::SessionO
     std::string node_name;
     ret = std::make_shared<TestCaseResult>(data_count, EXECUTE_RESULT::NOT_SUPPORT, "");
   }
-#endif
 
   on_finished(ret, pci);
+#endif
 }
 
 EXECUTE_RESULT StatusCodeToExecuteResult(int input) {
