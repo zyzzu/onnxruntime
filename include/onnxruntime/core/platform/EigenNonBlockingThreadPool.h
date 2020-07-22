@@ -9,6 +9,7 @@
 
 /* Modifications Copyright (c) Microsoft. */
 
+#include <iostream>
 #include <type_traits>
 
 #pragma once
@@ -433,6 +434,44 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
     for (int i = 0; i < num_threads_; i++) {
       worker_data_[i].thread.reset(env_.CreateThread(name, i, WorkerLoop, this, thread_options));
     }
+
+    // Temporary controls for performance experiments.  The controls here are
+    // not intended to be merged back into the main branch, or to be exposed
+    // long-term like this via environment variables.  The output to stderr
+    // is to provide a reminder of this.
+    {
+      const char *ort_threading_env_name = "ORT_THREADING_CONTROL";
+      char *ort_threading_env = getenv(ort_threading_env_name);
+      ::std::cerr << "Reading additional settings from " <<
+             ort_threading_env_name <<
+             ::std::endl;
+      if (ort_threading_env) {
+        while (*ort_threading_env) {
+          switch (*ort_threading_env) {
+            case 'a':
+            ::std::cerr << " - Always spin" << ::std::endl;
+            always_spin_ = true;
+            break;
+
+            case 'p':
+            ::std::cerr << " - Pin work to threads" << ::std::endl;
+            pin_work_to_threads_ = true;
+            break;
+
+            case 'v':
+            ::std::cerr << " - Prevent stealing" << ::std::endl;
+            prevent_stealing_ = true;
+            break;
+
+            default:
+            ::std::cerr << " - Unknown option " << (*ort_threading_env) << ::std::endl;
+            break;
+          }
+          ort_threading_env++;
+        }
+      }
+    }
+    
   }
 
   ~ThreadPoolTempl() override {
@@ -566,7 +605,9 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
         b.Notify(1);
       });
       int q_idx;
-      if (i < good_hints.size()) {
+      if (pin_work_to_threads_) {
+        q_idx = i;
+      } else if (i < good_hints.size()) {
         q_idx = good_hints[i];
       } else {
         auto alt_i = i - static_cast<unsigned>(good_hints.size());
@@ -593,7 +634,7 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
         td.EnsureAwake();
       }
     }
-
+    
     // Run the final copy ourselves, for the total of n degree-of-parallelism
     fn();
 
@@ -794,6 +835,9 @@ int CurrentThreadId() const EIGEN_FINAL {
   Environment& env_;
   const int num_threads_;
   const bool allow_spinning_;
+  bool always_spin_;
+  bool prevent_stealing_;
+  bool pin_work_to_threads_;
   Eigen::MaxSizeVector<WorkerData> worker_data_;
   Eigen::MaxSizeVector<Eigen::MaxSizeVector<unsigned>> all_coprimes_;
   std::atomic<unsigned> blocked_;  // Count of blocked workers, used as a termination condition
@@ -848,8 +892,12 @@ int CurrentThreadId() const EIGEN_FINAL {
           // threads which are not themselves spinning.
 
           SetGoodWorkerHint(thread_id, true);
-          for (int i = 0; i < spin_count && !t.f && !cancelled_ && !done_; i++) {
-            t = (i%steal_count == 0) ? TrySteal() : q.PopFront();
+          for (int i = 0; (i < spin_count || always_spin_) && !t.f && !cancelled_ && !done_; i++) {
+            if (prevent_stealing_) {
+              t = q.PopFront();
+            } else {
+              t = (i%steal_count == 0) ? TrySteal() : q.PopFront();
+            } 
           }
           SetGoodWorkerHint(thread_id, false);
 
