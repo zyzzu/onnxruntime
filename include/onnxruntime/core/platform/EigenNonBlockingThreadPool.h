@@ -37,12 +37,6 @@
 #include "core/platform/ort_mutex.h"
 #include "core/platform/Barrier.h"
 
-#ifdef _MSC_VER
-// Disable warning on temporary use of getenv
-#define _CRT_SECURE_NO_WARNINGS
-#define _CRT_SECURE_NO_DEPRECATE
-#endif
-
 namespace onnxruntime {
 
 namespace concurrency {
