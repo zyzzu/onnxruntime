@@ -12,9 +12,6 @@
 #include <iostream>
 #include <type_traits>
 
-// Disable warning on temporary use of getenv
-#define _CRT_SECURE_NO_WARNINGS
-
 #pragma once
 #include "onnxruntime_config.h"
 // build/external/eigen/unsupported/Eigen/CXX11/src/Tensor/TensorEvaluator.h:162:71:
@@ -35,6 +32,8 @@
 #pragma GCC diagnostic pop
 #elif defined(_MSC_VER)
 #pragma warning(pop)
+// Disable warning on temporary use of getenv
+#define _CRT_SECURE_NO_WARNINGS
 #endif
 #include "core/common/make_unique.h"
 #include "core/platform/ort_mutex.h"
