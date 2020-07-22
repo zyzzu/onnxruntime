@@ -32,15 +32,6 @@ def get_model_info(model_path, domain_opset_ops):
             if entry.version not in domain_opset_ops[domain]:
                 domain_opset_ops[domain][entry.version] = set()
 
-    # for n in m.graph.node:
-    #     d = n.domain if len(n.domain) > 0 else 'ai.onnx'  # empty == onnx
-    #     ops[d].add(n.op_type)
-    #
-    # ops1 = ops
-    # ops = {}
-    # for k in ops1.keys():
-    #     ops[k] = set()
-
     def process_nodes(graph):
         for n in graph.node:
             d = n.domain if len(n.domain) > 0 else 'ai.onnx'  # empty == onnx
@@ -53,7 +44,6 @@ def get_model_info(model_path, domain_opset_ops):
 
     process_nodes(m.graph)
 
-    # return target_opsets, ops,
     return domain_opset_ops
 
 
@@ -208,7 +198,6 @@ def process_file(domain_opset_ops, input_filename, is_contrib_ops=False):
 
 
 if __name__ == "__main__":
-    # r'C:\Users\scmckay\Desktop\OnnxFootprint\quantized.optimized_level2.onnx',
     # model_paths = \
     #     [
     #      r'D:\src\github\ORT test models\20190729\opset10\yolov3\yolov3.optimized.onnx',
@@ -216,23 +205,33 @@ if __name__ == "__main__":
     #      r'D:\src\github\ORT test models\20190729\opset10\mlperf_ssd_mobilenet_300\ssd_mobilenet_v1_coco_2018_01_28.optimized.onnx'  # noqa
     #     ]
 
-    model_paths = [r'D:\temp\law_LM\law_LM.onnx',
-                   r'C:\Users\scmckay\Desktop\share_with_frank\fluency_v2_opt.quantized.onnx']
+    model_paths = [
+        # r'D:\temp\law_LM\test1\law_LM.optimized.onnx',
+        r'C:\Users\scmckay\Desktop\share_with_frank\testing\fluency_v2_opt.quantized.optimized.onnx'
+        # r'C:\Users\scmckay\Desktop\OnnxFootprint\quantized.optimized_level2.onnx',
+        # r'D:\src\github\ort.deserialize\build\Windows\Debug\Debug\testdata\ort_github_issue_4031.onnx'
+    ]
 
     # {domain: {opset:[list of ops used]}}
     # map of domain to a list of ops used in each opset enabled for that domain
     # as we support using multiple models as input there may be multiple opsets needed for a domain
     domain_opset_ops = {}
     for model_path in model_paths:
-        # target_opset, ops = get_model_info(model_path)
         get_model_info(model_path, domain_opset_ops)
 
     debug = True
     if debug:
-        for domain, opset_to_ops in domain_opset_ops.items():
-            print(f"Domain: {domain}")
-            for opset, ops in opset_to_ops.items():
-                print(f"\t{opset}:{','.join(ops)}")
+        total_ops = 0
+        for domain in sorted(domain_opset_ops.keys()):
+            opset_to_ops = domain_opset_ops[domain]
+            ops_in_domain = sum([len(x) for x in opset_to_ops.values()])
+            if ops_in_domain > 0:
+                print(f"Domain: {domain}")
+                total_ops += ops_in_domain
+                for opset, ops in opset_to_ops.items():
+                    print(f"\t{opset}:{','.join(sorted(ops))}")
+
+        print(f"Total ops:{total_ops}")
 
     process_file(domain_opset_ops,
                  r'D:\src\github\ort.deserialize\onnxruntime\core\providers\cpu\cpu_execution_provider.cc',

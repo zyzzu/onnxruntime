@@ -110,10 +110,10 @@ TEST(OrtModelOnlyTests, SerializeToFlexBuffer) {
 #endif
 
 // test that we can deserialize and run a model
-TEST(OrtModelOnlyTests, DeserializeToFlexBuffer) {
-  const auto output_file = ORT_TSTR("ort_github_issue_4031.onnx.ort");
+TEST(OrtModelOnlyTests, DeserializeFlexBuffer) {
+  const auto output_file = ORT_TSTR("testdata/ort_github_issue_4031.onnx.ort");
   SessionOptions so;
-  so.session_logid = "DeserializeToFlexBuffer";
+  so.session_logid = "DeserializeFromFlexBuffer";
   so.optimized_model_filepath = output_file;
   so.optimized_model_format = ORT_INTERNAL_FORMAT;
 

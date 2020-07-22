@@ -60,7 +60,7 @@ _check_python_version()
 def parse_arguments():
     parser = argparse.ArgumentParser(
         description="ONNXRuntime CI build driver.",
-        usage="""  # noqa
+        usage="""
         Default behavior is --update --build --test for native architecture builds.
         Default behavior is --update --build for cross-compiled builds.
 

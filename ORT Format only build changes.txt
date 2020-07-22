@@ -498,6 +498,44 @@ Step 12:
   Op removal via commenting out kernel registration works for either build type
 
 =================================
+Step 13:
+
+  Fluency model sizes
+
+  13a - build with reduced ops for q10n fluency and exceptions enabled. no type reductions
+  13b - exceptions disabled
+
+    Ort.deserialize (RelWithDebInfo.13a and MinSizeRel.13a folders)
+        RelWithDebInfo  onnxruntime.dll	    1,397,760
+        MinSizeRel      onnxruntime.dll	    1,202,688
+                        onnxruntime.zip	      450,391  440KB
+
+    Ort.deserialize (RelWithDebInfo.13b and MinSizeRel.13b folders)
+        RelWithDebInfo  onnxruntime.dll	    1,336,320
+        MinSizeRel      onnxruntime.dll	    1,100,800
+                        onnxruntime.zip	      411,951  402KB
+
+  Extra build sizes for comparison (13b build config)
+    x32 (build\Windows.x86\MinSizeRel\MinSizeRel.1)
+          RelWithDebInfo  onnxruntime.dll     912,384
+          MinSizeRel      onnxruntime.dll	    671,744  *** Note compression is less than usual of ~3:1 ***
+                          onnxruntime.zip	    313,467  306KB 
+
+    Reductions (from RelWithDebInfo build)
+        MLAS:     -211.0KB  (95.3%)
+        Framework: -84.0KB  (26.5%)
+        Providers: -64.9KB  (20.1%)
+        Session:   -37.4KB  (27.9%)
+
+    arm (build\Windows.arm\MinSizeRel\MinSizeRel.1)
+          MinSizeRel      onnxruntime.dll	    686,592  *** Note compression is less than usual of ~3:1 ***
+                          onnxruntime.zip	    339,680  332KB
+
+    arm64 (build\Windows.arm64\MinSizeRel\MinSizeRel.1)
+          MinSizeRel      onnxruntime.dll	    918,528
+                          onnxruntime.zip	    344,600  337KB
+
+=================================
 Support for other EPs
 
   - can we serialize enough info post-partitioning for an EP to be able to re-create the setup required to run
