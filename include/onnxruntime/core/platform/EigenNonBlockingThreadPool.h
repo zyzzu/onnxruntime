@@ -12,6 +12,9 @@
 #include <iostream>
 #include <type_traits>
 
+// Disable warning on temporary use of getenv
+#define _CRT_SECURE_NO_WARNINGS
+
 #pragma once
 #include "onnxruntime_config.h"
 // build/external/eigen/unsupported/Eigen/CXX11/src/Tensor/TensorEvaluator.h:162:71:
