@@ -440,14 +440,15 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
     // long-term like this via environment variables.  The output to stderr
     // is to provide a reminder of this.
     {
-      const char *ort_threading_env_name = "ORT_THREADING_CONTROL";
-      char *ort_threading_env = getenv(ort_threading_env_name);
+      const std::string ort_threading_env_name("ORT_THREADING_CONTROL");
+      auto ort_threading_env = env.GetEnvironmentVar(ort_threading_env_name);
       ::std::cerr << "Reading additional settings from " <<
              ort_threading_env_name <<
              ::std::endl;
-      if (ort_threading_env) {
-        while (*ort_threading_env) {
-          switch (*ort_threading_env) {
+      if (!ort_threading_env.empty()) {
+        for (auto i = 0u; i < ort_threading_env.length(); i++) {
+          auto option = ort_threading_env[i];
+          switch (option) {
             case 'a':
             ::std::cerr << " - Always spin" << ::std::endl;
             always_spin_ = true;
@@ -464,10 +465,9 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
             break;
 
             default:
-            ::std::cerr << " - Unknown option " << (*ort_threading_env) << ::std::endl;
+            ::std::cerr << " - Unknown option " << option << ::std::endl;
             break;
           }
-          ort_threading_env++;
         }
       }
     }

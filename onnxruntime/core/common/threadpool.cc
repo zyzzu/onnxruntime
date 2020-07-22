@@ -13,12 +13,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifdef _MSC_VER
-// Disable warning on temporary use of getenv
-#define _CRT_SECURE_NO_WARNINGS
-#define _CRT_SECURE_NO_DEPRECATE
-#endif
-
 #include <memory>
 
 #include "core/platform/threadpool.h"
