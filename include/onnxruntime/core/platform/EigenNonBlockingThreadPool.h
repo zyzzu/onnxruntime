@@ -32,12 +32,16 @@
 #pragma GCC diagnostic pop
 #elif defined(_MSC_VER)
 #pragma warning(pop)
-// Disable warning on temporary use of getenv
-#define _CRT_SECURE_NO_WARNINGS
 #endif
 #include "core/common/make_unique.h"
 #include "core/platform/ort_mutex.h"
 #include "core/platform/Barrier.h"
+
+#ifdef _MSC_VER
+// Disable warning on temporary use of getenv
+#define _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_DEPRECATE
+#endif
 
 namespace onnxruntime {
 
