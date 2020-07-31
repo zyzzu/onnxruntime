@@ -9,6 +9,7 @@
 
 /* Modifications Copyright (c) Microsoft. */
 
+#include <iomanip>
 #include <iostream>
 #include <type_traits>
 
@@ -404,6 +405,7 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
   ThreadPoolTempl(const CHAR_TYPE* name, int num_threads, bool allow_spinning, Environment& env,
                   const ThreadOptions& thread_options)
       : env_(env),
+        debug_name_(name),
         num_threads_(num_threads),
         allow_spinning_(allow_spinning),
         worker_data_(num_threads),
@@ -442,10 +444,10 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
     {
       const std::string ort_threading_env_name("ORT_THREADING_CONTROL");
       auto ort_threading_env = env.GetEnvironmentVar(ort_threading_env_name);
-      ::std::cerr << "Reading additional settings from " <<
-             ort_threading_env_name <<
-             ::std::endl;
       if (!ort_threading_env.empty()) {
+        ::std::cerr << "Reading additional settings from " <<
+               ort_threading_env_name <<
+               ::std::endl;
         for (auto i = 0u; i < ort_threading_env.length(); i++) {
           auto option = ort_threading_env[i];
           switch (option) {
@@ -454,9 +456,19 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
             always_spin_ = true;
             break;
 
+            case 'b':
+            ::std::cerr << " - Always block (passive mode)" << ::std::endl;
+            always_block_ = true;
+            break;
+
             case 'p':
             ::std::cerr << " - Pin work to threads" << ::std::endl;
             pin_work_to_threads_ = true;
+            break;
+
+            case 's':
+            ::std::cerr << " - Statistics enabled" << ::std::endl;
+            dump_statistics_ = true;
             break;
 
             case 'v':
@@ -466,12 +478,20 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
 
             default:
             ::std::cerr << " - Unknown option " << option << ::std::endl;
+            abort();
             break;
           }
         }
       }
+      if (always_spin_ && always_block_) {
+        ::std::cerr << "always-block incompatible with always-spin" << ::std::endl;
+        abort();
+      }
+      if (always_spin_ && !allow_spinning) {
+        ::std::cerr << "always-spin incompatible with allow_spinning=false" << ::std::endl;
+        abort();
+      }
     }
-    
   }
 
   ~ThreadPoolTempl() override {
@@ -492,11 +512,24 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
     // Join threads explicitly (by destroying) to avoid destruction order within
     // this class.
     for (size_t i = 0; i < worker_data_.size(); ++i) worker_data_[i].thread.reset();
+    // Output global thread-pool statistics.  Each worker thread outputs its own local stats.
+    if (dump_statistics_) {
+      std::unique_lock<OrtMutex> lock(statistics_output_lock_);
+      ::std::cerr << debug_name_ << 
+        " num_tasks_rejected: " << num_tasks_rejected_ <<
+        " stand_alone_tasks: " << num_tasks_scheduled_ << 
+        " parallel_tasks: " << num_parallel_tasks_scheduled_ <<
+        " mean_d_o_p: " << ::std::setprecision(2) << ((double)total_degree_of_parallelism_)/num_parallel_tasks_scheduled_ << 
+        " total_scheduled: " << (num_tasks_scheduled_ + total_degree_of_parallelism_ - num_parallel_tasks_scheduled_) <<
+        " total_revoked: " << num_tasks_revoked_ <<
+        "\n";
+    }
   }
 
   void Schedule(std::function<void()> fn) override {
     Task t = env_.CreateTask(std::move(fn));
     PerThread* pt = GetPerThread();
+    if (dump_statistics_) num_tasks_scheduled_++;
     if (pt->pool == this) {
       // Worker thread of this pool, push onto the thread's queue.
       Queue& q = worker_data_[pt->thread_id].queue;
@@ -511,6 +544,7 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
       if (t.f) {
         // The queue rejected the work; run it directly
         env_.ExecuteTask(t);
+        if (dump_statistics_) num_tasks_rejected_++;
       } else {
         // The queue accepted the work; ensure that the thread will pick it up
         td.EnsureAwake();
@@ -582,6 +616,10 @@ void GetGoodWorkerHints(int n, std::vector<unsigned>& good_hints, std::vector<un
 void RunInParallel(std::function<void()> fn, unsigned n) override {
   PerThread* my_pt = GetPerThread();
   assert(n>=1);
+  if (dump_statistics_) {
+    num_parallel_tasks_scheduled_ ++;
+    total_degree_of_parallelism_ += n;
+  }
   if (n == 1 || my_pt->in_parallel) {
     fn();
   } else {
@@ -645,6 +683,7 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
       Queue& q = worker_data_[item.first].queue;
       if (q.RevokeWithTag(my_pt->tag, item.second)) {
         notifications_needed++;
+        if (dump_statistics_) num_tasks_revoked_++;
       }
     }
     b.Notify(notifications_needed);
@@ -833,11 +872,23 @@ int CurrentThreadId() const EIGEN_FINAL {
   };
 
   Environment& env_;
+  const std::string debug_name_;
   const int num_threads_;
   const bool allow_spinning_;
-  bool always_spin_;
-  bool prevent_stealing_;
-  bool pin_work_to_threads_;
+  bool always_spin_ = false;
+  bool always_block_ = false;
+  bool prevent_stealing_ = false;
+  bool pin_work_to_threads_ = false;
+  bool dump_statistics_ = false;
+
+  // Statistics, collected if dump_statistics_ is set to true
+  OrtMutex statistics_output_lock_;
+  std::atomic<uint64_t> num_tasks_rejected_{0};
+  std::atomic<uint64_t> num_tasks_scheduled_{0};
+  std::atomic<uint64_t> num_parallel_tasks_scheduled_{0};
+  std::atomic<uint64_t> total_degree_of_parallelism_{0};
+  std::atomic<uint64_t> num_tasks_revoked_{0};
+
   Eigen::MaxSizeVector<WorkerData> worker_data_;
   Eigen::MaxSizeVector<Eigen::MaxSizeVector<unsigned>> all_coprimes_;
   std::atomic<unsigned> blocked_;  // Count of blocked workers, used as a termination condition
@@ -868,6 +919,10 @@ int CurrentThreadId() const EIGEN_FINAL {
 
   // Main worker thread loop.
   void WorkerLoop(int thread_id) {
+    uint64_t num_ran_own = 0;
+    uint64_t num_ran_stolen = 0;
+    uint64_t num_tried_to_block = 0;
+    uint64_t num_blocked = 0;
     PerThread* pt = GetPerThread();
     WorkerData& td = worker_data_[thread_id];
     Queue& q = td.queue;
@@ -880,11 +935,12 @@ int CurrentThreadId() const EIGEN_FINAL {
     SetGoodWorkerHint(thread_id, true /* Is good */);
 
     const int log2_spin = 20;
-    const int spin_count = allow_spinning_ ? (1ull<<log2_spin) : 0;
+    const int spin_count = (allow_spinning_ && !always_block_) ? (1ull<<log2_spin) : 0;
     const int steal_count = spin_count/100;
 
     while (!cancelled_ && !should_exit) {
         Task t = q.PopFront();
+        if (t.f) num_ran_own++;
         if (!t.f) {
           // Spin waiting for work.  We indicate, via SetGOodWorkerHint that we are
           // spinning.  This will bias other threads toward pushing work to our queue.
@@ -895,8 +951,15 @@ int CurrentThreadId() const EIGEN_FINAL {
           for (int i = 0; (i < spin_count || always_spin_) && !t.f && !cancelled_ && !done_; i++) {
             if (prevent_stealing_) {
               t = q.PopFront();
+              if (t.f) num_ran_own++;
             } else {
-              t = (i%steal_count == 0) ? TrySteal() : q.PopFront();
+              if (i%steal_count == 0) {
+                t = TrySteal();
+                if (t.f) num_ran_stolen++;
+               } else {
+                 t = q.PopFront();
+                 if (t.f) num_ran_own++;
+               }
             } 
           }
           SetGoodWorkerHint(thread_id, false);
@@ -906,8 +969,10 @@ int CurrentThreadId() const EIGEN_FINAL {
             // steal work from other threads prior to blocking.
             if (num_threads_ != 1) {
               t = Steal(true /* true => check all queues */);
+              if (t.f) num_ran_stolen++;
             }
             if (!t.f) {
+              num_tried_to_block++;
               td.SetBlocked(
                   // Pre-block test
                   [&]() -> bool {
@@ -950,6 +1015,7 @@ int CurrentThreadId() const EIGEN_FINAL {
                   },
                   // Post-block update (executed only if we blocked)
                   [&]() {
+                    num_blocked++;
                     blocked_--;
                   });
             }
@@ -966,6 +1032,17 @@ int CurrentThreadId() const EIGEN_FINAL {
       // any other threads that have remained blocked.
       if (should_exit) {
         WakeAllWorkersForExit();
+      }
+
+      // Output per-thread statistics if requested
+      if (dump_statistics_) {
+        std::unique_lock<OrtMutex> lock(statistics_output_lock_);
+        ::std::cerr << debug_name_ << 
+          " id: " << thread_id <<
+          " ran_own: " << num_ran_own <<
+          " ran_stolen: " << num_ran_stolen <<
+          " tried_to_block: " << num_tried_to_block <<
+          " blocked: " << num_blocked << "\n";    
       }
     }
 
