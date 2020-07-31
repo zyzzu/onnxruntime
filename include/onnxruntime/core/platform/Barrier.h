@@ -14,7 +14,7 @@
 namespace onnxruntime {
 class Barrier {
  public:
-  explicit Barrier(unsigned int count) : state_(count << 1), notified_(false) {
+  explicit Barrier(unsigned int count, bool spin = false) : state_(count << 1), spin_(spin), notified_(false) {
     assert(((count << 1) >> 1) == count);
   }
 #ifdef NDEBUG
@@ -42,12 +42,18 @@ class Barrier {
   }
 
   void Wait() {
-    unsigned int v = state_.fetch_or(1, std::memory_order_acq_rel);
-    if ((v >> 1) == 0)
-      return;
-    std::unique_lock<OrtMutex> l(mu_);
-    while (!notified_) {
-      cv_.wait(l);
+    if (spin_) {
+      while ((state_ >> 1) != 0) {
+        /* spin */
+      }
+    } else {
+      unsigned int v = state_.fetch_or(1, std::memory_order_acq_rel);
+      if ((v >> 1) == 0)
+        return;
+      std::unique_lock<OrtMutex> l(mu_);
+      while (!notified_) {
+        cv_.wait(l);
+      }
     }
   }
 
@@ -55,6 +61,7 @@ class Barrier {
   OrtMutex mu_;
   OrtCondVar cv_;
   std::atomic<unsigned int> state_;  // low bit is waiter flag
+  const bool spin_;
   bool notified_;
 };
 
