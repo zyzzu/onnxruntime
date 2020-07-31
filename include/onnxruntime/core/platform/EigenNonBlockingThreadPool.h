@@ -432,11 +432,6 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
     num_hint_words_ = static_cast<int>((num_threads_ + bits_per_hint_word_ - 1) / bits_per_hint_word_);
     good_worker_hints_ = onnxruntime::make_unique<std::atomic<uint64_t>[]>(num_hint_words_);
 
-    worker_data_.resize(num_threads_);
-    for (int i = 0; i < num_threads_; i++) {
-      worker_data_[i].thread.reset(env_.CreateThread(name, i, WorkerLoop, this, thread_options));
-    }
-
     // Temporary controls for performance experiments.  The controls here are
     // not intended to be merged back into the main branch, or to be exposed
     // long-term like this via environment variables.  The output to stderr
@@ -501,6 +496,13 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
         abort();
       }
     }
+
+    // Create threads.  This must be last in the constructor in order that other fields are
+    // already initialized.
+    worker_data_.resize(num_threads_);
+    for (int i = 0; i < num_threads_; i++) {
+      worker_data_[i].thread.reset(env_.CreateThread(name, i, WorkerLoop, this, thread_options));
+    }
   }
 
   ~ThreadPoolTempl() override {
@@ -530,7 +532,13 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
         " parallel_tasks: " << num_parallel_tasks_scheduled_ <<
         " mean_d_o_p: " << ::std::setprecision(2) << ((double)total_degree_of_parallelism_)/num_parallel_tasks_scheduled_ << 
         " total_scheduled: " << (num_tasks_scheduled_ + total_degree_of_parallelism_ - num_parallel_tasks_scheduled_) <<
-        " total_revoked: " << num_tasks_revoked_ <<
+        " total_revoked: " << num_tasks_revoked_ << 
+        "\n" <<
+        debug_name_ <<
+        " time_pre_ms: " << time_scheduling_pre_ms_ << 
+        " time_running_ms: " << time_running_ms_ <<
+        " time_post_ms: " << time_scheduling_post_ms_ <<
+        " time_waiting_ms: " << time_waiting_ms_ <<
         "\n";
     }
   }
@@ -632,6 +640,8 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
   if (n == 1 || my_pt->in_parallel) {
     fn();
   } else {
+    uint64_t start_ms = dump_timing_ ? GetCurrentTimeMS() : 0;
+
     // We build a list of <thread,idx> pairs for each of the queues that accepts a work
     // item.  This lets us remove any work items that do not get executed by the threads
     // that we push them to.
@@ -681,10 +691,22 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
         td.EnsureAwake();
       }
     }
+
+    if (dump_timing_) {
+      uint64_t now = GetCurrentTimeMS();
+      time_scheduling_pre_ms_ += now - start_ms;
+      start_ms = now;
+    }
     
     // Run the final copy ourselves, for the total of n degree-of-parallelism
     fn();
 
+    if (dump_timing_) {
+      uint64_t now = GetCurrentTimeMS();
+      time_running_ms_ += now - start_ms;
+      start_ms = now;
+    }
+    
     // Notify the barrier for the work we completed, plus any work that we successfully
     // revoke from the work queues
     int notifications_needed = 1;
@@ -697,9 +719,21 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
     }
     b.Notify(notifications_needed);
 
+    if (dump_timing_) {
+      uint64_t now = GetCurrentTimeMS();
+      time_scheduling_post_ms_ += now - start_ms;
+      start_ms = now;
+    }
+        
     // Synchronize with any work items that are still running
     b.Wait();
     my_pt->in_parallel = false;
+
+    if (dump_timing_) {
+      uint64_t now = GetCurrentTimeMS();
+      time_waiting_ms_ += now - start_ms;
+      start_ms = now;
+    }   
   }
 }
 
@@ -898,6 +932,10 @@ int CurrentThreadId() const EIGEN_FINAL {
   std::atomic<uint64_t> num_parallel_tasks_scheduled_{0};
   std::atomic<uint64_t> total_degree_of_parallelism_{0};
   std::atomic<uint64_t> num_tasks_revoked_{0};
+  std::atomic<uint64_t> time_scheduling_pre_ms_{0};
+  std::atomic<uint64_t> time_running_ms_{0};
+  std::atomic<uint64_t> time_scheduling_post_ms_{0};
+  std::atomic<uint64_t> time_waiting_ms_{0};
 
   Eigen::MaxSizeVector<WorkerData> worker_data_;
   Eigen::MaxSizeVector<Eigen::MaxSizeVector<unsigned>> all_coprimes_;
@@ -939,6 +977,7 @@ int CurrentThreadId() const EIGEN_FINAL {
     uint64_t num_blocked = 0;
     uint64_t start_time_ms = 0;
     uint64_t time_busy_ms = 0;
+    uint64_t time_spinning_ms = 0;
     uint64_t time_blocked_ms = 0;
     PerThread* pt = GetPerThread();
     WorkerData& td = worker_data_[thread_id];
@@ -965,6 +1004,7 @@ int CurrentThreadId() const EIGEN_FINAL {
           // In addition, priodically make a best-effort attempt to steal from other
           // threads which are not themselves spinning.
 
+          uint64_t spin_start_ms = dump_timing_ ? GetCurrentTimeMS() : 0;
           SetGoodWorkerHint(thread_id, true);
           for (int i = 0; (i < spin_count || always_spin_) && !t.f && !cancelled_ && !done_; i++) {
             if (prevent_stealing_) {
@@ -981,7 +1021,8 @@ int CurrentThreadId() const EIGEN_FINAL {
             } 
           }
           SetGoodWorkerHint(thread_id, false);
-
+          if (dump_timing_) time_spinning_ms += GetCurrentTimeMS() - spin_start_ms;
+          
           if (!t.f) {
             // No work passed to us while spinning; make a further full attempt to
             // steal work from other threads prior to blocking.
@@ -1069,6 +1110,7 @@ int CurrentThreadId() const EIGEN_FINAL {
           ::std::cerr << 
             " wall_ms: " << (GetCurrentTimeMS() - start_time_ms) <<
             " busy_ms: " << time_busy_ms <<
+            " spin_ms: " << time_spinning_ms <<
             " blocked_ms: " << time_blocked_ms;
         }
        ::std::cerr << "\n";    
