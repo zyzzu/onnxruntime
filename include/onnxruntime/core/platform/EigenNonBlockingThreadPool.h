@@ -471,6 +471,11 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
             dump_statistics_ = true;
             break;
 
+            case 't':
+            ::std::cerr << " - Timing enabled" << ::std::endl;
+            dump_timing_ = true;
+            break;
+
             case 'v':
             ::std::cerr << " - Prevent stealing" << ::std::endl;
             prevent_stealing_ = true;
@@ -482,6 +487,10 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
             break;
           }
         }
+      }
+      if (dump_timing_ && !dump_statistics_) {
+        ::std::cerr << "dump-timing requires dump-statistics" << ::std::endl;
+        abort();
       }
       if (always_spin_ && always_block_) {
         ::std::cerr << "always-block incompatible with always-spin" << ::std::endl;
@@ -880,6 +889,7 @@ int CurrentThreadId() const EIGEN_FINAL {
   bool prevent_stealing_ = false;
   bool pin_work_to_threads_ = false;
   bool dump_statistics_ = false;
+  bool dump_timing_ = false;
 
   // Statistics, collected if dump_statistics_ is set to true
   OrtMutex statistics_output_lock_;
@@ -917,12 +927,19 @@ int CurrentThreadId() const EIGEN_FINAL {
     }
   }
 
+  static uint64_t GetCurrentTimeMS() { 
+    return ::std::chrono::duration_cast<::std::chrono::milliseconds>(::std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+  }
+
   // Main worker thread loop.
   void WorkerLoop(int thread_id) {
     uint64_t num_ran_own = 0;
     uint64_t num_ran_stolen = 0;
     uint64_t num_tried_to_block = 0;
     uint64_t num_blocked = 0;
+    uint64_t start_time_ms = 0;
+    uint64_t time_busy_ms = 0;
+    uint64_t time_blocked_ms = 0;
     PerThread* pt = GetPerThread();
     WorkerData& td = worker_data_[thread_id];
     Queue& q = td.queue;
@@ -934,6 +951,7 @@ int CurrentThreadId() const EIGEN_FINAL {
     assert(td.GetStatus() == WorkerData::ThreadStatus::Spinning);
     SetGoodWorkerHint(thread_id, true /* Is good */);
 
+    start_time_ms = GetCurrentTimeMS();
     const int log2_spin = 20;
     const int spin_count = (allow_spinning_ && !always_block_) ? (1ull<<log2_spin) : 0;
     const int steal_count = spin_count/100;
@@ -972,6 +990,7 @@ int CurrentThreadId() const EIGEN_FINAL {
               if (t.f) num_ran_stolen++;
             }
             if (!t.f) {
+              uint64_t blocked_start_ms = dump_timing_ ? GetCurrentTimeMS() : 0;
               num_tried_to_block++;
               td.SetBlocked(
                   // Pre-block test
@@ -1015,6 +1034,7 @@ int CurrentThreadId() const EIGEN_FINAL {
                   },
                   // Post-block update (executed only if we blocked)
                   [&]() {
+                    if (dump_timing_) time_blocked_ms += GetCurrentTimeMS() - blocked_start_ms;
                     num_blocked++;
                     blocked_--;
                   });
@@ -1022,9 +1042,11 @@ int CurrentThreadId() const EIGEN_FINAL {
           }
         }
         if (t.f) {
+          uint64_t busy_start_ms = dump_timing_ ? GetCurrentTimeMS() : 0;
           td.SetActive();
           env_.ExecuteTask(t);
           td.SetSpinning();
+          if (dump_timing_) time_busy_ms += GetCurrentTimeMS() - busy_start_ms;
         }
       }
 
@@ -1042,7 +1064,14 @@ int CurrentThreadId() const EIGEN_FINAL {
           " ran_own: " << num_ran_own <<
           " ran_stolen: " << num_ran_stolen <<
           " tried_to_block: " << num_tried_to_block <<
-          " blocked: " << num_blocked << "\n";    
+          " blocked: " << num_blocked;
+        if (dump_timing_) {
+          ::std::cerr << 
+            " wall_ms: " << (GetCurrentTimeMS() - start_time_ms) <<
+            " busy_ms: " << time_busy_ms <<
+            " blocked_ms: " << time_blocked_ms;
+        }
+       ::std::cerr << "\n";    
       }
     }
 
