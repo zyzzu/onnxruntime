@@ -533,13 +533,15 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
         " mean_d_o_p: " << ::std::setprecision(2) << ((double)total_degree_of_parallelism_)/num_parallel_tasks_scheduled_ << 
         " total_scheduled: " << (num_tasks_scheduled_ + total_degree_of_parallelism_ - num_parallel_tasks_scheduled_) <<
         " total_revoked: " << num_tasks_revoked_ << 
-        "\n" <<
-        debug_name_ <<
-        " time_pre_ms: " << time_scheduling_pre_ms_ << 
-        " time_running_ms: " << time_running_ms_ <<
-        " time_post_ms: " << time_scheduling_post_ms_ <<
-        " time_waiting_ms: " << time_waiting_ms_ <<
         "\n";
+      if (dump_timing_) {
+        ::std::cerr << debug_name_ <<
+          " time_pre_ms: " << time_scheduling_pre_ms_ << 
+          " time_running_ms: " << time_running_ms_ <<
+          " time_post_ms: " << time_scheduling_post_ms_ <<
+          " time_waiting_ms: " << time_waiting_ms_ <<
+          "\n";
+      }
     }
   }
 
