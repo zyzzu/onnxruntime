@@ -1136,7 +1136,7 @@ int CurrentThreadId() const EIGEN_FINAL {
           // threads which are not themselves spinning.
 
           uint64_t spin_start_ms = dump_timing_ ? GetCurrentTimeMS() : 0;
-          if (!retain_affinity) SetGoodWorkerHint(thread_id, true);
+          if (!retain_affinity_) SetGoodWorkerHint(thread_id, true);
           for (int i = 0; (i < spin_count || always_spin_) && !t.f && !cancelled_ && !done_; i++) {
             if (prevent_stealing_) {
               t = q.PopFront();
@@ -1151,7 +1151,7 @@ int CurrentThreadId() const EIGEN_FINAL {
                }
             } 
           }
-          if (!retain_affinity) SetGoodWorkerHint(thread_id, false);
+          if (!retain_affinity_) SetGoodWorkerHint(thread_id, false);
           if (dump_timing_) time_spinning_ms += GetCurrentTimeMS() - spin_start_ms;
           
           if (!t.f) {
