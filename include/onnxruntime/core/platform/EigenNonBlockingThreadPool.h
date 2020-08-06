@@ -456,6 +456,11 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
             always_block_ = true;
             break;
 
+            case 'f':
+            ::std::cerr << " - Retain affinity" << ::std::endl;
+            retain_affinity_ = true;
+            break;
+
             case 'p':
             ::std::cerr << " - Pin work to threads" << ::std::endl;
             pin_work_to_threads_ = true;
@@ -927,6 +932,7 @@ int CurrentThreadId() const EIGEN_FINAL {
   const bool allow_spinning_;
   bool always_spin_ = false;
   bool always_block_ = false;
+  bool retain_affinity_ = false;
   bool prevent_stealing_ = false;
   bool pin_work_to_threads_ = false;
   bool dump_statistics_ = false;
