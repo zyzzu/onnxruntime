@@ -440,54 +440,54 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
       const std::string ort_threading_env_name("ORT_THREADING_CONTROL");
       auto ort_threading_env = env.GetEnvironmentVar(ort_threading_env_name);
       if (!ort_threading_env.empty()) {
-        ::std::cerr << "Reading additional settings from " <<
+        ::std::cout << "Reading additional settings from " <<
                ort_threading_env_name <<
                ::std::endl;
         for (auto i = 0u; i < ort_threading_env.length(); i++) {
           auto option = ort_threading_env[i];
           switch (option) {
             case 'a':
-            ::std::cerr << " - Always spin" << ::std::endl;
+            ::std::cout << " - Always spin" << ::std::endl;
             always_spin_ = true;
             break;
 
             case 'b':
-            ::std::cerr << " - Always block (passive mode)" << ::std::endl;
+            ::std::cout << " - Always block (passive mode)" << ::std::endl;
             always_block_ = true;
             break;
 
             case 'f':
-            ::std::cerr << " - Retain affinity" << ::std::endl;
+            ::std::cout << " - Retain affinity" << ::std::endl;
             retain_affinity_ = true;
             break;
 
             case 'l':
-            ::std::cerr << " - All-threads optimization" << ::std::endl;
+            ::std::cout << " - All-threads optimization" << ::std::endl;
             all_threads_optimization_ = true;
             break;
 
             case 'p':
-            ::std::cerr << " - Pin work to threads" << ::std::endl;
+            ::std::cout << " - Pin work to threads" << ::std::endl;
             pin_work_to_threads_ = true;
             break;
 
             case 's':
-            ::std::cerr << " - Statistics enabled" << ::std::endl;
+            ::std::cout << " - Statistics enabled" << ::std::endl;
             dump_statistics_ = true;
             break;
 
             case 't':
-            ::std::cerr << " - Timing enabled" << ::std::endl;
+            ::std::cout << " - Timing enabled" << ::std::endl;
             dump_timing_ = true;
             break;
 
             case 'v':
-            ::std::cerr << " - Prevent stealing" << ::std::endl;
+            ::std::cout << " - Prevent stealing" << ::std::endl;
             prevent_stealing_ = true;
             break;
 
             case 'z':
-            ::std::cerr << " - Spin in end-of-loop barrier" << ::std::endl;
+            ::std::cout << " - Spin in end-of-loop barrier" << ::std::endl;
             spin_end_of_loop_ = true;
             break;
 
@@ -1117,7 +1117,7 @@ int CurrentThreadId() const EIGEN_FINAL {
     pt->thread_id = thread_id;
 
     assert(td.GetStatus() == WorkerData::ThreadStatus::Spinning);
-    SetGoodWorkerHint(thread_id, true /* Is good */);
+    if (!retain_affinity_) SetGoodWorkerHint(thread_id, true /* Is good */);
 
     start_time_ms = GetCurrentTimeMS();
     const int log2_spin = 20;
@@ -1136,7 +1136,7 @@ int CurrentThreadId() const EIGEN_FINAL {
           // threads which are not themselves spinning.
 
           uint64_t spin_start_ms = dump_timing_ ? GetCurrentTimeMS() : 0;
-          SetGoodWorkerHint(thread_id, true);
+          if (!retain_affinity) SetGoodWorkerHint(thread_id, true);
           for (int i = 0; (i < spin_count || always_spin_) && !t.f && !cancelled_ && !done_; i++) {
             if (prevent_stealing_) {
               t = q.PopFront();
@@ -1151,7 +1151,7 @@ int CurrentThreadId() const EIGEN_FINAL {
                }
             } 
           }
-          SetGoodWorkerHint(thread_id, false);
+          if (!retain_affinity) SetGoodWorkerHint(thread_id, false);
           if (dump_timing_) time_spinning_ms += GetCurrentTimeMS() - spin_start_ms;
           
           if (!t.f) {
