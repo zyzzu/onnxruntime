@@ -597,11 +597,97 @@ void SetGoodWorkerHint(int idx, bool is_good) {
   } while (!u64.compare_exchange_weak(saw, want));
 }
 
+// The thread pool maintains a LIFO stack of workers.  Workers are added to the stack
+// when they start waiting for work.  Workers are removed from the stack when a thread
+// is distributing work.  The stack serves to concentrate load on a subset of workers
+// allowing the remainder to block.
+
+void PushWorkerLIFO(int idx) {
+  assert(idx >= 0 && idx < num_threads_);
+  WorkerData &wd = worker_data_[idx];
+
+  bool want = false;  
+  while (!lifo_latch_.compare_exchange_weak(want, true, std::memory_order_acquire)) {   
+    want = false;
+    while (lifo_latch_.load(std::memory_order_relaxed)) {
+    }   
+  }
+
+  if (wd.lifo_next_ == WorkerData::NONE) {
+    wd.lifo_next_ = lifo_first_;
+    lifo_first_ = idx;
+  }
+  
+  lifo_latch_.store(false, std::memory_order_release);
+}
+
+int PopWorkerLIFO(int need, std::vector<unsigned> &threads) {
+  int got = 0;
+
+  bool want = false;  
+  while (!lifo_latch_.compare_exchange_weak(want, true, std::memory_order_acquire)) {   
+    want = false;
+    while (lifo_latch_.load(std::memory_order_relaxed)) {
+    }   
+  }
+
+  while (got<need && lifo_first_ != WorkerData::NONE) {
+    unsigned idx = lifo_first_;
+    assert(idx >= 0 && idx < num_threads_);  
+    WorkerData &wd = worker_data_[idx];
+    lifo_first_ = wd.lifo_next_;
+    wd.lifo_next_ = WorkerData::NONE;
+    threads.push_back(idx);
+    got++;
+  }
+
+  lifo_latch_.store(false, std::memory_order_release);
+
+  return got;
+}
+
 // Retrieve hints for up to n threads to distribute work to.  Threads in good_hints
 // pass a best-effort check to identify spinning threads via the good_worker_hints_
 // bitmap.  Threads in alt_hint do not pass that test, but are distinct from those in
 // good_hints, letting the caller avoid distributing more than one work item to
 // any individual thread.
+
+void GetGoodWorkerHints2(int n , std::vector<unsigned>& good_hints, std::vector<unsigned>& alt_hints) {
+  PerThread* pt = GetPerThread();
+  good_hints.clear();
+  alt_hints.clear();
+
+  assert(n <= num_threads_);
+
+  // Pick threads from the LIFO where possible, meaning that we will tend toward
+  // distributing work to threads that were active recently.
+  int got = PopWorkerLIFO(n, good_hints);
+
+  // Pick up any additional threads, avoiding ones already chosen
+  if (got < n) {
+    uint64_t threads_in_use[num_hint_words_]={0};
+    for (int i = 0; i < got; i++) {
+      unsigned idx = good_hints[i];
+      threads_in_use[idx / bits_per_hint_word_] |= 1ull << (idx % bits_per_hint_word_);
+    }
+    n-= got;
+  
+    unsigned base = Rand(&pt->rand) % num_hint_words_;
+    for (int i = 0; n && (i < num_hint_words_); i++) {
+      int u64_idx = (base + i) % num_hint_words_;
+      for (int j = 0; n && (j < bits_per_hint_word_); j++) {
+        uint64_t bit = 1ull << j;
+        int thread = u64_idx * bits_per_hint_word_ + j;
+        if (thread < num_threads_) {
+          if (!(threads_in_use[u64_idx] & bit)) {
+            alt_hints.push_back(thread);
+            n--;
+          }
+        }
+      }
+    }
+  }
+}
 
 void GetGoodWorkerHints(int n, std::vector<unsigned>& good_hints, std::vector<unsigned>& alt_hints) {
   PerThread* pt = GetPerThread();
@@ -667,7 +753,11 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
 
     // Push up to n-1 copies of the work item into the queues
     std::vector<unsigned> good_hints, alt_hints;
-    GetGoodWorkerHints(n - 1, good_hints, alt_hints);
+    if (retain_affinity_) {
+       GetGoodWorkerHints2(n - 1, good_hints, alt_hints);
+    } else {
+      GetGoodWorkerHints(n - 1, good_hints, alt_hints);
+    }
     for (unsigned i = 0; i < n - 1; i++) {
       Task t = env_.CreateTask([&b, &fn]() {
         fn();
@@ -920,6 +1010,9 @@ int CurrentThreadId() const EIGEN_FINAL {
       status = ThreadStatus::Spinning;
     }
 
+    static constexpr int NONE = -1;
+    int lifo_next_ = WorkerData::NONE;
+
   private:
     std::atomic<ThreadStatus> status{ThreadStatus::Spinning};
     OrtMutex mutex;
@@ -967,6 +1060,9 @@ int CurrentThreadId() const EIGEN_FINAL {
   int num_hint_words_;
   std::unique_ptr<std::atomic<uint64_t>[]> good_worker_hints_;
 
+  std::atomic_bool lifo_latch_{false};
+  int lifo_first_ = WorkerData::NONE;
+
   // Wake any blocked workers so that they can cleanly exit WorkerLoop().  For an
   // abrupt exit, cancelled_==true and threads will exit their worker loops.  For
   // a clean exit, each thread will observe (1) done_ set, indicating that the
@@ -1009,6 +1105,8 @@ int CurrentThreadId() const EIGEN_FINAL {
     const int spin_count = (allow_spinning_ && !always_block_) ? (1ull<<log2_spin) : 0;
     const int steal_count = spin_count/100;
 
+    if (retain_affinity_) { PushWorkerLIFO(thread_id); }
+          
     while (!cancelled_ && !should_exit) {
         Task t = q.PopFront();
         if (t.f) num_ran_own++;
@@ -1100,6 +1198,7 @@ int CurrentThreadId() const EIGEN_FINAL {
           uint64_t busy_start_ms = dump_timing_ ? GetCurrentTimeMS() : 0;
           td.SetActive();
           env_.ExecuteTask(t);
+          if (retain_affinity_) { PushWorkerLIFO(thread_id); }
           td.SetSpinning();
           if (dump_timing_) time_busy_ms += GetCurrentTimeMS() - busy_start_ms;
         }
