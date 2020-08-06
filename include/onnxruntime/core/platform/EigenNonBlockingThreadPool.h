@@ -461,6 +461,11 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
             retain_affinity_ = true;
             break;
 
+            case 'l':
+            ::std::cerr << " - All-threads optimization" << ::std::endl;
+            all_threads_optimization_ = true;
+            break;
+
             case 'p':
             ::std::cerr << " - Pin work to threads" << ::std::endl;
             pin_work_to_threads_ = true;
@@ -604,21 +609,23 @@ void SetGoodWorkerHint(int idx, bool is_good) {
 
 void PushWorkerLIFO(int idx) {
   assert(idx >= 0 && idx < num_threads_);
-  WorkerData &wd = worker_data_[idx];
-
-  bool want = false;  
-  while (!lifo_latch_.compare_exchange_weak(want, true, std::memory_order_acquire)) {   
-    want = false;
-    while (lifo_latch_.load(std::memory_order_relaxed)) {
-    }   
-  }
+  WorkerData& wd = worker_data_[idx];
 
   if (wd.lifo_next_ == WorkerData::NONE) {
-    wd.lifo_next_ = lifo_first_;
-    lifo_first_ = idx;
+    bool want = false;
+    while (!lifo_latch_.compare_exchange_weak(want, true, std::memory_order_acquire)) {
+      want = false;
+      while (lifo_latch_.load(std::memory_order_relaxed)) {
+      }
+    }
+
+    if (wd.lifo_next_ == WorkerData::NONE) {
+      wd.lifo_next_ = lifo_first_;
+      lifo_first_ = idx;
+    }
+
+    lifo_latch_.store(false, std::memory_order_release);
   }
-  
-  lifo_latch_.store(false, std::memory_order_release);
 }
 
 int PopWorkerLIFO(int need, std::vector<unsigned> &threads) {
@@ -637,9 +644,11 @@ int PopWorkerLIFO(int need, std::vector<unsigned> &threads) {
     WorkerData &wd = worker_data_[idx];
     lifo_first_ = wd.lifo_next_;
     wd.lifo_next_ = WorkerData::NONE;
-    threads.push_back(idx);
+        //::std::cerr << idx;
+            threads.push_back(idx);
     got++;
   }
+  //::std::cerr << "\n";
 
   lifo_latch_.store(false, std::memory_order_release);
 
@@ -739,6 +748,7 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
     fn();
   } else {
     uint64_t start_ms = dump_timing_ ? GetCurrentTimeMS() : 0;
+    bool all_threads = (all_threads_optimization_ && ((int)n==num_threads_+1));
 
     // We build a list of <thread,idx> pairs for each of the queues that accepts a work
     // item.  This lets us remove any work items that do not get executed by the threads
@@ -753,18 +763,22 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
 
     // Push up to n-1 copies of the work item into the queues
     std::vector<unsigned> good_hints, alt_hints;
-    if (retain_affinity_) {
-       GetGoodWorkerHints2(n - 1, good_hints, alt_hints);
-    } else {
-      GetGoodWorkerHints(n - 1, good_hints, alt_hints);
+    if (!all_threads) {
+      if (retain_affinity_) {
+        GetGoodWorkerHints2(n - 1, good_hints, alt_hints);
+      } else {
+        GetGoodWorkerHints(n - 1, good_hints, alt_hints);
+      }
     }
+
     for (unsigned i = 0; i < n - 1; i++) {
       Task t = env_.CreateTask([&b, &fn]() {
         fn();
         b.Notify(1);
       });
       int q_idx;
-      if (pin_work_to_threads_) {
+      if (all_threads || pin_work_to_threads_) {
+        //::std::cerr << ".";
         q_idx = i;
       } else if (i < good_hints.size()) {
         q_idx = good_hints[i];
@@ -916,6 +930,7 @@ int CurrentThreadId() const EIGEN_FINAL {
     constexpr PerThread() : pool(nullptr) {
     }
     ThreadPoolTempl* pool;             // Parent pool, or null for normal threads.
+    WorkerData *wd;
     uint64_t rand{0};                  // Random generator state.
     int thread_id{-1};                 // Worker thread index in pool.
     Tag tag{};                         // Work item tag used to identify this thread.
@@ -927,6 +942,7 @@ int CurrentThreadId() const EIGEN_FINAL {
   struct WorkerData {
     constexpr WorkerData() : thread(), queue() {
     }
+    int idx;
     std::unique_ptr<Thread> thread;
     Queue queue;
 
@@ -1026,6 +1042,7 @@ int CurrentThreadId() const EIGEN_FINAL {
   bool always_spin_ = false;
   bool always_block_ = false;
   bool retain_affinity_ = false;
+  bool all_threads_optimization_ = false;
   bool prevent_stealing_ = false;
   bool pin_work_to_threads_ = false;
   bool dump_statistics_ = false;
@@ -1091,6 +1108,8 @@ int CurrentThreadId() const EIGEN_FINAL {
     uint64_t time_blocked_ms = 0;
     PerThread* pt = GetPerThread();
     WorkerData& td = worker_data_[thread_id];
+    pt->wd = &td;
+    td.idx = thread_id;
     Queue& q = td.queue;
     bool should_exit = false;
     pt->pool = this;
