@@ -12,38 +12,21 @@ using namespace ::onnxruntime::common;
 namespace onnxruntime {
 
 // helper to check dimensions match on concrete or symbolic value
-bool operator==(
-  const ONNX_NAMESPACE::TensorShapeProto_Dimension& lhs,
-  const ONNX_NAMESPACE::TensorShapeProto_Dimension& rhs) {
-
-  if (utils::HasDimValue(lhs) && 
-      utils::HasDimValue(rhs) &&
-      lhs.dim_value() == rhs.dim_value())
-    return true;
-
-  if (utils::HasDimParam(lhs) &&
-      utils::HasDimParam(rhs) &&
-      lhs.dim_param() == rhs.dim_param())
-    return true;
-
-  return false;
-}
-
 bool operator!=(
   const ONNX_NAMESPACE::TensorShapeProto_Dimension& lhs,
   const ONNX_NAMESPACE::TensorShapeProto_Dimension& rhs) {
     return !(lhs == rhs);
-}
+} 
 
 bool operator==(const ONNX_NAMESPACE::TensorShapeProto_Dimension& lhs, int value) {
-  return utils::HasDimValue(lhs) && lhs.dim_value() == value)
+  return utils::HasDimValue(lhs) && lhs.dim_value() == value;
 }
 
 bool operator!=(const ONNX_NAMESPACE::TensorShapeProto_Dimension& lhs, int value) {
   return !(lhs == value);
 }
 
-void select_mask_on_lhs_condition(bool lhs_condition, const Node& add_node, NodeArg** input, NodeArg** mask) {
+void select_input_on_lhs_condition(bool lhs_condition, Node& add_node, NodeArg** input, NodeArg** mask) {
   if (lhs_condition) {
     *input = add_node.MutableInputDefs()[0];
     *mask = add_node.MutableInputDefs()[1];
@@ -78,9 +61,9 @@ Status SelfAttnSoftmaxFusion::ApplyImpl(Graph& graph, bool& modified, int graph_
     }
 
     // check shape information is not available for both add inputs
-    const auto& add_node = node;
-    const NodeArg* input1 = add_node.MutableInputDefs()[0];
-    const NodeArg* input2 = add_node.MutableInputDefs()[1];
+    auto& add_node = node;
+    NodeArg* input1 = add_node.MutableInputDefs()[0];
+    NodeArg* input2 = add_node.MutableInputDefs()[1];
     const TensorShapeProto* S1 = input1->Shape();
     const TensorShapeProto* S2 = input2->Shape();
     if (S1 == nullptr || S2 == nullptr || S1->dim_size() < 1 || S2->dim_size() < 1) {
@@ -92,25 +75,23 @@ Status SelfAttnSoftmaxFusion::ApplyImpl(Graph& graph, bool& modified, int graph_
     if (p == add_node.OutputNodesEnd()) {
       continue;
     }
-    const Node& next_node = *p;
-    if (!graph_utils::IsSupportedOptypeVersionAndDomain(next_node, "Softmax", {1, 11}, kMSDomain) ||
-        next_node.GetExecutionProviderType() != add_node.GetExecutionProviderType() ||
-        !optimizer_utils::CheckOutputEdges(graph, next_node, 1)) {
+    Node& softmax_node = const_cast<Node&>(*p);
+    if (!graph_utils::IsSupportedOptypeVersionAndDomain(softmax_node, "Softmax", {1, 11}, kMSDomain) ||
+        softmax_node.GetExecutionProviderType() != add_node.GetExecutionProviderType() ||
+        !optimizer_utils::CheckOutputEdges(graph, softmax_node, 1)) {
       continue;
     }
-    const Node& softmax_node = next_node;
 
     // check softmax is only consumed by dropout with matching exec provider
     p = softmax_node.OutputNodesBegin();
     if (p == softmax_node.OutputNodesEnd()) {
       continue;
     }
-    next_node = *p;
-    if (!graph_utils::IsSupportedOptypeVersionAndDomain(next_node, "Dropout", {12}, kMSDomain) ||
-        next_node.GetExecutionProviderType() != softmax_node.GetExecutionProviderType()) {
+    Node& dropout_node = const_cast<Node&>(*p);
+    if (!graph_utils::IsSupportedOptypeVersionAndDomain(dropout_node, "Dropout", {12}, kMSDomain) ||
+        dropout_node.GetExecutionProviderType() != softmax_node.GetExecutionProviderType()) {
       continue;
     }
-    const Node& dropout_node = next_node;
 
     // can't perform conversion if output is graph output
     if (!graph.GetNodeOutputsInGraphOutputs(add_node).empty() ||
@@ -143,12 +124,15 @@ Status SelfAttnSoftmaxFusion::ApplyImpl(Graph& graph, bool& modified, int graph_
     // confirm all dimensions starting from softmax axis match for input and mask
     bool singlebatch_shape_matches = true;
 
-    auto& axis_attr = softmax_node.GetAttributes()["axis"];
-    int axis = utils::HasInt(axis_attr)? axis_attr.i() : 1;
+    int axis = 1;
+    auto& softmax_attr = softmax_node.GetAttributes();
+    if (softmax_attr.find("axis") != softmax_attr.end()) {
+      auto& axis_attr = softmax_attr.at("axes");
+      axis = utils::HasInt(axis_attr)? axis_attr.i() : 1;
+    }
 
-    int N1 = input1_shape->dim_size();
-    int N2 = input2_shape->dim_size();
-    int N = std::max({N1, N2});
+    int N1 = input1->Shape()->dim_size();
+    int N2 = input2->Shape()->dim_size();
     int k = axis;
     int singlebatch_rank = std::max({N1-k, N2-k});
 
@@ -156,7 +140,7 @@ Status SelfAttnSoftmaxFusion::ApplyImpl(Graph& graph, bool& modified, int graph_
       continue;
     }
     for (int i = 1; i <= singlebatch_rank; i++) {
-      if (input1_shape->dim(N1-i) != input2_shape->dim(N2-i)) {
+      if (input1->Shape()->dim(N1-i) != input2->Shape()->dim(N2-i)) {
         singlebatch_shape_matches = false;
         break;
       }
@@ -170,10 +154,8 @@ Status SelfAttnSoftmaxFusion::ApplyImpl(Graph& graph, bool& modified, int graph_
     // also distinguish between input and mask in this process
     bool mask_can_simple_broadcast = true;
 
+    int B;
     NodeArg *input, *mask;
-    const TensorShapeProto* mask_shape;
-
-    int B, k = axis;
 
      // case 1: mask rank == input rank
     if (N1 == N2) {
@@ -219,12 +201,13 @@ Status SelfAttnSoftmaxFusion::ApplyImpl(Graph& graph, bool& modified, int graph_
     // coalesce subgraph nodes into fused node
     // -----------------------------------------------------------------------
     std::vector<NodeArg*> fused_inputs{input, mask};
-    for (int i = 1; i < dropout_node.InputArgCount(); i++) {
-      fused_inputs.push_back(dropout_node.InputDefs[i]);
+    for (size_t i = 1; i < dropout_node.MutableInputDefs().size(); i++) {
+      fused_inputs.push_back(dropout_node.MutableInputDefs()[i]);
     }
 
+    std::string op_type = "SelfAttnSoftmax";
     Node& fused_node = graph.AddNode(graph.GenerateNodeName(op_type),
-                                    "SelfAttnSoftmax",
+                                    op_type,
                                     "fused dropout(softmax(input + bias))",
                                     fused_inputs,
                                     {},
@@ -233,13 +216,13 @@ Status SelfAttnSoftmaxFusion::ApplyImpl(Graph& graph, bool& modified, int graph_
 
     // add attributes from dropout node (e.g. seed)
     for (auto const& a : dropout_node.GetAttributes()) {
-      fused_node.AddAttribute(a->first, a->second);
+      fused_node.AddAttribute(a.first, a.second);
     }
 
     // add softmax axis and broadcast axis (to simplify runtime logic)
     // recall broadcast along axes B ... (k-1)
-    fused_node.AddAttribute("softmax_axis", k);
-    fused_node.AddAttribute("broadcast_axis", B);
+    fused_node.AddAttribute("softmax_axis", (int64_t)k);
+    fused_node.AddAttribute("broadcast_axis", (int64_t)B);
 
     // finalize node fusion (e.g. remove old nodes and shift outputs)
     fused_node.SetExecutionProviderType(add_node.GetExecutionProviderType());
