@@ -8,13 +8,13 @@
 namespace onnxruntime {
 
 /**
-@Class BiasSoftmaxFusion
-Fuse Add + Softmax to BiasSoftmax
+@Class BiasDropoutSoftmaxFusion
+Fuse Dropout(Softmax(Input + Bias))
 */
-class SelfAttnSoftmaxFusion : public GraphTransformer {
+class BiasDropoutSoftmaxFusion : public GraphTransformer {
  public:
-  SelfAttnSoftmaxFusion(const std::unordered_set<std::string>& compatible_execution_providers = {}) noexcept
-      : GraphTransformer("SelfAttnSoftmaxFusion", compatible_execution_providers) {
+  BiasDropoutSoftmaxFusion(const std::unordered_set<std::string>& compatible_execution_providers = {}) noexcept
+      : GraphTransformer("BiasDropoutSoftmaxFusion", compatible_execution_providers) {
   }
 
   Status ApplyImpl(Graph& graph, bool& modified, int graph_level, const logging::Logger& logger) const override;

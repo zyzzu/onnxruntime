@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 #include "core/optimizer/initializer.h"
-#include "core/optimizer/selfattn_softmax_fusion.h"
+#include "core/optimizer/bias_dropout_softmax_fusion.h"
 #include "core/graph/graph_utils.h"
 #include "core/optimizer/utils.h"
 #include <deque>
@@ -37,7 +37,7 @@ void select_input_on_lhs_condition(bool lhs_condition, Node& add_node, NodeArg**
   }
 }
 
-Status SelfAttnSoftmaxFusion::ApplyImpl(Graph& graph, bool& modified, int graph_level, const logging::Logger& logger) const {
+Status BiasDropoutSoftmaxFusion::ApplyImpl(Graph& graph, bool& modified, int graph_level, const logging::Logger& logger) const {
   GraphViewer graph_viewer(graph);
   const auto& node_topology_list = graph_viewer.GetNodesInTopologicalOrder();
 
@@ -205,7 +205,7 @@ Status SelfAttnSoftmaxFusion::ApplyImpl(Graph& graph, bool& modified, int graph_
       fused_inputs.push_back(dropout_node.MutableInputDefs()[i]);
     }
 
-    std::string op_type = "SelfAttnSoftmax";
+    std::string op_type = "BiasDropoutSoftmax";
     Node& fused_node = graph.AddNode(graph.GenerateNodeName(op_type),
                                     op_type,
                                     "fused dropout(softmax(input + bias))",
