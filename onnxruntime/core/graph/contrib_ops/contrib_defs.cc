@@ -546,7 +546,7 @@ GELU (Gaussian Error Linear Unit) approximation: Y=0.5*X*(1+tanh(0.797885*X+0.03
       .TypeAndShapeInferenceFunction(ONNX_NAMESPACE::propagateShapeAndTypeFromFirstInput);
 
   // schema merges Softmax and Dropout
-  ONNX_OPERATOR_SET_SCHEMA(BiasDropoutSoftmax)
+  ONNX_CONTRIB_OPERATOR_SCHEMA(BiasDropoutSoftmax)
       .SetDomain(kMSDomain)
       .SinceVersion(1)
       .SetSupportLevel(OpSchema::SupportType::EXPERIMENTAL)
@@ -571,7 +571,7 @@ GELU (Gaussian Error Linear Unit) approximation: Y=0.5*X*(1+tanh(0.797885*X+0.03
           "T2",
           {"tensor(bool)"},
           "Constrain output 'mask' types to boolean tensors.")
-      .TypeAndShapeInferenceFunction([](InferenceContext& ctx) {
+      .TypeAndShapeInferenceFunction([](ONNX_NAMESPACE::InferenceContext& ctx) {
 
         // propagate output shape
         propagateElemTypeFromInputToOutput(ctx, 0, 0);
@@ -583,7 +583,7 @@ GELU (Gaussian Error Linear Unit) approximation: Y=0.5*X*(1+tanh(0.797885*X+0.03
         // ...
 
         // validate attribute 'axis'
-        const TensorShapeProto& input_shape =
+        const ONNX_NAMESPACE::TensorShapeProto& input_shape =
             ctx.getInputType(0)->tensor_type().shape();
         int r = input_shape.dim_size();
         int axis = static_cast<int>(getAttribute(ctx, "axis", 1));
@@ -615,7 +615,7 @@ GELU (Gaussian Error Linear Unit) approximation: Y=0.5*X*(1+tanh(0.797885*X+0.03
 
         // propagate output 'mask' shape
         if (ctx.getNumOutputs() == 2) {
-          updateOutputElemType(ctx, 1, TensorProto::BOOL);
+          updateOutputElemType(ctx, 1, ONNX_NAMESPACE::TensorProto::BOOL);
           if (hasNInputShapes(ctx, 1)) {
             propagateShapeFromInputToOutput(ctx, 0, 1);
           }
@@ -2925,8 +2925,6 @@ It's an extension of Gelu. It takes the sum of input A and bias input B as the i
           propagateShapeFromInputToOutput(ctx, 0, 0);
         }
       });
-
-  };
 
   RegisterBertSchemas();
 }

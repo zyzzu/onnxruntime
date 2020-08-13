@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
+#include "core/providers/common.h"
 #include "core/optimizer/initializer.h"
 #include "core/optimizer/bias_dropout_softmax_fusion.h"
 #include "core/graph/graph_utils.h"
@@ -60,6 +61,8 @@ Status BiasDropoutSoftmaxFusion::ApplyImpl(Graph& graph, bool& modified, int gra
       continue;
     }
 
+    std::cout << "Found an add node " << node.Name() << ".\n";
+
     // check shape information is not available for both add inputs
     auto& add_node = node;
     NodeArg* input1 = add_node.MutableInputDefs()[0];
@@ -67,24 +70,32 @@ Status BiasDropoutSoftmaxFusion::ApplyImpl(Graph& graph, bool& modified, int gra
     const TensorShapeProto* S1 = input1->Shape();
     const TensorShapeProto* S2 = input2->Shape();
     if (S1 == nullptr || S2 == nullptr || S1->dim_size() < 1 || S2->dim_size() < 1) {
+      std::cout << "Missing shape data for add node " << node.Name() << ".\n";
       continue;
     }
+
+    std::cout << "Found shape data for add node " << node.Name() << ".\n";
 
     // check add is only consumed by softmax with matching exec provider
     auto p = add_node.OutputNodesBegin();
     if (p == add_node.OutputNodesEnd()) {
+      std::cout << "Add node " << node.Name() << " has no outputs.\n";
       continue;
     }
     Node& softmax_node = const_cast<Node&>(*p);
     if (!graph_utils::IsSupportedOptypeVersionAndDomain(softmax_node, "Softmax", {1, 11}, kMSDomain) ||
         softmax_node.GetExecutionProviderType() != add_node.GetExecutionProviderType() ||
         !optimizer_utils::CheckOutputEdges(graph, softmax_node, 1)) {
+      std::cout << "Add node " << node.Name() << " has does not have matching softmax output.\n";
       continue;
     }
+
+    std::cout << "Found softmax node " << softmax_node.Name() << ".\n";
 
     // check softmax is only consumed by dropout with matching exec provider
     p = softmax_node.OutputNodesBegin();
     if (p == softmax_node.OutputNodesEnd()) {
+      std::cout << "Softmax node " << softmax_node.Name() << " has no outputs.\n";
       continue;
     }
     Node& dropout_node = const_cast<Node&>(*p);
@@ -92,12 +103,16 @@ Status BiasDropoutSoftmaxFusion::ApplyImpl(Graph& graph, bool& modified, int gra
         dropout_node.GetExecutionProviderType() != softmax_node.GetExecutionProviderType()) {
       continue;
     }
+    std::cout << "Found dropout node " << dropout_node.Name() << " has no outputs.\n";
 
     // can't perform conversion if output is graph output
     if (!graph.GetNodeOutputsInGraphOutputs(add_node).empty() ||
         !graph.GetNodeOutputsInGraphOutputs(softmax_node).empty()) {
+      std::cout << "One of softmax or dropout nodes has graph output.\n";
       continue;
     }
+
+    std::cout << "Pattern matched BiasDropoutSoftmax.\n";
 
     // check mask can broadcast across input batches with simple division
     // -----------------------------------------------------------------------
@@ -133,8 +148,12 @@ Status BiasDropoutSoftmaxFusion::ApplyImpl(Graph& graph, bool& modified, int gra
 
     int N1 = input1->Shape()->dim_size();
     int N2 = input2->Shape()->dim_size();
-    int k = axis;
+    int k = HandleNegativeAxis(axis, std::max({N1, N2}));
     int singlebatch_rank = std::max({N1-k, N2-k});
+
+    std::cout << "Got softmax axis " << axis << ".\n";
+    std::cout << "Got input ranks " << N1 << " and " << N2 << ".\n";
+    std::cout << "Got single batch rank " << singlebatch_rank << ".\n";
 
     if (singlebatch_rank > N1 || singlebatch_rank > N2) {
       continue;
@@ -147,8 +166,11 @@ Status BiasDropoutSoftmaxFusion::ApplyImpl(Graph& graph, bool& modified, int gra
     }
 
     if (!singlebatch_shape_matches) {
+      std::cout << "Found single batch ranks do NOT match for input and bias.\n";
       continue;
     }
+
+    std::cout << "Found single batch ranks match for input and bias.\n";
 
     // identify broadcast dimensions (i.e. B to k-1 in expression above)
     // also distinguish between input and mask in this process
@@ -160,11 +182,15 @@ Status BiasDropoutSoftmaxFusion::ApplyImpl(Graph& graph, bool& modified, int gra
      // case 1: mask rank == input rank
     if (N1 == N2) {
 
+      std::cout << "Found input rank == mask rank.\n";
+
       // discover B (first axis where shapes don't match)
       B = 0;
       while (B < k && input1->Shape()->dim(B) == input2->Shape()->dim(B)) {
         B++;
       }
+
+      std::cout << "Found broadcast axis " << B <<".\n";
 
       // use B dimension to distinguish input and mask
       select_input_on_lhs_condition(input1->Shape()->dim(B) != 1, add_node, &input, &mask);
@@ -181,8 +207,12 @@ Status BiasDropoutSoftmaxFusion::ApplyImpl(Graph& graph, bool& modified, int gra
     // case 2: mask rank < input rank
     else { 
 
+      std::cout << "Found input rank != mask rank.\n";
+
       B = 0;
       select_input_on_lhs_condition(N1 > N2, add_node, &input, &mask);
+
+      std::cout << "Found broadcast axis " << B <<".\n";
 
       // confirm any mask dimensions are ones before softmax axis
       int mask_rank = mask->Shape()->dim_size();
@@ -195,8 +225,12 @@ Status BiasDropoutSoftmaxFusion::ApplyImpl(Graph& graph, bool& modified, int gra
     }
 
     if (!mask_can_simple_broadcast) {
+
+      std::cout << "Found bias can NOT simple broadcast.\n";
       continue;
     }
+    
+    std::cout << "Found bias can simple broadcast.\n";
 
     // coalesce subgraph nodes into fused node
     // -----------------------------------------------------------------------
@@ -204,6 +238,8 @@ Status BiasDropoutSoftmaxFusion::ApplyImpl(Graph& graph, bool& modified, int gra
     for (size_t i = 1; i < dropout_node.MutableInputDefs().size(); i++) {
       fused_inputs.push_back(dropout_node.MutableInputDefs()[i]);
     }
+
+    std::cout << "Fusing subgraph into BiasDropoutSoftmax node.\n";
 
     std::string op_type = "BiasDropoutSoftmax";
     Node& fused_node = graph.AddNode(graph.GenerateNodeName(op_type),
