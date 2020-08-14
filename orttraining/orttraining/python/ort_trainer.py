@@ -441,6 +441,11 @@ def create_ort_training_session_with_optimizer(model, device, training_optimizer
     ort_parameters.optimizer_attributes_map = optimizer_attributes_map
     ort_parameters.optimizer_int_attributes_map = optimizer_int_attributes_map
 
+    print('LEGACY')
+    print(f'weights_to_train={weights_to_train}')
+    print(f'optimizer_attributes_map={optimizer_attributes_map}')
+    print(f'optimizer_int_attributes_map={optimizer_int_attributes_map}')
+
     sessionOptions = ort.SessionOptions()
     sessionOptions.use_deterministic_compute = use_deterministic_compute
     session = ort.TrainingSession(model.SerializeToString(), ort_parameters, sessionOptions)

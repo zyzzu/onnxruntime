@@ -817,6 +817,43 @@ def testORTTrainerFrozenWeights(model_params):
     assert not all([param in session_state for param in model_params])
 
 
+@pytest.mark.parametrize("optim_params", [
+    ([{'params' : ['decoder.weight'], }]),
+])
+def testORTTrainerOptimizerConfigParamGroups(optim_params):
+    # Common setup
+    device = 'cuda'
+    total_steps = 10
+    options = orttrainer.ORTTrainerOptions({})
+
+    # Setup ORTTrainer WITHOUT frozen weights
+    model, model_desc, my_loss, batcher_fn,\
+        train_data, val_data, _ = _load_pytorch_transformer_model(device)
+    optim_config = optim.LambConfig(lr=0.001)
+    trainer = orttrainer.ORTTrainer(model, model_desc, optim_config, loss_fn=my_loss, options=options)
+    for i in range(total_steps):
+        data, targets = batcher_fn(train_data, i)
+        _, _ = trainer.train_step(data, targets)
+
+    # All model_params must be in the session state
+    assert trainer._onnx_model is not None
+    # session_state = trainer._training_session.get_state()
+    # assert all([param in session_state for param in model_params])
+
+
+    # # Setup ORTTrainer WITH frozen weights
+    # model, _, _, _, _, _, _ = _load_pytorch_transformer_model(device)
+    # trainer = orttrainer.ORTTrainer(model, model_desc, optim_config, loss_fn=my_loss, options=options)
+    # for i in range(total_steps):
+    #     data, targets = batcher_fn(train_data, i)
+    #     _, _ = trainer.train_step(data, targets)
+
+    # # All model_params CANNOT be in the session state
+    # assert trainer._onnx_model is not None
+    # session_state = trainer._training_session.get_state()
+    # assert not all([param in session_state for param in model_params])
+
+
 ###############################################################################
 # Temporary tests comparing Legacy vs Experimental ORTTrainer APIs ############
 ###############################################################################
@@ -825,10 +862,9 @@ def testORTTrainerFrozenWeights(model_params):
 @pytest.mark.parametrize("seed,device", [
     (1234, 'cuda')
 ])
-def testORTTrainerLegacyAndExperimentalWeightsCheck(seed, device):
+def testORTTrainerLegacyAndExperimentalBasicTraining(seed, device):
     # Common data
-    total_steps = 5
-    bptt = 35
+    total_steps = 10
 
     # Setup for the experimental ORTTRainer run
     torch.manual_seed(seed)
@@ -844,10 +880,11 @@ def testORTTrainerLegacyAndExperimentalWeightsCheck(seed, device):
     })
     model, model_desc, my_loss, batcher_fn, train_data, val_data, _ = _load_pytorch_transformer_model(device)
     trainer = orttrainer.ORTTrainer(model, model_desc, optim_config, loss_fn=my_loss, options=opts)
-    # Training loop
+    experimental_loss = []
     for i in range(total_steps):
         data, targets = batcher_fn(train_data, i)
-        _ = trainer.train_step(data, targets)
+        exp_loss, _ = trainer.train_step(data, targets)
+        experimental_loss.append(exp_loss.cpu())
 
     # Setup for the legacy ORTTrainer run
     torch.manual_seed(seed)
@@ -855,14 +892,15 @@ def testORTTrainerLegacyAndExperimentalWeightsCheck(seed, device):
     model, (model_desc, lr_desc), _, _, _, _, _ = _load_pytorch_transformer_model(device, legacy_api=True)
     legacy_trainer = Legacy_ORTTrainer(model, my_loss, model_desc, "LambOptimizer", None, lr_desc,
                                        device, _use_deterministic_compute=True)
-    # Training loop
+    legacy_loss = []
     for i in range(total_steps):
         data, targets = batcher_fn(train_data, i)
-        _, _ = legacy_trainer.train_step(data, targets, torch.tensor([optim_config.lr]))
+        leg_loss, _ = legacy_trainer.train_step(data, targets, torch.tensor([optim_config.lr]))
+        legacy_loss.append(leg_loss.cpu())
 
     # Compare legacy vs experimental APIs
     _test_helpers.assert_legacy_onnx_weights(trainer, legacy_trainer, rtol=1e-4)
-
+    _test_helpers.assert_model_outputs(legacy_loss, experimental_loss, rtol=1e-6)
 
 @pytest.mark.parametrize("seed,device", [
     (321, 'cuda'),
@@ -870,7 +908,6 @@ def testORTTrainerLegacyAndExperimentalWeightsCheck(seed, device):
 def testORTTrainerLegacyAndExperimentalPrecisionLossScaler(seed, device):
     # Common data
     total_steps = 5
-    bptt=35
 
     # Setup experimental API
     torch.manual_seed(seed)
@@ -960,4 +997,83 @@ def testORTTrainerLegacyAndExperimentalGradientAccumulation(seed, device, gradie
         legacy_loss.append(leg_loss.cpu())
 
     # Compare legacy vs experimental APIs
+    _test_helpers.assert_model_outputs(legacy_loss, experimental_loss, rtol=1e-6)
+
+
+@pytest.mark.parametrize("seed,device,total_steps", [
+    (0, 'cuda', 10),
+])
+def testORTTrainerLegacyAndExperimentalOptimizerParamGroups(seed, device, total_steps):
+    # Common data
+    torch.set_printoptions(precision=10)
+
+    # Setup experimental API
+    torch.manual_seed(seed)
+    set_seed(seed)
+    options = orttrainer.ORTTrainerOptions({'device' : {'id' : device},
+                                            'debug' : {'deterministic_compute' : True}})
+    model, model_desc, my_loss, batcher_fn, train_data, val_data, _ = _load_pytorch_transformer_model(device)
+    no_decay_params = [{'params' : ['decoder.bias',
+                                    'encoder.bias',
+                                    'transformer_encoder.layers.0.linear1.bias',
+                                    'transformer_encoder.layers.0.linear2.bias',
+                                    'transformer_encoder.layers.0.norm1.bias',
+                                    'transformer_encoder.layers.0.norm2.bias',
+                                    'transformer_encoder.layers.0.self_attn.in_proj_bias',
+                                    'transformer_encoder.layers.0.self_attn.out_proj.bias',
+                                    'transformer_encoder.layers.1.linear1.bias',
+                                    'transformer_encoder.layers.1.linear2.bias',
+                                    'transformer_encoder.layers.1.norm1.bias',
+                                    'transformer_encoder.layers.1.norm2.bias',
+                                    'transformer_encoder.layers.1.self_attn.in_proj_bias',
+                                    'transformer_encoder.layers.1.self_attn.out_proj.bias'],
+                       'alpha': 0.9, 'beta': 0.999, 'lambda_coef': 0.01, 'epsilon': 1e-6}]
+    # decay_params = [{'params': ['decoder.weight',
+    #                             'encoder.weight',
+    #                             'transformer_encoder.layers.0.linear1.weight',
+    #                             'transformer_encoder.layers.0.linear2.weight',
+    #                             'transformer_encoder.layers.0.norm1.weight',
+    #                             'transformer_encoder.layers.0.norm2.weight',
+    #                             'transformer_encoder.layers.0.self_attn.in_proj_weight',
+    #                             'transformer_encoder.layers.0.self_attn.out_proj.weight',
+    #                             'transformer_encoder.layers.1.linear1.weight',
+    #                             'transformer_encoder.layers.1.linear2.weight',
+    #                             'transformer_encoder.layers.1.norm1.weight',
+    #                             'transformer_encoder.layers.1.norm2.weight',
+    #                             'transformer_encoder.layers.1.self_attn.in_proj_weight',
+    #                             'transformer_encoder.layers.1.self_attn.out_proj.weight'],
+    #                  'alpha': 0.9, 'beta': 0.999, 'lambda_coef': 0.0, 'epsilon': 1e-6}]
+    # no_decay_params.extend(decay_params)
+    optim_config = optim.LambConfig(no_decay_params, lr=0.001, alpha=0.9, beta=0.999, lambda_coef=0.0, epsilon=1e-6)
+    trainer = orttrainer.ORTTrainer(model, model_desc, optim_config, loss_fn=my_loss, options=options)
+    experimental_loss = []
+    for i in range(total_steps):
+        data, targets = batcher_fn(train_data, i)
+        exp_loss, exp_preds = trainer.train_step(data, targets)
+        experimental_loss.append(exp_loss.cpu())
+
+    # Setup legacy API
+    torch.manual_seed(seed)
+    set_seed(seed)
+
+    def map_optimizer_attributes(name):
+        no_decay_keys = ["bias", "gamma", "beta", "LayerNorm"]
+        no_decay = any(no_decay_key in name for no_decay_key in no_decay_keys)
+        if no_decay:
+            return {"alpha": 0.9, "beta": 0.999, "lambda": 0.01, "epsilon": 1e-6}
+        else:
+            return {"alpha": 0.9, "beta": 0.999, "lambda": 0.0, "epsilon": 1e-6}
+
+    model, (model_desc, lr_desc), _, _, _, _, _ = _load_pytorch_transformer_model(device, legacy_api=True)
+    legacy_trainer = Legacy_ORTTrainer(model, my_loss, model_desc, "LambOptimizer", map_optimizer_attributes,
+                                       lr_desc, device=device,
+                                       _use_deterministic_compute=True)
+    # Training loop
+    legacy_loss = []
+    for i in range(total_steps):
+        data, targets = batcher_fn(train_data, i)
+        leg_loss, leg_p_reds = legacy_trainer.train_step(data, targets, torch.tensor([optim_config.lr]))
+        legacy_loss.append(leg_loss.cpu())
+
+    # # Compare legacy vs experimental APIs
     _test_helpers.assert_model_outputs(legacy_loss, experimental_loss, rtol=1e-6)

@@ -570,6 +570,11 @@ class ORTTrainer(object):
         ort_parameters.optimizer_attributes_map = optimizer_attributes_map
         ort_parameters.optimizer_int_attributes_map = optimizer_int_attributes_map
 
+        print('EXPERIMENTAL')
+        print(f'weights_to_train={trainable_params}')
+        print(f'optimizer_attributes_map={optimizer_attributes_map}')
+        print(f'optimizer_int_attributes_map={optimizer_int_attributes_map}')
+
         # SessionOptions
         session_options = ort.SessionOptions()
         session_options.use_deterministic_compute = self.options.debug.deterministic_compute

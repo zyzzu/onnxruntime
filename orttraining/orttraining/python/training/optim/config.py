@@ -146,7 +146,7 @@ class AdamConfig(_OptimizerConfig):
         AFTER_WEIGHT_UPDATE = 1
 
     def __init__(self, params=[], lr=0.001, alpha=0.9, beta=0.999, lambda_coef=0.0, epsilon=1e-8,
-                 do_bias_correction=True, weight_decay_mode=DecayMode.BEFORE_WEIGHT_UPDATE):
+                 do_bias_correction=False, weight_decay_mode=DecayMode.BEFORE_WEIGHT_UPDATE):
         assert lr >= 0, "'lr' must be a positive number"
         assert alpha >= 0, "'alpha' must be a positive number"
         assert beta >= 0, "'beta' must be a positive number"
