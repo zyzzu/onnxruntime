@@ -1210,6 +1210,30 @@ std::vector<NodeDef> GetBiasGeluGradNodes(
 }
 }  // namespace
 
+IMPLEMENT_GRADIENT_BUILDER(GetBiasDropoutSoftmaxGradient) {
+  // Y = softmax(X) and Z = dropout(Y)
+  const auto dZ = GO(0), Y = I(0), mask = I(1),
+             dX = GI(0), dB = GI(1);
+
+  std::vector<NodeDef> grad_graph;
+
+  // applies dropout mask and softmax backward in one go
+  grad_graph.push_back(
+    NodeDef("BiasDropoutSoftmaxGrad_dX", kMSDomain, 1}, {dZ, Y, mask, ratio}, {dX});
+
+  // for target fusion the derivative w.r.t. bias is not required
+  if (IsGradientRequiredForSrcNodeInput(1)) {
+    grad_graph.push_back(
+      NodeDef("ReduceSum", {dX}, {dB}, {
+          {"keepdims", MakeAttribute("keepdims", int64_t{0 to bcast, softmax to end})}, // fix this
+          {"axes", MakeAttribute("axes", B_axes)} // fix this
+      })
+    );
+  }
+
+  return grad_graph;
+}
+
 IMPLEMENT_GRADIENT_BUILDER(GetBiasGeluGradient) {
   const auto dY = GO(0), X = I(0), B = I(1),
              dX = GI(0), dB = GI(1);

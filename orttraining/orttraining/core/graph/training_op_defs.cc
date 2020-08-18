@@ -1417,6 +1417,36 @@ Example 4:
         propagateShapeAndTypeFromFirstInput(ctx);
       });
 
+  ONNX_CONTRIB_OPERATOR_SCHEMA(BiasDropoutSoftmaxGrad)
+      .SetDomain(kMSDomain)
+      .SinceVersion(1)
+      .SetDoc("BiasDropoutSoftmaxGrad")
+      .Attr("softmax_axis", "refer BiasDropoutSoftmax", AttributeProto::INT, static_cast<int64_t>(1))
+      .Attr("broadcast_axis", "refer BiasDropoutSoftmax", AttributeProto::INT, static_cast<int64_t>(1))
+      .Input(0, "dZ", "The gradient tensor of Z = dropout(softmax(X + bias)).", "T")
+      .Input(1, "Y", "The output tensor Y = softmax(X + bias)")
+      .Input(2, "mask", "The mask tensor corresponding Z = dropout(softmax(X + bias)). ", "T2")
+      .Input(3, "ratio", "refer DropoutGrad", "T1", OpSchema::Optional)
+      .Input(4, "training_mode","refer DropoutGrad", "T2", OpSchema::Optional)
+      .Output(0, "dX", "Gradient of input X to Z = dropout(softmax(X + bias)).", "T")
+      .Output(1, "dbias", "Gradient of input bias to Z = dropout(softmax(X + bias))")
+      .TypeConstraint(
+          "T",
+          {"tensor(float16)", "tensor(float)", "tensor(double)"},
+          "Constrain input and output types to float tensors.")
+      .TypeConstraint(
+          "T1",
+          {"tensor(float16)", "tensor(float)", "tensor(double)"},
+          "Constrain input 'ratio' types to float tensors.")
+      .TypeConstraint(
+          "T2",
+          {"tensor(bool)"},
+          "Constrain 'mask' and 'training_mode' types to boolean tensors.")
+      .TypeAndShapeInferenceFunction([](ONNX_NAMESPACE::InferenceContext& ctx) {
+        // todo .. deduce shape of bias from attributes
+        propagateShapeAndTypeFromFirstInput(ctx);
+      });
+
   ONNX_CONTRIB_OPERATOR_SCHEMA(BroadcastGradientArgs)
       .SetDomain(kMSDomain)
       .SinceVersion(1)

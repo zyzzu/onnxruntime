@@ -26,13 +26,15 @@ template <typename T>
 class BiasDropoutSoftmax final : public CudaKernel {
  public:
   BiasDropoutSoftmax(const OpKernelInfo& info) : CudaKernel{info} {
-    info.GetAttrOrDefault("axis", &axis_, static_cast<int64_t>(1));
+    info.GetAttrOrDefault("softmax_axis", &softmax_axis_, static_cast<int64_t>(1));
+    info.GetAttrOrDefault("broadcast_axis", &broadcast_axis_, static_cast<int64_t>(1));
   }
 
   Status ComputeInternal(OpKernelContext* context) const override;
 
  private:
-  int64_t axis_;
+  int64_t softmax_axis_;
+  int64_t broadcast_axis_;
 };
 
 }  // namespace cuda

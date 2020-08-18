@@ -22,7 +22,18 @@ namespace cuda {
 template <typename T>
 Status BiasDropoutSoftmax<T>::ComputeInternal(OpKernelContext* ctx) const {
   std::string s = ctx->GetOpDomain();
-  // ... do stuff
+  
+  if (element_count <= 1024) {
+    // presumably thread block still fits within SM registers at high occupancy
+    // call dispatch_bias_softmax_forward()
+  }
+  else {
+    // fallback to original routine - will dispatch to cuDNN
+    // call softmax(...)
+  }
+
+  // call dropout_kernel(...)
+
   return Status::OK();
 }
 
