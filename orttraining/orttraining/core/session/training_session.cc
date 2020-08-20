@@ -229,6 +229,8 @@ Status TrainingSession::ConfigureForTraining(
     weight_names_to_train.erase(weight_name_to_not_train);
   }
 
+  weights_to_not_train_.insert("bert.encoder.rel_pos_bias_ghost_fp16");
+
   {
     std::ostringstream weight_names_stream{};
     for (const auto& weight_name : weight_names_to_train) {
@@ -973,6 +975,8 @@ std::unordered_set<std::string> TrainingSession::GetStateTensorNames() const {
       opt_state_initializer_names_.begin(), opt_state_initializer_names_.end());
   checkpointed_tensor_names.insert(
       fp16_weight_initializer_names_.begin(), fp16_weight_initializer_names_.end());
+  checkpointed_tensor_names.insert(
+      weights_to_not_train_.begin(), weights_to_not_train_.end());
   return checkpointed_tensor_names;
 }
 

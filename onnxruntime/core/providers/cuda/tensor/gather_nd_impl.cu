@@ -108,6 +108,7 @@ SPECIALIZED_IMPL(float)
 #if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 600
 SPECIALIZED_IMPL(half)
 SPECIALIZED_IMPL(double)
+SPECIALIZED_IMPL(int64_t)
 #endif
 
 }  // namespace cuda

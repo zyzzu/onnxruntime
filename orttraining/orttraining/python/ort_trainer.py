@@ -632,7 +632,7 @@ class ORTTrainer():
         self.world_size = world_size
         self.use_mixed_precision = use_mixed_precision
 
-        self.original_model_state_keys = list(model.state_dict().keys()) if hasattr(model, 'state_dict') else []
+        #self.original_model_state_keys = list(model.state_dict().keys()) if hasattr(model, 'state_dict') else []
 
         self.session = None
         self.device_ = device
@@ -728,6 +728,7 @@ class ORTTrainer():
             self.torch_model_.cpu()
             # torch buffers created using 'register_buffer' are not meant to be trainable.
             torch_buffers = list(dict(self.torch_model_.named_buffers()).keys())
+            torch_buffers = [name[7:] if name.startswith('model_.') else name for name in torch_buffers]
             self.frozen_weights_ = self.frozen_weights_ + torch_buffers
             self.onnx_model_ = convert_model_loss_fn_to_onnx(
                 self.torch_model_, self.loss_fn_, self.model_desc_, torch.device('cpu'), inputs, opset_version=self.opset_version_)
@@ -776,11 +777,12 @@ class ORTTrainer():
             if n.name not in torch_state:
                 torch_state[n.name] = torch.from_numpy(numpy_helper.to_array(n))
 
+        return torch_state
         # Need to remove redundant initializers and name suffices to map back to original torch state names
-        torch_state_to_return = {key: torch_state[key] for key in self.original_model_state_keys if key in torch_state} \
-                                if self.original_model_state_keys \
-                                else torch_state
-        return torch_state_to_return
+        #torch_state_to_return = {key: torch_state[key] for key in self.original_model_state_keys if key in torch_state} \
+        #                        if self.original_model_state_keys \
+        #                        else torch_state
+        #return torch_state_to_return
 
     def load_state_dict(self, state_dict, strict=False):
         # Note: It may happen ONNX model has not yet been initialized
@@ -810,6 +812,31 @@ class ORTTrainer():
         # load training state
         session_state = {name:state_dict[name].numpy() for name in state_dict}
         self.session.load_state(session_state, strict)
+
+    def get_initializer_tensors(self, initializer_names):
+        # extract trained weights
+        session_state = self.session.get_state()
+        torch_state = {}
+        for name in initializer_names:
+            if name in session_state:
+                torch_state[name] = torch.from_numpy(session_state[name])
+
+        # extract untrained weights and buffer
+        for n in self.onnx_model_.graph.initializer:
+            if n.name in initializer_names and n.name not in torch_state:
+                torch_state[n.name] = torch.from_numpy(numpy_helper.to_array(n))
+
+        return torch_state
+
+    def set_initializer_tensors(self, initializer_tensors):
+        # update onnx model from loaded state dict
+        cur_initializers_names = [n.name for n in self.onnx_model_.graph.initializer]
+        new_initializers = {}
+        for name in initializer_tensors:
+            new_initializers[name] = initializer_tensors[name].numpy()
+
+        self._update_onnx_model_initializers(new_initializers)
+        self.session.load_state(new_initializers, False)
 
     def save_as_onnx(self, path):
         if not self.session:
