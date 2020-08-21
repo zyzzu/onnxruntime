@@ -93,7 +93,9 @@ CastToStringData(const Tensor& in, Tensor& out, const TensorShape& shape) {
   auto output_data = out.MutableDataAsSpan<std::string>();
 
   for (int i = 0; i < len; ++i) {
-    output_data[i] = (std::ostringstream() << input_data[i]).str();
+    std::ostringstream s;
+    s << input_data[i];
+    output_data[i] = s.str();
   }
 }
 
