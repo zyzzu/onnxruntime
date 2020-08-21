@@ -3,6 +3,8 @@
 
 #pragma once
 
+#if defined(ORT_PARALLEL_EXECUTOR)
+
 #include <vector>
 #include "core/common/common.h"
 #include "core/common/status.h"
@@ -64,3 +66,5 @@ class ParallelExecutor : public IExecutor {
   onnxruntime::concurrency::ThreadPool* const executor_pool_{};
 };
 }  // namespace onnxruntime
+
+#endif

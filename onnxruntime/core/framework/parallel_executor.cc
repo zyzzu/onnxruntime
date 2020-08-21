@@ -1,6 +1,8 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
+#if defined(ORT_PARALLEL_EXECUTOR)
+
 #include "core/framework/parallel_executor.h"
 
 #include <chrono>
@@ -315,3 +317,4 @@ void ParallelExecutor::EnqueueNode(size_t p_node_index, const SessionState& sess
   });
 }
 }  // namespace onnxruntime
+#endif

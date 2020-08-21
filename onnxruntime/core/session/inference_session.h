@@ -157,7 +157,9 @@ class InferenceSession {
   // TODO: Should this just take bytes + length so gsl dependency is internal?
   Status Deserialize(const gsl::span<const uint8_t>& flexbuffer_serialized_bytes);
   Status Deserialize(const std::string& model_uri);
+#ifdef _WIN32
   Status Deserialize(const std::wstring& model_uri);
+#endif
 
   virtual ~InferenceSession();
 

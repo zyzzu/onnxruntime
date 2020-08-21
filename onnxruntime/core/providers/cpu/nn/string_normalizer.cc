@@ -80,10 +80,10 @@ const std::string default_locale("en-US");
 
 class Locale {
  public:
-  explicit Locale(const std::string& name) try : loc_(name.c_str()) {
-  } catch (const std::runtime_error& e) {
+  explicit Locale(const std::string& name) /*try*/ : loc_(name.c_str()) {
+    /*} catch (const std::runtime_error& e) {
     ORT_THROW("Failed to construct locale with name:",
-              name, ":", e.what(), ":Please, install necessary language-pack-XX and configure locales");
+              name, ":", e.what(), ":Please, install necessary language-pack-XX and configure locales");*/
   }
 
   ORT_DISALLOW_COPY_ASSIGNMENT_AND_MOVE(Locale);

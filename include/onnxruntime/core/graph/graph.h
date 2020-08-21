@@ -109,7 +109,7 @@ class Node {
   /** Gets the Node's SinceVersion.
   Allows decoupling from OpSchema for models using the ORT format with no ONNX dependencies.
   */
-  const ONNX_NAMESPACE::OperatorSetVersion SinceVersion() const noexcept { return since_version_; }
+  ONNX_NAMESPACE::OperatorSetVersion SinceVersion() const noexcept { return since_version_; }
 
   /** Gets the Node's Node::Type. */
   Node::Type NodeType() const noexcept;
@@ -255,6 +255,7 @@ class Node {
   /** Gets an iterator to the end of the output nodes from this Node. */
   NodeConstIterator OutputNodesEnd() const noexcept { return NodeConstIterator(relationships_.output_edges.cend()); }
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   /** Gets an iterator to the beginning of the input edges to this Node.
   @remarks There are no nullptr entries in this collection. */
   EdgeConstIterator InputEdgesBegin() const noexcept { return relationships_.input_edges.cbegin(); }
@@ -277,7 +278,7 @@ class Node {
 
   /** Gets the number of output edges from this Node */
   size_t GetOutputEdgesCount() const noexcept { return relationships_.output_edges.size(); }
-
+#endif
   /** Add an attribute to this Node with specified attribute name and value. */
   void AddAttribute(const std::string& attr_name, const ONNX_NAMESPACE::AttributeProto& value);
 
@@ -293,15 +294,13 @@ class Node {
   ADD_ATTR_INTERFACES(ONNX_NAMESPACE::GraphProto)
   ADD_ATTR_INTERFACES(ONNX_NAMESPACE::SparseTensorProto)
 
-#if !defined(ORT_MODEL_FORMAT_ONLY)
-  /** Remove the specified attribute from this Node */
-  bool ClearAttribute(const std::string& attr_name);
-#endif
-
   /** Gets the Node's attributes. */
   const NodeAttributes& GetAttributes() const noexcept;
 
 #if !defined(ORT_MODEL_FORMAT_ONLY)
+  /** Remove the specified attribute from this Node */
+  bool ClearAttribute(const std::string& attr_name);
+
   /** Gets the Node's mutable attributes. */
   NodeAttributes& GetMutableAttributes() noexcept;
 
@@ -505,8 +504,10 @@ class Node {
 
   ONNX_NAMESPACE::OperatorSetVersion since_version_ = -1;
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   // OperatorSchema that <*this> node refers to.
   const ONNX_NAMESPACE::OpSchema* op_ = nullptr;
+#endif
 
   Node::Type node_type_ = Node::Type::Primitive;
 
@@ -1268,8 +1269,10 @@ class Graph {
 
   bool graph_proto_sync_needed_ = false;
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
   // The topological order of node index used to do node and op match verification temporarily.
   std::vector<NodeIndex> nodes_in_topological_order_;
+#endif
 
   // Full list of graph inputs. Matches number and order of inputs in the GraphProto.
   std::vector<const NodeArg*> graph_inputs_including_initializers_;

@@ -40,5 +40,5 @@ const OrtMemoryInfo* MockedOrtAllocator::Info() const {
 
 void MockedOrtAllocator::LeakCheck() {
   if (memory_inuse.load())
-    throw std::runtime_error("memory leak!!!");
+    ORT_CXX_THROW("memory leak!!!", ORT_FAIL);
 }

@@ -18,7 +18,7 @@ void ThrowOnError(OrtStatus* status) {
     std::string ort_error_message = OrtApis::GetErrorMessage(status);
     OrtErrorCode ort_error_code = OrtApis::GetErrorCode(status);
     OrtApis::ReleaseStatus(status);
-    throw Ort::Exception(std::move(ort_error_message), ort_error_code);
+    ORT_CXX_THROW(std::move(ort_error_message), ort_error_code);
   }
 }
 

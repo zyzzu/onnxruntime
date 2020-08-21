@@ -40,7 +40,8 @@ source_group(TREE ${REPO_ROOT} FILES ${onnxruntime_optimizer_srcs})
 
 add_library(onnxruntime_optimizer ${onnxruntime_optimizer_srcs})
 if (onnxruntime_NO_TRANSFORMERS)
-set_target_properties(onnxruntime_optimizer PROPERTIES LINKER_LANGUAGE C++) 
+# This breaks the android build
+#set_target_properties(onnxruntime_optimizer PROPERTIES LINKER_LANGUAGE C++) 
 endif()
 
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/../include/onnxruntime/core/optimizer  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/onnxruntime/core)

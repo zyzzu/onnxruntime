@@ -8,7 +8,7 @@
 
 #include "core/graph/graph_viewer.h"
 
-#include "core/graph/graph_utils.h"
+// #include "core/graph/graph_utils.h"
 
 namespace onnxruntime {
 GraphViewer::GraphViewer(const Graph& graph) {
@@ -28,11 +28,13 @@ GraphViewer::GraphViewer(const Graph& graph) {
       },
       NodeCompare());
 
+#if defined(ORT_PARALLEL_EXECUTOR)
   for (auto& node : graph_->Nodes()) {
     if (node.InputEdgesBegin() == node.InputEdgesEnd()) {
       root_nodes_.push_back(node.Index());
     }
   }
+#endif
 }
 
 // Graph name.
@@ -93,9 +95,11 @@ const std::vector<NodeIndex>& GraphViewer::GetNodesInTopologicalOrder() const {
   return nodes_in_topological_order_;
 }
 
+#if defined(ORT_PARALLEL_EXECUTOR)
 const std::vector<NodeIndex>& GraphViewer::GetRootNodes() const {
   return root_nodes_;
 }
+#endif
 
 const InitializedTensorSet& GraphViewer::GetAllInitializedTensors() const noexcept {
   return graph_->GetAllInitializedTensors();

@@ -57,7 +57,7 @@ void PTestRunner::Start(ORT_CALLBACK_INSTANCE, size_t concurrent_runs) {
   next_test_to_run = 0;
   for (size_t i = 0; i != concurrent_runs; ++i) {
     if (!ScheduleNew()) {
-      throw std::runtime_error("ScheduleNew task failed");
+      ORT_THROW("ScheduleNew task failed");
     }
   }
 }

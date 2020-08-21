@@ -71,13 +71,13 @@ void* DefaultAlloc(size_t size) {
   size_t alignment = MlasGetPreferredBufferAlignment();
 #if _MSC_VER
   p = _aligned_malloc(size, alignment);
-  if (p == nullptr) throw std::bad_alloc();
+  if (p == nullptr) ORT_THROW_EX(std::bad_alloc);
 #elif defined(_LIBCPP_SGX_CONFIG)
   p = memalign(alignment, size);
-  if (p == nullptr) throw std::bad_alloc();
+  if (p == nullptr) ORT_THROW_EX(std::bad_alloc);
 #else
   int ret = posix_memalign(&p, alignment, size);
-  if (ret != 0) throw std::bad_alloc();
+  if (ret != 0) ORT_THROW_EX(std::bad_alloc);
 #endif
   return p;
 }
@@ -441,7 +441,11 @@ static common::Status ExecuteGraphImpl(const SessionState& session_state,
       LOGS(logger, WARNING) << "Only one thread was configured for parallel execution. Hence will use sequential execution.";
       p_exec = std::unique_ptr<IExecutor>(new SequentialExecutor(terminate_flag, only_execute_path_to_fetches));
     } else {
+#if defined(ORT_PARALLEL_EXECUTOR)
       p_exec = std::unique_ptr<IExecutor>(new ParallelExecutor(session_state, terminate_flag));
+#else
+      ORT_THROW("Parallel executor is not supported in this build");
+#endif
     }
   }
 

@@ -206,7 +206,7 @@ if __name__ == "__main__":
     #     ]
 
     model_paths = [
-        # r'D:\temp\law_LM\test1\law_LM.optimized.onnx',
+        r'D:\temp\law_LM\test1\law_LM.optimized.onnx',
         r'C:\Users\scmckay\Desktop\share_with_frank\testing\fluency_v2_opt.quantized.optimized.onnx'
         # r'C:\Users\scmckay\Desktop\OnnxFootprint\quantized.optimized_level2.onnx',
         # r'D:\src\github\ort.deserialize\build\Windows\Debug\Debug\testdata\ort_github_issue_4031.onnx'
@@ -216,8 +216,8 @@ if __name__ == "__main__":
     # map of domain to a list of ops used in each opset enabled for that domain
     # as we support using multiple models as input there may be multiple opsets needed for a domain
     domain_opset_ops = {}
-    for model_path in model_paths:
-        get_model_info(model_path, domain_opset_ops)
+    # for model_path in model_paths:
+    #     get_model_info(model_path, domain_opset_ops)
 
     debug = True
     if debug:

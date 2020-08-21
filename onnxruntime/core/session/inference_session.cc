@@ -14,7 +14,6 @@
 #include "core/common/logging/logging.h"
 #include "core/platform/threadpool.h"
 #include "core/graph/graph_viewer.h"
-#include "core/graph/graph_utils.h"
 #include "core/graph/model.h"
 #include "core/framework/allocatormgr.h"
 #include "core/framework/customregistry.h"
@@ -299,9 +298,21 @@ InferenceSession::InferenceSession(const SessionOptions& session_options, const 
 #endif
 
 Status InferenceSession::Deserialize(const std::string& model_uri) {
-  return Deserialize(ToWideString(model_uri));
+  size_t length = 0;
+  ORT_RETURN_IF_ERROR(Env::Default().GetFileLength(ToWideString(model_uri).c_str(), length));
+
+  std::ifstream bytes_stream(model_uri, std::ifstream::in | std::ifstream::binary);
+
+  std::vector<uint8_t> bytes;
+  bytes.resize(length);
+  bytes_stream.read(reinterpret_cast<char*>(bytes.data()), length);
+
+  auto bytes_span = gsl::make_span<std::vector<uint8_t>>(bytes);
+
+  return Deserialize(bytes_span);
 }
 
+#ifdef _WIN32
 Status InferenceSession::Deserialize(const std::wstring& model_uri) {
   size_t length = 0;
   ORT_RETURN_IF_ERROR(Env::Default().GetFileLength(model_uri.c_str(), length));
@@ -316,6 +327,7 @@ Status InferenceSession::Deserialize(const std::wstring& model_uri) {
 
   return Deserialize(bytes_span);
 }
+#endif
 
 Status InferenceSession::Deserialize(const gsl::span<const uint8_t>& flexbuffer_serialized_bytes) {
   auto root = flexbuffers::GetRoot(flexbuffer_serialized_bytes.data(), flexbuffer_serialized_bytes.size()).AsMap();

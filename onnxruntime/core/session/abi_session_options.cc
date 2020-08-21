@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 #include "core/graph/onnx_protobuf.h"
-#include "core/session/onnxruntime_c_api.h"
+#include "core/session/onnxruntime_cxx_api.h"
 #include "core/session/ort_apis.h"
 #include "core/framework/error_code_helper.h"
 #include <cstring>
@@ -13,7 +13,7 @@
 OrtSessionOptions::~OrtSessionOptions() = default;
 
 OrtSessionOptions& OrtSessionOptions::operator=(const OrtSessionOptions&) {
-  throw std::runtime_error("not implemented");
+  ORT_CXX_THROW("not implemented", ORT_FAIL);
 }
 OrtSessionOptions::OrtSessionOptions(const OrtSessionOptions& other)
     : value(other.value), provider_factories(other.provider_factories) {

@@ -22,9 +22,9 @@
 #include "core/graph/function.h"
 #include "core/graph/function_impl.h"
 #include "onnx/checker.h"
+#include "core/graph/graph_utils.h"
 #endif
 
-#include "core/graph/graph_utils.h"
 #include "core/graph/graph_viewer.h"
 #include "core/graph/indexed_sub_graph.h"
 #include "core/graph/model.h"
@@ -1590,6 +1590,9 @@ Status Graph::BuildConnections(std::unordered_set<std::string>& outer_scope_node
 }
 #endif
 
+//
+// TODO: If we serialize the execution plan we probably don't need the edges or ReverseDFSFrom code to do the topological sort
+
 void Graph::ReverseDFSFrom(const std::vector<NodeIndex>& from,
                            const std::function<void(const Node*)>& enter,
                            const std::function<void(const Node*)>& leave,
@@ -1672,7 +1675,7 @@ void Graph::ReverseDFSFrom(const std::vector<const Node*>& from,
 
 #if !defined(ORT_MODEL_FORMAT_ONLY)
 GSL_SUPPRESS(es .84)  // noisy warning about ignoring return value from insert(...)
-Status Graph::PerformTopologicalSortAndCheckIsAcyclic() {
+    Status Graph::PerformTopologicalSortAndCheckIsAcyclic() {
   nodes_in_topological_order_.clear();
   // nodes that have been processed and added to nodes_in_topological_order.
   std::unordered_set<NodeIndex> processed_nodes;
@@ -2254,7 +2257,7 @@ common::Status Graph::TypeCheckInputsAndInitializers() {
       if (nullptr == p_existing_shape) {
         // use the inferred shape if this is a constant initializer (cannot be overridden).
         // if not it has a matching graph input, and we prefer the shape info (or lack of info) from the graph input
-        if (graph_utils::IsConstantInitializer(*this, name, false)) {
+        if (IsConstantInitializer(name, false)) {
           node_arg->SetShape(inferred_shape);
         }
       } else {

@@ -100,6 +100,12 @@ void LogRuntimeError(uint32_t session_id, const common::Status& status, const ch
   ::onnxruntime::CodeLocation(__FILE__, __LINE__, __PRETTY_FUNCTION__, ::onnxruntime::GetStackTrace())
 
 #ifdef ORT_NO_EXCEPTIONS
+#define ORT_THROW_EX(ex)           \
+  do {                             \
+    std::cerr << #ex << std::endl; \
+    abort();                       \
+  } while (false)
+
 #define ORT_THROW(...)                                                                       \
   do {                                                                                       \
     std::cerr << ::onnxruntime::OnnxRuntimeException(ORT_WHERE_WITH_STACK,                   \

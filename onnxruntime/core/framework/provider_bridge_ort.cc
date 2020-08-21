@@ -4,6 +4,8 @@
 // This is the Onnxruntime side of the bridge to allow providers to be built as a DLL
 // It implements onnxruntime::ProviderHost
 
+#if !defined(ORT_MODEL_FORMAT_ONLY)
+
 #include "core/framework/data_types.h"
 #include "core/framework/allocatormgr.h"
 #include "core/providers/dnnl/dnnl_provider_factory.h"
@@ -583,3 +585,5 @@ ORT_API_STATUS_IMPL(OrtSessionOptionsAppendExecutionProvider_Dnnl, _In_ OrtSessi
   options->provider_factories.push_back(factory);
   return nullptr;
 }
+
+#endif

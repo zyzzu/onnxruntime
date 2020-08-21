@@ -562,6 +562,9 @@ Status Model::Serialize(flexbuffers::Builder& builder) const {
 
 #endif
 
+Model::Model() : model_path_{} {
+}
+
 Status Model::Deserialize(const flexbuffers::Reference& fbr,
                           const logging::Logger& logger,
                           std::unique_ptr<Model>& model) {

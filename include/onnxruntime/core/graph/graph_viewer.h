@@ -91,12 +91,14 @@ class GraphViewer {
   /** Gets the NodeIndex values for the Graph nodes, sorted into topological order. */
   const std::vector<NodeIndex>& GetNodesInTopologicalOrder() const;
 
+#if defined(ORT_PARALLEL_EXECUTOR)
   /**
   Gets the NodeIndex values for the root nodes in the Graph.
   The root nodes are the topmost nodes in the Graph that receive inputs from the Graph inputs
   and no other nodes in the Graph.
   */
   const std::vector<NodeIndex>& GetRootNodes() const;
+#endif
 
   /** Gets all tensors created from initializers. */
   const InitializedTensorSet& GetAllInitializedTensors() const noexcept;
@@ -134,7 +136,10 @@ class GraphViewer {
 
   // The NodeIndex values of the graph nodes sorted in topological order.
   std::vector<NodeIndex> nodes_in_topological_order_;
+
+#if defined(ORT_PARALLEL_EXECUTOR)
   // Graph root nodes.
   std::vector<NodeIndex> root_nodes_;
+#endif
 };
 }  // namespace onnxruntime

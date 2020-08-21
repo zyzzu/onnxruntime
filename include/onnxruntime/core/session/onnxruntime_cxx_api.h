@@ -14,14 +14,15 @@
 
 #pragma once
 #include "onnxruntime_c_api.h"
-#include <cstddef>
 #include <array>
+#include <cstddef>
+#include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <vector>
-#include <utility>
 #include <type_traits>
+#include <utility>
+#include <vector>
 
 namespace Ort {
 
@@ -77,17 +78,33 @@ ORT_DEFINE_RELEASE(Value);
 ORT_DEFINE_RELEASE(ModelMetadata);
 ORT_DEFINE_RELEASE(ThreadingOptions);
 
+#ifdef ORT_NO_EXCEPTIONS
+#define ORT_CXX_THROW(...)                   \
+  do {                                       \
+    std::cerr << Ort::Exception(__VA_ARGS__) \
+                     .what()                 \
+              << std::endl;                  \
+    abort();                                 \
+  } while (false)
+#else
+#define ORT_CXX_THROW(...) \
+  throw Ort::Exception(__VA_ARGS__)
+#endif
+
 // This is used internally by the C++ API. This is the common base class used by the wrapper objects.
 template <typename T>
 struct Base {
   Base() = default;
   Base(T* p) : p_{p} {
-    if (!p) throw Ort::Exception("Allocation failure", ORT_FAIL);
+    if (!p) {
+      // throw Ort::Exception("Allocation failure", ORT_FAIL);
+      ORT_CXX_THROW("Allocation failure", ORT_FAIL);
+    }
   }
   ~Base() { OrtRelease(p_); }
 
   operator T*() { return p_; }
-  operator const T*() const { return p_; }
+  operator const T *() const { return p_; }
 
   T* release() {
     T* p = p_;
@@ -298,7 +315,7 @@ struct AllocatorWithDefaultOptions {
   AllocatorWithDefaultOptions();
 
   operator OrtAllocator*() { return p_; }
-  operator const OrtAllocator*() const { return p_; }
+  operator const OrtAllocator *() const { return p_; }
 
   void* Alloc(size_t size);
   void Free(void* p);

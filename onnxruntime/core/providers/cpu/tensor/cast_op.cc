@@ -156,7 +156,11 @@ void CastFromStringData(const Tensor& in, Tensor& out, const TensorShape& shape)
       mutable_data[i] = std::stoull(in.Data<std::string>()[i]);
     }
   } else {
+#ifdef ORT_NO_RTTI
+    ORT_THROW("Unsupported type in cast op");
+#else
     ORT_THROW("Unsupported type in cast op: from String to ", typeid(DstType).name());
+#endif
   }
 }
 #endif

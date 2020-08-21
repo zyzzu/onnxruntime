@@ -200,10 +200,9 @@ if(onnxruntime_USE_NNAPI_BUILTIN AND onnxruntime_USE_NNAPI_DNNLIBRARY)
   message(FATAL_ERROR "Please use only one of onnxruntime_USE_NNAPI_BUILTIN, onnxruntime_USE_NNAPI_DNNLIBRARY")
 endif()
 
+set(onnxruntime_NO_EXCEPTIONS OFF)
 if(onnxruntime_ORT_MODEL_FORMAT_ONLY)
   add_compile_definitions(ORT_MODEL_FORMAT_ONLY)
-  add_compile_definitions(NO_MODEL_PROTO)
-  add_compile_definitions(NO_SCHEMA_REGISTRY)
 
   set(onnxruntime_NO_EXCEPTIONS ON)
   
@@ -229,6 +228,7 @@ endif()
 # as we (currently) only pull in data_type_utils.cc/h which doesn't throw
 if (onnxruntime_NO_EXCEPTIONS)
   add_compile_definitions("ORT_NO_EXCEPTIONS")
+
   if(MSVC)
     string(REGEX REPLACE "/EHsc" "/EHs-c-" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
     # Eigen throw_std_bad_alloc calls 'new' instead of throwing which results in a nodiscard warning.
@@ -547,10 +547,18 @@ target_include_directories(safeint_interface INTERFACE ${SAFEINT_INCLUDE_DIR})
 # throw instead of calling terminate if there's a bounds checking violation.
 # we make it through via a handler so CUDA does not complain
 # The following -DGSL macros are recognized by gsl-lite along with -Dgsl macros
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Dgsl_CONFIG_CONTRACT_VIOLATION_THROWS")
-# no bounds checking in release build so no perf cost
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DGSL_UNENFORCED_ON_CONTRACT_VIOLATION")
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -DGSL_UNENFORCED_ON_CONTRACT_VIOLATION")
+if (onnxruntime_NO_EXCEPTIONS)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGSL_TERMINATE_ON_CONTRACT_VIOLATION")
+else()
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGSL_THROW_ON_CONTRACT_VIOLATION")
+endif()
+
+# FIXME!
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Dgsl_CONFIG_CONTRACT_VIOLATION_THROWS")
+# # no bounds checking in release build so no perf cost
+# set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DGSL_UNENFORCED_ON_CONTRACT_VIOLATION")
+# set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -DGSL_UNENFORCED_ON_CONTRACT_VIOLATION")
+# set(CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL} -DGSL_UNENFORCED_ON_CONTRACT_VIOLATION")
 
 include(eigen)
 

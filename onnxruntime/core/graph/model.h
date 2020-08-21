@@ -199,8 +199,8 @@ class Model {
                             std::unique_ptr<Model>& model);
 
  private:
-  Model() = default;
-
+  // Model() = default;
+  Model();
   // Model data.
   ONNX_NAMESPACE::ModelProto model_proto_;
 

@@ -455,8 +455,12 @@ struct SetSequenceType {
   static void Set(ONNX_NAMESPACE::TypeProto& proto) {
     MLDataType dt = GetMLDataType<T, IsTensorContainedType<T>::value>::Get();
     const auto* elem_proto = dt->GetTypeProto();
+#ifdef ORT_NO_RTTI
+    ORT_ENFORCE(elem_proto != nullptr, "expected a registered ONNX type");
+#else
     ORT_ENFORCE(elem_proto != nullptr, typeid(T).name(),
                 " expected to be a registered ONNX type");
+#endif
     CopyMutableSeqElement(*elem_proto, proto);
   }
 };

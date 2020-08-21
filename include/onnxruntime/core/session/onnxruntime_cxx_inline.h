@@ -14,7 +14,8 @@ inline void ThrowOnError(const OrtApi& ort, OrtStatus* status) {
     std::string error_message = ort.GetErrorMessage(status);
     OrtErrorCode error_code = ort.GetErrorCode(status);
     ort.ReleaseStatus(status);
-    throw Ort::Exception(std::move(error_message), error_code);
+    //throw Ort::Exception(std::move(error_message), error_code);
+    ORT_CXX_THROW(std::move(error_message), error_code);
   }
 }
 
@@ -620,7 +621,7 @@ inline SessionOptions& SessionOptions::DisablePerSessionThreads() {
 
 inline std::vector<std::string> GetAvailableProviders() {
   int len;
-  char **providers;
+  char** providers;
   const OrtApi& api = GetApi();
   ThrowOnError(api.GetAvailableProviders(&providers, &len));
   std::vector<std::string> available_providers(providers, providers + len);
