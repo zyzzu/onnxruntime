@@ -486,11 +486,6 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
             prevent_stealing_ = true;
             break;
 
-            case 'z':
-            ::std::cout << " - Spin in end-of-loop barrier" << ::std::endl;
-            spin_end_of_loop_ = true;
-            break;
-
             default:
             ::std::cerr << " - Unknown option " << option << ::std::endl;
             abort();
@@ -760,7 +755,7 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
     // item.  This lets us remove any work items that do not get executed by the threads
     // that we push them to.
     std::vector<std::pair<int, unsigned>> pending_items;
-    Barrier b(n, spin_end_of_loop_ && (always_spin_ || (allow_spinning_ && !always_block_)));
+    Barrier b(n, always_spin_ || (allow_spinning_ && !always_block_));
 
     my_pt->in_parallel = true;
     if (!my_pt->tag.Get()) {

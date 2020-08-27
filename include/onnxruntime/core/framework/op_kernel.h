@@ -17,8 +17,8 @@
 #include "core/framework/sparse_tensor.h"
 #include "core/graph/constants.h"
 #include "core/graph/graph_viewer.h"
+#include "core/graph/onnx_protobuf.h"
 #include "gsl/gsl"
-#include "onnx/defs/schema.h"
 
 namespace onnxruntime {
 class IExecutionFrame;
@@ -47,6 +47,27 @@ class OpKernel {
 
   virtual Status ComputeAsync(_Inout_ OpKernelContext*, DoneCallback) const ORT_MUST_USE_RESULT {
     ORT_NOT_IMPLEMENTED(__FUNCTION__, " is not implemented");
+  }
+
+  // Override this function to PrePack initialized constant tensor to the format as needed.
+  // For example, MatMul kernel can pack the input B if it is constant like code below.
+  //   Status PrePack(const Tensor& tensor, int input_idx, bool& is_packed) override {
+  //     is_packed = false;
+  //     if (input_idx == 1) {
+  //       this.Pack(tensor, this.buffer_);
+  //       is_packed = true;
+  //     }
+  //     return Status::OK();
+  //   }
+  // Please refer to MatMulIntegerToFloatBase for a complete example
+  // @param tesnor: The initialized constant tensor
+  // @param input_idx: The input index of the tensor in this kernel
+  // @param is_packed: Set it to true if the kernel packed the tensor or to false
+  //                   The kernel is responsible keep the packed data and related metadata if is_packed is set to true
+  //                   And the original intialized constant tensor will be released and not accessible anymore in Compute function.
+  virtual Status PrePack(const Tensor& /*tensor*/, int /*input_idx*/, bool& is_packed) {
+    is_packed = false;
+    return Status::OK();
   }
 
   const OrtMemoryInfo& Allocator(int id, OrtMemType mem_type) const {
@@ -260,6 +281,8 @@ struct KernelCreateInfo {
   KernelCreateInfo(KernelCreateInfo&& other) noexcept
       : kernel_def(std::move(other.kernel_def)),
         kernel_create_func(std::move(other.kernel_create_func)) {}
+
+  KernelCreateInfo() = default;
 };
 
 using KernelCreateMap = std::multimap<std::string, KernelCreateInfo>;

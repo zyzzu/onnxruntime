@@ -7,14 +7,18 @@
 // Public License v. 2.0. If a copy of the MPL was not distributed
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+#include <assert.h>
+
 #include "core/platform/ort_mutex.h"
+
 #include <mutex>
 #include <atomic>
 
 namespace onnxruntime {
 class Barrier {
  public:
-  explicit Barrier(unsigned int count, bool spin = false) : state_(count << 1), spin_(spin), notified_(false) {
+  explicit Barrier(unsigned int count, bool spin = false)
+      : state_(count << 1), notified_(false), spin_(spin) {
     assert(((count << 1) >> 1) == count);
   }
 #ifdef NDEBUG
@@ -63,6 +67,7 @@ class Barrier {
   std::atomic<unsigned int> state_;  // low bit is waiter flag
   const bool spin_;
   bool notified_;
+  const bool spin_;
 };
 
 // Notification is an object that allows a user to to wait for another
