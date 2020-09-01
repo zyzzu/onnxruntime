@@ -7,6 +7,10 @@ parameters:
   displayName: Image Tag
   type: string
   default: latest
+- name: run_tests
+  displayName: Run Tests
+  type: boolean
+  default: true
 
 variables:
   docker_image_prefix: onnxruntime-training
@@ -48,7 +52,8 @@ jobs:
           --config ${{ variables.build_config }} \
           --test \
           --enable_onnx_tests
-      workingDirectory: $(Build.SourcesDirectory) 
+      workingDirectory: $(Build.SourcesDirectory)
+      condition: eq('$parameters.run_tests', true)
 
   - task: Docker@2
     displayName: Build entire docker file
