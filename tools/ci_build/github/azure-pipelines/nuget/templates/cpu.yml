@@ -115,8 +115,8 @@ jobs:
         addPipelineData: false
     - script: |
        set -e -x
-       find /build/linux-x64/lib64 -name \*.so -exec strip -s {} \;
-       mv /build/linux-x64/lib64 $(Build.BinariesDirectory)/linux-x64/linux-x64
+       find $(Build.BinariesDirectory)/linux-x64/lib64 -name \*.so -exec strip -s {} \;
+       mv $(Build.BinariesDirectory)/linux-x64/usr/local/lib64 $(Build.BinariesDirectory)/linux-x64/linux-x64
        cd $(Build.BinariesDirectory)/linux-x64
        zip -r linux-x64.zip linux-x64
        cp $(Build.BinariesDirectory)/linux-x64/linux*.zip $(Build.ArtifactStagingDirectory)
