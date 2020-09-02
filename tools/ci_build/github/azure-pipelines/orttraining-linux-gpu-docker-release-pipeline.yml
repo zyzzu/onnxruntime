@@ -53,7 +53,7 @@ jobs:
           --test \
           --enable_onnx_tests
       workingDirectory: $(Build.SourcesDirectory)
-      condition: eq('$parameters.run_tests', true)
+      condition: eq('${{ parameters.run_tests }}', true)
 
   - task: Docker@2
     displayName: Build entire docker file
