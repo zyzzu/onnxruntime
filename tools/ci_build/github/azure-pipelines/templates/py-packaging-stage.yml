@@ -273,7 +273,7 @@ stages:
                   --build_wheel \
                   --enable_onnx_tests \
                   ${{ parameters.build_py_parameters }} \
-                  --cmake_extra_defines PYTHON_INCLUDE_DIR=$(python.manylinux.include.dir) PYTHON_LIBRARY=/usr/lib64/librt.so CMAKE_CUDA_ARCHITECTURES="35 37 52 60 61 70 75" \
+                  --cmake_extra_defines PYTHON_INCLUDE_DIR=$(python.manylinux.include.dir) PYTHON_LIBRARY=/usr/lib64/librt.so CMAKE_CUDA_ARCHITECTURES="35;37;52;60;61;70;75" \
                   --use_cuda --cuda_version=10.1 --cuda_home=/usr/local/cuda-10.1 --cudnn_home=/usr/local/cuda-10.1
           workingDirectory: $(Build.SourcesDirectory)
 
@@ -495,7 +495,7 @@ stages:
             --use_cuda --cuda_version=$(CUDA_VERSION)
             --cuda_home="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v$(CUDA_VERSION)"
             --cudnn_home="C:\local\cudnn-$(CUDA_VERSION)-windows10-x64-v7.6.5.32\cuda"
-            --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES="35 37 52 60 61 70 75"
+            --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES="35;37;52;60;61;70;75"
             $(TelemetryOption)
           workingDirectory: '$(Build.BinariesDirectory)'
 
