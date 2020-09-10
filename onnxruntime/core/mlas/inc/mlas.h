@@ -621,6 +621,8 @@ MlasQLinearMul(
 void
 MLASCALL
 MlasQnhwcConv(
+    int64_t InputChannels,
+    int64_t OutputChannels,
     const int64_t* InputShape,
     const int64_t* KernelShape,
     const int64_t* DilationShape,
@@ -629,7 +631,7 @@ MlasQnhwcConv(
     const int64_t* OutputShape,
     const uint8_t* Input,
     uint8_t offa,
-    const int8_t* B,
-    int32_t* C,
+    const int8_t* PackedFilter,
+    int32_t* Output,
     MLAS_THREADPOOL* ThreadPool
     );

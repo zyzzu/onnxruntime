@@ -2178,20 +2178,19 @@ struct MLAS_QNHWC_CONV_WORK_BLOCK {
     size_t RangeCountM;
     size_t RangeCountN;
     size_t InputChannels;
-    size_t OutputChannels;
     size_t M;
     size_t N;
     size_t K;
     const uint8_t* Input;
     const uint8_t* PackedFilter;
-    int32_t* C;
-    int16_t offa;
+    int32_t* Output;
     size_t InputShape[2];
     size_t OutputShape[2];
     size_t KernelShape[2];
     size_t StrideShape[2];
     size_t DilationShape[2];
     size_t Padding[4];
+    uint8_t offa;
 };
 
 void
@@ -2367,7 +2366,7 @@ Return Value:
     const size_t ldc = WorkBlock->N;
 
     const uint8_t* PackedFilter = (const uint8_t*)WorkBlock->PackedFilter;
-    int32_t* C = WorkBlock->C + WorkBlock->RangeStartM * ldc + WorkBlock->RangeStartN;
+    int32_t* C = WorkBlock->Output + WorkBlock->RangeStartM * ldc + WorkBlock->RangeStartN;
 
     int32_t offa = WorkBlock->offa;
 
@@ -2602,6 +2601,8 @@ Return Value:
 void
 MLASCALL
 MlasQnhwcConv(
+    int64_t InputChannels,
+    int64_t OutputChannels,
     const int64_t* InputShape,
     const int64_t* KernelShape,
     const int64_t* DilationShape,
@@ -2611,7 +2612,7 @@ MlasQnhwcConv(
     const uint8_t* Input,
     uint8_t offa,
     const int8_t* PackedFilter,
-    int32_t* C,
+    int32_t* Output,
     MLAS_THREADPOOL* ThreadPool
     )
 /*++
@@ -2621,6 +2622,10 @@ Routine Description:
     This module implements the quantized integer NHWC convolution operation.
 
 Arguments:
+
+    InputChannels - Supplies the number of input channels.
+
+    OutputChannels - Supplies the number of output channels.
 
     InputShape - Supplies the shape of the input tensor.
 
@@ -2637,9 +2642,9 @@ Arguments:
 
     Input - Supplies the input tensor.
 
-    offa -
+    offa - Supplies the zero point offset of the input tensor.
 
-    PackedFilter -
+    PackedFilter - Supplies the address of the packed weight tensor.
 
     Output - Supplies the output tensor.
 
@@ -2658,19 +2663,18 @@ Return Value:
     // Capture the convolution parameters to the work block.
     //
 
-    WorkBlock.InputChannels = size_t(InputShape[3]);
-    WorkBlock.OutputChannels = size_t(OutputShape[3]);
-    WorkBlock.M = size_t(OutputShape[1]) * size_t(OutputShape[2]);
-    WorkBlock.N = size_t(OutputShape[3]);
-    WorkBlock.K = size_t(InputShape[3]) * size_t(KernelShape[0]) * size_t(KernelShape[1]);
+    WorkBlock.InputChannels = size_t(InputChannels);
+    WorkBlock.M = size_t(OutputShape[0]) * size_t(OutputShape[1]);
+    WorkBlock.N = size_t(OutputChannels);
+    WorkBlock.K = WorkBlock.InputChannels * size_t(KernelShape[0]) * size_t(KernelShape[1]);
     WorkBlock.Input = Input;
     WorkBlock.PackedFilter = (const uint8_t*)PackedFilter;
-    WorkBlock.C = C;
-    WorkBlock.offa = int16_t(offa);
+    WorkBlock.Output = Output;
+    WorkBlock.offa = offa;
 
     for (size_t dim = 0; dim < 2; dim++) {
-        WorkBlock.InputShape[dim] = size_t(InputShape[dim + 1]);
-        WorkBlock.OutputShape[dim] = size_t(OutputShape[dim + 1]);
+        WorkBlock.InputShape[dim] = size_t(InputShape[dim]);
+        WorkBlock.OutputShape[dim] = size_t(OutputShape[dim]);
         WorkBlock.KernelShape[dim] = size_t(KernelShape[dim]);
         WorkBlock.StrideShape[dim] = size_t(StrideShape[dim]);
         WorkBlock.DilationShape[dim] = size_t(DilationShape[dim]);

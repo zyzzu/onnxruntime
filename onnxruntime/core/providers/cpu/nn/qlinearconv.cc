@@ -500,9 +500,6 @@ Status QLinearConv<int8_t>::Compute(OpKernelContext* context) const {
   auto* transpose_output = static_cast<uint8_t*>(alloc->Alloc(SafeInt<size_t>(sizeof(uint8_t)) * Y_offset));
   BufferUniquePtr transpose_output_buffer(transpose_output, BufferDeleter(alloc));
 
-  std::vector<int64_t> x_swizzled = {X->Shape()[0], X->Shape()[2], X->Shape()[3], group_input_channels};
-  std::vector<int64_t> y_swizzled = {Y->Shape()[0], Y->Shape()[2], Y->Shape()[3], group_output_channels};
-
   BufferUniquePtr reordered_W_buffer;
   BufferUniquePtr col_buffer;
   uint8_t* reordered_W = nullptr;
@@ -542,12 +539,14 @@ Status QLinearConv<int8_t>::Compute(OpKernelContext* context) const {
       do {
 #ifdef MLAS_SUPPORTS_PACKED_GEMM_U8X8
         if (packed_W_buffer_) {
-          MlasQnhwcConv(x_swizzled.data(),
+          MlasQnhwcConv(group_input_channels,
+                        group_output_channels,
+                        input_shape.GetDims().data(),
                         kernel_shape.data(),
                         dilations.data(),
                         pads.data(),
                         strides.data(),
-                        y_swizzled.data(),
+                        output_shape.GetDims().data(),
                         transpose_input,
                         X_zero_point_value,
                         static_cast<const int8_t*>(packed_W_buffer_.get()) + group_id * packed_W_size_,
@@ -605,7 +604,7 @@ Status QLinearConv<int8_t>::Compute(OpKernelContext* context) const {
                                  Bdata != nullptr ? Bdata + group_id * group_output_channels : nullptr,
                                  static_cast<size_t>(output_image_size),
                                  static_cast<size_t>(group_output_channels),
-                                 output_scales.data(),
+                                 output_scales.data() + group_id * group_output_channels,
                                  Y_zero_point_value);
       }
 
