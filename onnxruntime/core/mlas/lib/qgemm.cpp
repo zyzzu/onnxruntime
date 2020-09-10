@@ -2231,6 +2231,8 @@ MlasGemmU8S8PackAIm2col(
     size_t zkw = (zkxy % KernelWidth);
     size_t zkh = (zkxy / KernelWidth);
 
+    const uint8_t offa = WorkBlock->offa;
+
     if (DilationHeight == 1 && DilationWidth == 1 && CountK == InputChannels * KernelHeight * KernelWidth) {
 
         for (size_t EndingM = m + CountM; m < EndingM; m++) {
@@ -2250,7 +2252,7 @@ MlasGemmU8S8PackAIm2col(
                 size_t InputX = OriginInputX - PaddingLeftX;
 
                 if (InputY >= InputHeight) {
-                    paa = std::fill_n(paa, KernelWidth * InputChannels, uint8_t(0));
+                    paa = std::fill_n(paa, KernelWidth * InputChannels, offa);
                     continue;
                 }
 
@@ -2259,7 +2261,7 @@ MlasGemmU8S8PackAIm2col(
                 while (InputX > InputWidth) {
                     InputX++;
                     kw--;
-                    paa = std::fill_n(paa, InputChannels, uint8_t(0));
+                    paa = std::fill_n(paa, InputChannels, offa);
                 }
 
                 size_t pp = std::min(kw, InputWidth - InputX);
@@ -2270,7 +2272,7 @@ MlasGemmU8S8PackAIm2col(
                 kw -= pp;
 
                 while (kw--) {
-                    paa = std::fill_n(paa, InputChannels, uint8_t(0));
+                    paa = std::fill_n(paa, InputChannels, offa);
                 }
             }
         }
@@ -2309,7 +2311,7 @@ MlasGemmU8S8PackAIm2col(
                 if (InputY < InputHeight && InputX < InputWidth) {
                     paa = std::copy_n(inputPixel, kk, paa);
                 } else {
-                    paa = std::fill_n(paa, kk, uint8_t(0));
+                    paa = std::fill_n(paa, kk, offa);
                 }
 
                 ic = 0;
