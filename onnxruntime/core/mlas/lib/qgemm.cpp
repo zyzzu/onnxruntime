@@ -2186,7 +2186,6 @@ struct MLAS_QNHWC_CONV_WORK_BLOCK {
     const uint8_t* PackedFilter;
     int32_t* C;
     int16_t offa;
-    int16_t offb;
     size_t InputShape[2];
     size_t OutputShape[2];
     size_t KernelShape[2];
@@ -2371,7 +2370,6 @@ Return Value:
     int32_t* C = WorkBlock->C + WorkBlock->RangeStartM * ldc + WorkBlock->RangeStartN;
 
     int32_t offa = WorkBlock->offa;
-    int32_t offb = typename KernelType::OffsetBType(WorkBlock->offb);
 
     std::fill_n(RowSumBuffer, Strides.M, 0);
 
@@ -2421,7 +2419,6 @@ Return Value:
             // Step through each slice of matrix A along the M dimension.
             //
 
-            const int32_t DepthValue = int32_t(CountK) * offa * offb;
             const uint8_t* b = PackedFilter + (WorkBlock->RangeStartN + n) *
                 KernelType::PackedK * PackedCountK;
             int32_t* c = C + n;
@@ -2444,8 +2441,8 @@ Return Value:
                     size_t RowsHandled;
 
                     RowsHandled = KernelType::GemmKernel(pa, b, c, PackedCountK,
-                        RowsRemaining, CountN, ldc, RowSums, ColumnSumBuffer,
-                        DepthValue, ZeroMode);
+                        RowsRemaining, CountN, ldc, RowSums, ColumnSumBuffer, 0,
+                        ZeroMode);
 
                     c += ldc * RowsHandled;
                     pa += KernelType::PackedK * PackedCountK * RowsHandled;
@@ -2614,7 +2611,6 @@ MlasQnhwcConv(
     const uint8_t* Input,
     uint8_t offa,
     const int8_t* PackedFilter,
-    uint8_t offb,
     int32_t* C,
     MLAS_THREADPOOL* ThreadPool
     )
@@ -2671,7 +2667,6 @@ Return Value:
     WorkBlock.PackedFilter = (const uint8_t*)PackedFilter;
     WorkBlock.C = C;
     WorkBlock.offa = int16_t(offa);
-    WorkBlock.offb = int16_t(offb);
 
     for (size_t dim = 0; dim < 2; dim++) {
         WorkBlock.InputShape[dim] = size_t(InputShape[dim + 1]);

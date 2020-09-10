@@ -555,7 +555,19 @@ MlasRequantizeOutputNhwc(
     const int32_t* Bias,
     size_t M,
     size_t N,
-    float Scale,
+    const float Scale,
+    uint8_t ZeroPoint
+    );
+
+void
+MLASCALL
+MlasRequantizeOutputNhwc(
+    const int32_t* Input,
+    uint8_t* Output,
+    const int32_t* Bias,
+    size_t M,
+    size_t N,
+    const float* Scale,
     uint8_t ZeroPoint
     );
 
@@ -618,7 +630,6 @@ MlasQnhwcConv(
     const uint8_t* Input,
     uint8_t offa,
     const int8_t* B,
-    uint8_t offb,
     int32_t* C,
     MLAS_THREADPOOL* ThreadPool
     );

@@ -82,17 +82,19 @@ Status QLinearConv<uint8_t>::Compute(OpKernelContext* context) const {
   std::vector<int64_t> kernel_shape;
   ORT_RETURN_IF_ERROR(conv_attrs_.ComputeKernelShape(W->Shape(), kernel_shape));
 
+  const size_t kernel_rank = kernel_shape.size();
+
   std::vector<int64_t> pads(conv_attrs_.pads);
   if (pads.empty()) {
-    pads.resize(kernel_shape.size() * 2, 0);
+    pads.resize(kernel_rank * 2, 0);
   }
   std::vector<int64_t> dilations(conv_attrs_.dilations);
   if (dilations.empty()) {
-    dilations.resize(kernel_shape.size(), 1);
+    dilations.resize(kernel_rank, 1);
   }
   std::vector<int64_t> strides(conv_attrs_.strides);
   if (strides.empty()) {
-    strides.resize(kernel_shape.size(), 1);
+    strides.resize(kernel_rank, 1);
   }
 
   std::vector<int64_t> Y_dims({N, M});
@@ -118,8 +120,6 @@ Status QLinearConv<uint8_t>::Compute(OpKernelContext* context) const {
   const int64_t kernel_dim = group_input_channels * kernel_size;
   const int64_t W_offset = W->Shape().Size() / conv_attrs_.group;
   const int64_t col_buffer_size = kernel_dim * output_image_size;
-
-  const size_t kernel_rank = kernel_shape.size();
 
   AllocatorPtr alloc;
   ORT_RETURN_IF_ERROR(context->GetTempSpaceAllocator(&alloc));
@@ -379,22 +379,34 @@ Status QLinearConv<int8_t>::Compute(OpKernelContext* context) const {
   const Tensor* W = is_W_packed_ ? nullptr : context->Input<Tensor>(3);
   const auto& W_shape = is_W_packed_ ? W_shape_ : W->Shape();
 
+  const int64_t N = X->Shape()[0];
+  const int64_t M = W_shape[0];
+
   // validate offsets
   const Tensor* X_zero_point = context->Input<Tensor>(2);
   const Tensor* W_zero_point = context->Input<Tensor>(5);
   const Tensor* Y_zero_point = context->Input<Tensor>(7);
   ORT_ENFORCE(IsScalarOr1ElementVector(X_zero_point),
               "QLinearConv : input zero point must be a scalar or 1D tensor of size 1");
-  ORT_ENFORCE(IsScalarOr1ElementVector(W_zero_point),
-              "QLinearConv : filter zero point must be a scalar or 1D tensor of size 1");
   ORT_ENFORCE(IsScalarOr1ElementVector(Y_zero_point),
               "QLinearConv : result zero point must be a scalar or 1D tensor of size 1");
 
   auto X_zero_point_value = *(X_zero_point->template Data<uint8_t>());
-  auto W_zero_point_value = *(W_zero_point->template Data<int8_t>());
   auto Y_zero_point_value = *(Y_zero_point->template Data<uint8_t>());
 
-  ORT_ENFORCE(W_zero_point_value == 0, "QLinearConv : filter zero point must be zero");
+  const auto& W_zero_point_shape = W_zero_point->Shape();
+  if (W_zero_point_shape.NumDimensions() == 0 ||
+      (W_zero_point_shape.NumDimensions() == 1 && (W_zero_point_shape[0] == 1 || W_zero_point_shape[0] == M))) {
+    const int64_t W_zero_point_size = W_zero_point_shape.Size();
+    const auto* W_zero_point_data = W_zero_point->template Data<int8_t>();
+    for (int64_t i = 0; i < W_zero_point_size; i++) {
+      if (W_zero_point_data[i] != 0) {
+        return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT, "QLinearConv : filter zero point must be zero");
+      }
+    }
+  } else {
+    return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT, "QLinearConv : filter zero point shape invalid");
+  }
 
   // validate scale
   const Tensor* X_scale = context->Input<Tensor>(1);
@@ -402,19 +414,28 @@ Status QLinearConv<int8_t>::Compute(OpKernelContext* context) const {
   const Tensor* Y_scale = context->Input<Tensor>(6);
   ORT_ENFORCE(IsScalarOr1ElementVector(X_scale),
               "QLinearConv : input scale must be a scalar or 1D tensor of size 1");
-  ORT_ENFORCE(IsScalarOr1ElementVector(W_scale),
-              "QLinearConv : filter scale must be a scalar or 1D tensor of size 1");
   ORT_ENFORCE(IsScalarOr1ElementVector(Y_scale),
               "QLinearConv : result scale must be a scalar or 1D tensor of size 1");
 
   auto X_scale_value = *(X_scale->template Data<float>());
-  auto W_scale_value = *(W_scale->template Data<float>());
   auto Y_scale_value = *(Y_scale->template Data<float>());
+
+  std::vector<float> output_scales;
+  const auto& W_scale_shape = W_scale->Shape();
+  if (W_scale_shape.NumDimensions() == 0 ||
+      (W_scale_shape.NumDimensions() == 1 && (W_scale_shape[0] == 1 || W_scale_shape[0] == M))) {
+    const int64_t W_scale_size = W_scale_shape.Size();
+    const auto* W_scale_data = W_scale->template Data<float>();
+    output_scales.reserve(static_cast<size_t>(W_scale_size));
+    for (int64_t i = 0; i < W_scale_size; i++) {
+      output_scales.push_back(X_scale_value * W_scale_data[i] / Y_scale_value);
+    }
+  } else {
+    return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT, "QLinearConv : filter scale shape invalid");
+  }
 
   const Tensor* B = context->Input<Tensor>(8);
 
-  const int64_t N = X->Shape()[0];
-  const int64_t M = W_shape[0];
   ORT_RETURN_IF_ERROR(conv_attrs_.ValidateInputShape(X->Shape(), W_shape));
 
   std::vector<int64_t> kernel_shape;
@@ -462,8 +483,6 @@ Status QLinearConv<int8_t>::Compute(OpKernelContext* context) const {
 
   AllocatorPtr alloc;
   ORT_RETURN_IF_ERROR(context->GetTempSpaceAllocator(&alloc));
-
-  const float real_multiplier = (X_scale_value * W_scale_value) / Y_scale_value;
 
   // Use an intermediate int32_t buffer for the GEMM computation before
   // requantizing to the output type.
@@ -532,7 +551,6 @@ Status QLinearConv<int8_t>::Compute(OpKernelContext* context) const {
                         transpose_input,
                         X_zero_point_value,
                         static_cast<const int8_t*>(packed_W_buffer_.get()) + group_id * packed_W_size_,
-                        W_zero_point_value,
                         gemm_output,
                         context->GetOperatorThreadPool());
           break;
@@ -565,7 +583,7 @@ Status QLinearConv<int8_t>::Compute(OpKernelContext* context) const {
                  X_zero_point_value,
                  reordered_W + group_id * group_output_channels,
                  static_cast<size_t>(M),
-                 W_zero_point_value,
+                 0,
                  true,
                  gemm_output,
                  static_cast<size_t>(group_output_channels),
@@ -573,13 +591,23 @@ Status QLinearConv<int8_t>::Compute(OpKernelContext* context) const {
 
       } while (false);
 
-      MlasRequantizeOutputNhwc(gemm_output,
-                               transpose_output,
-                               Bdata != nullptr ? Bdata + group_id * group_output_channels : nullptr,
-                               static_cast<size_t>(output_image_size),
-                               static_cast<size_t>(group_output_channels),
-                               real_multiplier,
-                               Y_zero_point_value);
+      if (output_scales.size() == 1) {
+        MlasRequantizeOutputNhwc(gemm_output,
+                                 transpose_output,
+                                 Bdata != nullptr ? Bdata + group_id * group_output_channels : nullptr,
+                                 static_cast<size_t>(output_image_size),
+                                 static_cast<size_t>(group_output_channels),
+                                 output_scales[0],
+                                 Y_zero_point_value);
+      } else {
+        MlasRequantizeOutputNhwc(gemm_output,
+                                 transpose_output,
+                                 Bdata != nullptr ? Bdata + group_id * group_output_channels : nullptr,
+                                 static_cast<size_t>(output_image_size),
+                                 static_cast<size_t>(group_output_channels),
+                                 output_scales.data(),
+                                 Y_zero_point_value);
+      }
 
       // Transpose the input from channels last (NHWC) to channels first (NCHW).
       MlasTranspose(transpose_output,
