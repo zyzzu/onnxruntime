@@ -346,7 +346,7 @@ void setup_training_params(GPT2Parameters& params) {
 #ifdef USE_CUDA
   OrtDevice::DeviceId device_id = static_cast<OrtDevice::DeviceId>(MPIContext::GetInstance().GetLocalRank());
   params.providers.emplace(kCudaExecutionProvider, CreateExecutionProviderFactory_CUDA(device_id));
-  params.input_allocator = std::make_shared<CUDAPinnedAllocator>(device_id, CUDA_PINNED);
+  params.input_allocator = std::make_shared<CUDAPinnedAllocator>(device_id, GPU_PINNED);
 #endif
 
   params.use_nccl = true;
