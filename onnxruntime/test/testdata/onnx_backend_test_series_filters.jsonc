@@ -32,7 +32,9 @@
         "^test_resize_downsample_scales_linear_align_corners", // results mismatch with onnx tests
         "^test_adam", // NOT_IMPLEMENTED : Could not find an implementation for the node Adam(1)
         "^test_adam_multiple", // NOT_IMPLEMENTED : Could not find an implementation for the node Adam(1)
-        "^test_training_dropout.*" // NOT_IMPLEMENTED : Could not find an implementation for the node Dropout(12) (Temporary, subsequent PR will add this -- we need training_mode change in the kernel)
+        "^test_training_dropout.*", // NOT_IMPLEMENTED : Could not find an implementation for the node Dropout(12) (Temporary, subsequent PR will add this -- we need training_mode change in the kernel)
+        "^test_if_seq_cpu", // NOT_IMPLEMENTED : Could not find an implementation for the node If(13)
+        "^test_loop13_seq_cpu" // NOT_IMPLEMENTED : Could not find an implementation for the node Loop(13)
     ],
     "current_failing_tests_x86": [
         "^test_vgg19",
@@ -84,9 +86,9 @@
         "^test_softmax_cross_entropy.*"
     ],
     "current_failing_tests_OPENVINO_MYRIAD": [
-         "^test_range",
-         "^test_dynamicquantizelinear",
-         "^test_operator_index"
+        "^test_range",
+        "^test_dynamicquantizelinear",
+        "^test_operator_index"
     ],
     "current_failing_tests_OPENVINO_GPU": [
         "^test_div",
@@ -160,7 +162,57 @@
         "^test_operator_mm",
         "^test_operator_non_float_params",
         "^test_operator_params",
-        "^test_operator_pow"
+        "^test_operator_pow",
+        "^test_nllloss_NC",
+        "^test_nllloss_NCd1",
+        "^test_nllloss_NCd1d2",
+        "^test_nllloss_NCd1d2d3d4d5_none_no_weight",
+        "^test_nllloss_NCd1d2d3d4d5_none_no_weight_expanded",
+        "^test_nllloss_NCd1d2d3_none_no_weight_negative_ii",
+        "^test_nllloss_NCd1d2d3_none_no_weight_negative_ii_expanded",
+        "^test_nllloss_NCd1d2d3_sum_weight_high_ii",
+        "^test_nllloss_NCd1d2d3_sum_weight_high_ii_expanded",
+        "^test_nllloss_NCd1d2_expanded",
+        "^test_nllloss_NCd1d2_reduction_mean",
+        "^test_nllloss_NCd1d2_reduction_mean_expanded",
+        "^test_nllloss_NCd1d2_reduction_sum",
+        "^test_nllloss_NCd1d2_reduction_sum_expanded",
+        "^test_nllloss_NCd1d2_with_weight_reduction_sum_ii",
+        "^test_nllloss_NCd1d2_with_weight_reduction_sum_ii_expanded",
+        "^test_nllloss_NCd1_expanded",
+        "^test_nllloss_NC_expanded",
+        "^test_sce_mean_3d",
+        "^test_sce_mean_3d_expanded",
+        "^test_sce_mean_3d_log_prob",
+        "^test_sce_mean_3d_log_prob_expanded",
+        "^test_sce_mean",
+        "^test_sce_mean_expanded",
+        "^test_sce_mean_log_prob",
+        "^test_sce_mean_log_prob_expanded",
+        "^test_sce_NCd1d2d3d4d5_mean_weight",
+        "^test_sce_NCd1d2d3d4d5_mean_weight_expanded",
+        "^test_sce_NCd1d2d3d4d5_mean_weight_log_prob",
+        "^test_sce_NCd1d2d3d4d5_mean_weight_log_prob_expanded",
+        "^test_sce_NCd1d2d3d4d5_none_no_weight",
+        "^test_sce_NCd1d2d3d4d5_none_no_weight_expanded",
+        "^test_sce_NCd1d2d3d4d5_none_no_weight_log_prob",
+        "^test_sce_NCd1d2d3d4d5_none_no_weight_log_prob_expanded",
+        "^test_sce_NCd1d2d3_none_no_weight_negative_ii",
+        "^test_sce_NCd1d2d3_none_no_weight_negative_ii_expanded",
+        "^test_sce_NCd1d2d3_none_no_weight_negative_ii_log_prob",
+        "^test_sce_NCd1d2d3_none_no_weight_negative_ii_log_prob_expanded",
+        "^test_sce_NCd1d2d3_sum_weight_high_ii",
+        "^test_sce_NCd1d2d3_sum_weight_high_ii_expanded",
+        "^test_sce_NCd1d2d3_sum_weight_high_ii_log_prob",
+        "^test_sce_NCd1d2d3_sum_weight_high_ii_log_prob_expanded",
+        "^test_sce_none",
+        "^test_sce_none_expanded",
+        "^test_sce_none_log_prob",
+        "^test_sce_none_log_prob_expanded",
+        "^test_sce_sum",
+        "^test_sce_sum_expanded",
+        "^test_sce_sum_log_prob",
+        "^test_sce_sum_log_prob_expanded"
     ],
     "unsupported_usages": [
         "^test_convtranspose_1d", // ConvTransponse supports 4-D only
