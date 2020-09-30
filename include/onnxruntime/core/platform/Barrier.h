@@ -65,7 +65,6 @@ class Barrier {
   OrtMutex mu_;
   OrtCondVar cv_;
   std::atomic<unsigned int> state_;  // low bit is waiter flag
-  const bool spin_;
   bool notified_;
   const bool spin_;
 };
