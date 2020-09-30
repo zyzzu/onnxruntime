@@ -23,11 +23,25 @@
 #include "core/graph/function.h"
 #include "gsl/gsl"
 
+namespace flatbuffers {
+class FlatBufferBuilder;
+template <typename T>
+struct Offset;
+}  // namespace flatbuffers
+
 namespace onnxruntime {
 class Graph;
 struct IndexedSubGraph;
 class Model;
 class OpSignature;
+
+namespace experimental {
+namespace fbs {
+struct Graph;
+struct Node;
+struct NodeEdge;
+}  // namespace fbs
+}  // namespace experimental
 
 /**
 @class Node
@@ -94,13 +108,21 @@ class Node {
   /** Gets the domain of the OperatorSet that specifies the operator returned by #OpType. */
   const std::string& Domain() const noexcept { return domain_; }
 
+  /** Gets the Node's exection priority. 
+  @remarks Lower value means higher priority  */
+  int Priority() const noexcept { return priority_; };
+
+  /** Sets the execution priority of a node.
+  @remarks Lower value means higher priority  */
+  void SetPriority(int priority) noexcept;
+
   /** Gets the node description. */
   const std::string& Description() const noexcept { return description_; }
 
   /** Gets the Node's Node::Type. */
   Node::Type NodeType() const noexcept { return node_type_; }
-
-  /** Gets the opset version that the Node's operator was first defined in. 
+  
+  /** Gets the opset version that the Node's operator was first defined in.
   @returns Opset version. If -1 the Node's operator has not been set.
   @remarks Prefer over Op()->SinceVersion() as Op() is disabled in a minimal build
   */
@@ -111,16 +133,16 @@ class Node {
   @remarks The graph containing this node must be resolved, otherwise nullptr will be returned. */
   const ONNX_NAMESPACE::OpSchema* Op() const noexcept { return op_; }
 
-  /** 
+  /**
   Gets the function body if applicable otherwise nullptr
   @param try_init_func_body If not already intialized, initialize the function body
   (only applicable to operators which are defined as function in ONNX spec).
-  Function body can be initialized in 2 cases : 
-  1. For nodes of type "Fused" 
+  Function body can be initialized in 2 cases :
+  1. For nodes of type "Fused"
   2. For nodes which are defined as functions in ONNX spec (example: DynamicQuantizeLinear)
   For all other cases this will always return nullptr.
-  Nodes of type "Fused" are created during partitioning and the function body 
-  initialization for such nodes also happens during node creation. Therefore, 
+  Nodes of type "Fused" are created during partitioning and the function body
+  initialization for such nodes also happens during node creation. Therefore,
   initialization of function body will happen via this method only in case 2 mentioned above.
   */
   const Function* GetFunctionBody(bool try_init_func_body = true);
@@ -298,7 +320,10 @@ class Node {
   ADD_ATTR_INTERFACES(std::string)
   ADD_ATTR_INTERFACES(ONNX_NAMESPACE::TensorProto)
   ADD_ATTR_INTERFACES(ONNX_NAMESPACE::GraphProto)
+
+#if !defined(ORT_MINIMAL_BUILD)
   ADD_ATTR_INTERFACES(ONNX_NAMESPACE::SparseTensorProto)
+#endif
 
   /** Gets the Node's attributes. */
   const NodeAttributes& GetAttributes() const noexcept { return attributes_; }
@@ -368,6 +393,21 @@ class Node {
                           to ensure the complete Graph is valid.
   */
   void ToProto(ONNX_NAMESPACE::NodeProto& proto, bool update_subgraphs = false) const;
+
+  Status SaveToOrtFormat(flatbuffers::FlatBufferBuilder& builder,
+                         flatbuffers::Offset<onnxruntime::experimental::fbs::Node>& fbs_node) const;
+
+  flatbuffers::Offset<onnxruntime::experimental::fbs::NodeEdge>
+  SaveEdgesToOrtFormat(flatbuffers::FlatBufferBuilder& builder) const;
+
+#endif
+
+#if defined(ENABLE_ORT_FORMAT_LOAD)
+  static Status LoadFromOrtFormat(const onnxruntime::experimental::fbs::Node& fbs_node, Graph& graph,
+                                  const logging::Logger& logger, std::unique_ptr<Node>& node);
+
+  Status LoadFromOrtFormat(const onnxruntime::experimental::fbs::Node& fbs_node, const logging::Logger& logger);
+  Status LoadEdgesFromOrtFormat(const onnxruntime::experimental::fbs::NodeEdge& fbs_node_edgs, const Graph& graph);
 #endif
 
   /**
@@ -488,6 +528,9 @@ class Node {
   const ONNX_NAMESPACE::OpSchema* op_ = nullptr;
 #endif
 
+  // Execution priority, lower value for higher priority
+  int priority_ = 0;
+
   // set from op_->SinceVersion() or via deserialization when OpSchema is not available
   int since_version_ = -1;
 
@@ -578,10 +621,11 @@ class Graph {
   /** Returns true if an initializer value can be overridden by a graph input with the same name. */
   bool CanOverrideInitializer() const noexcept { return ir_version_ >= 4; }
 
-  /** returns the initializer's TensorProto if 'name' is an initializer, is constant and 
+  /** returns the initializer's TensorProto if 'name' is an initializer, is constant and
   cannot be overridden at runtime. If the initializer is not found or is not constant, a nullptr is returned.
-  @param check_outer_scope If true and the graph is a subgraph, 
+  @param check_outer_scope If true and the graph is a subgraph,
          check ancestor graph/s for 'name' if not found in 'graph'.
+  @remarks check_outer_scope of true is not supported in a minimal build
   */
   const ONNX_NAMESPACE::TensorProto* GetConstantInitializer(const std::string& name, bool check_outer_scope) const;
 
@@ -681,6 +725,9 @@ class Graph {
   const NodeArg* GetNodeArg(const std::string& name) const {
     return const_cast<Graph*>(this)->GetNodeArg(name);
   }
+
+  // search this and up through any parent_graph_ instance for a NodeArg
+  NodeArg* GetNodeArgIncludingParentGraphs(const std::string& node_arg_name);
 
   /** Gets a mutable NodeArg by name. Creates a new NodeArg that is owned by this Graph if not found.
   @param name The NodeArg name.
@@ -827,6 +874,13 @@ class Graph {
                       const std::function<bool(const Node*, const Node*)>& comp,
                       const std::function<bool(const Node*, const Node*)>& stop) const;
 
+  /** Performs topological sort with Kahn's algorithm on the graph/s.
+  @param enter Visit function that will be invoked on a node when it is visited.
+  @param comp Comparison function to stabilize the traversal order by making Node ordering deterministic.
+  */
+  void KahnsTopologicalSort(const std::function<void(const Node*)>& enter,
+                            const std::function<bool(const Node*, const Node*)>& comp) const;
+
   /** Gets the map of operator domains to their opset versions. */
   const std::unordered_map<std::string, int>& DomainToVersionMap() const noexcept {
     return domain_to_version_;
@@ -965,6 +1019,9 @@ class Graph {
     return Resolve(default_options);
   }
 
+  common::Status SaveToOrtFormat(flatbuffers::FlatBufferBuilder& builder,
+                                 flatbuffers::Offset<onnxruntime::experimental::fbs::Graph>& fbs_graph) const;
+
 #endif  // !defined(ORT_MINIMAL_BUILD)
 
   /** Returns the Node containing the GraphProto for this Graph instance if IsSubgraph is true */
@@ -972,7 +1029,13 @@ class Graph {
 
   /** Returns true if the name is for a value that is coming from outer scope */
   bool IsOuterScopeValue(const std::string& name) const {
+#if !defined(ORT_MINIMAL_BUILD)
     return resolve_context_.outer_scope_node_args.find(name) != resolve_context_.outer_scope_node_args.cend();
+#else
+    // we shouldn't have code that calls this in a minimal build
+    ORT_UNUSED_PARAMETER(name);
+    ORT_THROW("Internal error. Outer scope value lookup is not currently supported in a minimal build.");
+#endif
   }
 
 #if !defined(ORT_MINIMAL_BUILD)
@@ -987,6 +1050,17 @@ class Graph {
 
   virtual ~Graph();
 
+#if defined(ENABLE_ORT_FORMAT_LOAD)
+  static common::Status LoadFromOrtFormat(
+      const onnxruntime::experimental::fbs::Graph& fbs_graph, const Model& owning_model,
+      const std::unordered_map<std::string, int>& domain_to_version,
+      const logging::Logger& logger, std::unique_ptr<Graph>& graph);
+
+  // deserialize a subgraph
+  static Status LoadFromOrtFormat(const onnxruntime::experimental::fbs::Graph& fbs_graph,
+                                  Graph& parent_graph, const Node& parent_node,
+                                  const logging::Logger& logger, std::unique_ptr<Graph>& graph);
+#endif
  private:
   ORT_DISALLOW_COPY_ASSIGNMENT_AND_MOVE(Graph);
 
@@ -995,6 +1069,17 @@ class Graph {
   friend class Model;
 
   Graph() = delete;
+
+  // Create empty Graph instance to re-create from ORT format serialized data.
+  Graph(const Model& owning_model,
+        const std::unordered_map<std::string, int>& domain_to_version,
+        Graph* parent_graph, const Node* parent_node,
+        const logging::Logger& logger);
+
+#if defined(ENABLE_ORT_FORMAT_LOAD)
+  // Populate Graph instance from ORT format serialized data.
+  common::Status LoadFromOrtFormat(const onnxruntime::experimental::fbs::Graph& fbs_graph);
+#endif
 
 #if !defined(ORT_MINIMAL_BUILD)
   // Constructor: Given a <GraphProto> loaded from model file, construct
@@ -1063,9 +1148,6 @@ class Graph {
    private:
     ORT_DISALLOW_COPY_ASSIGNMENT_AND_MOVE(ResolveContext);
   };
-
-  // search this and up through any parent_graph_ instance for a NodeArg
-  NodeArg* GetNodeArgIncludingParentGraphs(const std::string& node_arg_name);
 
   // Initialize all the graph inputs, initializers and outputs
   common::Status InitInputsInitializersOutputs();
@@ -1178,6 +1260,9 @@ class Graph {
   // it's consistent with <*this> graph.
   // This pointer is owned by parent model.
   ONNX_NAMESPACE::GraphProto* graph_proto_;
+
+  // GraphProto that provides storage for the ONNX proto types deserialized from a flexbuffer/flatbuffer
+  ONNX_NAMESPACE::GraphProto deserialized_proto_data_;
 
   InitializedTensorSet name_to_initial_tensor_;
 

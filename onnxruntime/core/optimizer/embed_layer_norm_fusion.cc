@@ -65,18 +65,6 @@ static bool CheckInput(NodeArg* input, const logging::Logger& logger) {
   return true;
 }
 
-static void AddNodes(std::vector<NodeIndex>& node_indices,
-                     const std::vector<const Node::EdgeEnd*>& edges) {
-  for (size_t i = 0; i < edges.size(); i++) {
-    auto item = edges[i]->GetNode().Index();
-    // Avoid duplication.
-    if (std::find(node_indices.begin(), node_indices.end(), item) != node_indices.end()) {
-      continue;
-    }
-    node_indices.push_back(item);
-  }
-}
-
 static bool IsNeighborNodeExpectedTypes(Node::NodeConstIterator start, const Node::NodeConstIterator end, const std::vector<std::string>& expected_types) {
   for (const std::string& expected_type : expected_types) {
     if (start == end || (*start).OpType().compare(expected_type) != 0) {
@@ -111,6 +99,8 @@ static bool IsNeighborNodeExpectedTypes(Node::NodeConstIterator start, const Nod
 
  The Expand and Gather on the bottom will not be added to subgraph_node_indices.
  It is because they are matched as part of other subgraph.
+
+ Two Shape nodes may merge into one.
 */
 
 static bool MatchInputToConcatSubgraph(
@@ -119,9 +109,7 @@ static bool MatchInputToConcatSubgraph(
     const NodeArg* input_ids,
     const int index,
     const logging::Logger& logger,
-    std::vector<NodeIndex>& subgraph_node_indices,
     const NodeIndex expected_gather_node_1_index) {
-  subgraph_node_indices.clear();
   std::vector<graph_utils::EdgeEndToMatch> expand_parent_path1{
       {0, index, "Concat", {4, 11}, kOnnxDomain},
       {0, 0, "Unsqueeze", {1, 11}, kOnnxDomain},
@@ -134,8 +122,14 @@ static bool MatchInputToConcatSubgraph(
     DEBUG_LOG("Failed to find path 1 of position shape.");
     return false;
   }
+  const size_t shape_index = edges.size() - 1;
   for (size_t i = 0; i < edges.size(); i++) {
     if (!optimizer_utils::CheckOutputEdges(graph, edges[i]->GetNode(), 1)) {
+      // Shape may have multiple outputs due to shape integration
+      // So check it later
+      if (i == shape_index) {
+        continue;
+      }
       DEBUG_LOG("Output edge count not expected for nodes in path 1 of position shape.");
       return false;
     }
@@ -149,8 +143,6 @@ static bool MatchInputToConcatSubgraph(
     return false;
   }
 
-  AddNodes(subgraph_node_indices, edges);
-
   std::vector<graph_utils::EdgeEndToMatch> concat_parent_path{
       {0, 1, "Unsqueeze", {1, 11}, kOnnxDomain},
       {0, 0, "Gather", {1, 11}, kOnnxDomain},
@@ -161,9 +153,10 @@ static bool MatchInputToConcatSubgraph(
     return false;
   }
 
+  // Shape may have multiple outputs due to shape integration
+  // Check it later
   if (!optimizer_utils::CheckOutputEdges(graph, edges[0]->GetNode(), 1) ||
-      !optimizer_utils::CheckOutputEdges(graph, edges[1]->GetNode(), 2) ||
-      !optimizer_utils::CheckOutputEdges(graph, edges[2]->GetNode(), 1)) {
+      !optimizer_utils::CheckOutputEdges(graph, edges[1]->GetNode(), 2)) {
     DEBUG_LOG("Output edge count not expected for nodes in path 2 of position shape.");
     return false;
   }
@@ -189,7 +182,19 @@ static bool MatchInputToConcatSubgraph(
     return false;
   }
 
-  AddNodes(subgraph_node_indices, edges);
+  // Check if shape have more than one output, it may due to shape integration
+  // We check if they share the same node
+  if (!optimizer_utils::CheckOutputEdges(graph, shape_node_0, 1) ||
+      !optimizer_utils::CheckOutputEdges(graph, shape_node_1, 1)) {
+    if (shape_node_0.Index() == shape_node_1.Index() &&
+        (shape_node_0.GetOutputEdgesCount() == 2 ||
+         shape_node_0.GetOutputEdgesCount() == 4)) {
+      DEBUG_LOG("two paths share the same shape");
+    } else {
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -210,14 +215,13 @@ static bool MatchInputToConcatSubgraph(
  * Note that position gather node is the node in the bottom of above sub-graph.
  * Paths in ^^ are alternative path to be matched if path input_ids -> Shape -> Expand -> Gather is not found.
  * Path in ** is an alternative path to check.
+ * Two shape node may merge into one
  */
 static bool MatchPositionEmbeddingSubgraphsFromGather(
     Graph& graph,
     const Node& position_gather_node,
     const NodeArg* input_ids,
-    const logging::Logger& logger,
-    std::vector<NodeIndex>& subgraph_node_indices) {
-  subgraph_node_indices.clear();
+    const logging::Logger& logger) {
   std::vector<const Node::EdgeEnd*> pg_edges;
   // Look for Path 1:
   // Shape --> Gather --> Unsqueeze --> ConstantOfShape --> NonZero --> Transpose --> Squeeze
@@ -268,10 +272,17 @@ static bool MatchPositionEmbeddingSubgraphsFromGather(
     return false;
   }
   const size_t gather_index = pg_edges.size() - 2;
+  const size_t shape_index = pg_edges.size() - 1;
   // All nodes in Path 1 must have only 1 output edge, except the gather node allowed 1 or 2 output edges
+  // And shape node allowed multiple output edges due to shape integration
   for (size_t i = 0; i < pg_edges.size(); i++) {
     if (!optimizer_utils::CheckOutputEdges(graph, pg_edges[i]->GetNode(), 1)) {
       if (i == gather_index && optimizer_utils::CheckOutputEdges(graph, pg_edges[i]->GetNode(), 2)) {
+        continue;
+      }
+      if (i == shape_index &&
+          (optimizer_utils::CheckOutputEdges(graph, pg_edges[i]->GetNode(), 2) ||
+           optimizer_utils::CheckOutputEdges(graph, pg_edges[i]->GetNode(), 4))) {
         continue;
       }
       DEBUG_LOG("Output edge count not expected for nodes in path1.");
@@ -318,8 +329,6 @@ static bool MatchPositionEmbeddingSubgraphsFromGather(
       DEBUG_LOG("The parent of shape nodes are expected to be input_ids.");
       return false;
     }
-
-    subgraph_node_indices.push_back(shape_node_index);
   } else {  // gather_output_edges_count == 2
     // Match optional Reshape -> Equal -> Where -> Expand
     //                  |                  |
@@ -343,19 +352,16 @@ static bool MatchPositionEmbeddingSubgraphsFromGather(
         return false;
       }
       // Match [input_ids] -> Gather -> Shape -> Unsqueeze from Reshape node.
-      if (!MatchInputToConcatSubgraph(graph, reshape_node, input_ids, 0, logger, subgraph_node_indices, gather_node.Index())) {
+      if (!MatchInputToConcatSubgraph(graph, reshape_node, input_ids, 0, logger, gather_node.Index())) {
         DEBUG_LOG("Failed to match position subgraph.");
         return false;
       }
-      AddNodes(subgraph_node_indices, pg_edges_2);
-    } else if (!MatchInputToConcatSubgraph(graph, expand_node, input_ids, 1, logger, subgraph_node_indices, gather_node.Index())) {
+    } else if (!MatchInputToConcatSubgraph(graph, expand_node, input_ids, 1, logger, gather_node.Index())) {
       // Match [input_ids] -> Gather -> Shape -> Unsqueeze from Expand node.
       DEBUG_LOG("Failed to match position subgraph.");
       return false;
     }
   }
-
-  AddNodes(subgraph_node_indices, pg_edges);
 
   return true;
 }
@@ -408,11 +414,12 @@ static bool MatchPositionEmbeddingSubgraph(
       }
     }
   } else {
-    if (!MatchPositionEmbeddingSubgraphsFromGather(graph, position_gather_node, input_ids, logger, subgraph_node_indices)) {
+    if (!MatchPositionEmbeddingSubgraphsFromGather(graph, position_gather_node, input_ids, logger)) {
       return false;
     }
   }
 
+  subgraph_node_indices.clear();
   subgraph_node_indices.push_back(position_gather_node.Index());
   return true;
 }
@@ -477,15 +484,12 @@ static void CreateEmbedLayernormNode(Graph& graph,
                                      NodeArg* word_embedding,
                                      NodeArg* position_embedding,
                                      NodeArg* segment_embedding,
-                                     NodeArg* mask,
-                                     Node& layer_norm_node,
-                                     Node& reduce_sum_node) {
-  // Cast input_ids, segment_ids, and mask to int32 if needed.
+                                     Node& layer_norm_node) {
+  // Cast input_ids and segment_ids to int32 if needed.
   input_ids = CastToInt32(graph, input_ids, layer_norm_node.GetExecutionProviderType());
   if (segment_ids != nullptr && segment_embedding != nullptr) {
     segment_ids = CastToInt32(graph, segment_ids, layer_norm_node.GetExecutionProviderType());
   }
-  mask = CastToInt32(graph, mask, layer_norm_node.GetExecutionProviderType());
 
   NodeArg place_holder("", nullptr);
   if (segment_ids == nullptr && segment_embedding == nullptr) {
@@ -500,14 +504,15 @@ static void CreateEmbedLayernormNode(Graph& graph,
       position_embedding,
       segment_embedding,
       layer_norm_node.MutableInputDefs()[1],
-      layer_norm_node.MutableInputDefs()[2],
-      mask};
+      layer_norm_node.MutableInputDefs()[2]};
+
+  auto& mask_index = graph.GetOrCreateNodeArg(graph.GenerateNodeArgName("mask_index"), nullptr);
 
   Node& embed_layer_norm_node = graph.AddNode(graph.GenerateNodeName("EmbedLayerNormalization"),
                                               "EmbedLayerNormalization",
                                               "fused EmbedLayerNorm subgraphs ",
                                               embed_layer_norm_input_defs,
-                                              {layer_norm_node.MutableOutputDefs()[0], reduce_sum_node.MutableOutputDefs()[0]},
+                                              {layer_norm_node.MutableOutputDefs()[0], &mask_index},
                                               {}, kMSDomain);
 
   // Get attribute "epsilon" from "LayerNormalization" node if available. Else, default value
@@ -527,7 +532,7 @@ static void CreateEmbedLayernormNode(Graph& graph,
 static bool FuseSubGraph(Graph& graph,
                          Node& layer_norm_add_node,
                          Node& layer_norm_node,
-                         Node& reduce_sum_node,
+
                          bool& modified,
                          const logging::Logger& logger) {
   // Trace back to find the Gather for segment embedding.
@@ -654,21 +659,9 @@ static bool FuseSubGraph(Graph& graph,
     return false;
   }
 
-  // Get input "mask" from "ReduceSum" node.
-  NodeArg* mask = reduce_sum_node.MutableInputDefs()[0];
-  if (!CheckInput(mask, logger)) {
-    DEBUG_LOG("Mask is not valid. ");
-    return false;
-  }
-
   if (utils::GetTensorShapeFromTensorShapeProto(*(input_ids->Shape())) !=
       utils::GetTensorShapeFromTensorShapeProto(*(segment_ids->Shape()))) {
     DEBUG_LOG("Input_ids and segment id should have the same shape. ");
-    return false;
-  }
-  if (utils::GetTensorShapeFromTensorShapeProto(*(input_ids->Shape())) !=
-      utils::GetTensorShapeFromTensorShapeProto(*(mask->Shape()))) {
-    DEBUG_LOG("Input_ids and mask should have the same shape. ");
     return false;
   }
 
@@ -685,16 +678,22 @@ static bool FuseSubGraph(Graph& graph,
   }
 
   CreateEmbedLayernormNode(graph, input_ids, segment_ids, word_embedding, position_embedding, segment_embedding,
-                           mask, layer_norm_node, reduce_sum_node);
+                           layer_norm_node);
+
+  if (!nodes_to_remove.empty()) {
+    graph_utils::RemoveNodesWithOneOutputBottomUp(graph, *graph.GetNode(nodes_to_remove[0]));
+  }
+
+  nodes_to_remove.clear();
 
   nodes_to_remove.push_back(word_gather_node.Index());
   nodes_to_remove.push_back(segment_gather_node.Index());
   nodes_to_remove.push_back(add_node.Index());
-  nodes_to_remove.push_back(reduce_sum_node.Index());
+
   nodes_to_remove.push_back(layer_norm_add_node.Index());
   nodes_to_remove.push_back(layer_norm_node.Index());
 
-  for (const auto& index : nodes_to_remove) {
+  for (const NodeIndex index : nodes_to_remove) {
     Node* node = graph.GetNode(index);
     graph_utils::RemoveNodeOutputEdges(graph, *node);
     graph.RemoveNode(node->Index());
@@ -707,7 +706,6 @@ static bool FuseSubGraph(Graph& graph,
 static bool FuseSubGraphDistilBert(Graph& graph,
                                    Node& layer_norm_add_node,
                                    Node& layer_norm_node,
-                                   Node& reduce_sum_node,
                                    const logging::Logger& logger) {
   std::vector<graph_utils::EdgeEndToMatch> word_embedding_path{
       {0, 0, "Gather", {1, 11, 13}, kOnnxDomain}};
@@ -763,19 +761,6 @@ static bool FuseSubGraphDistilBert(Graph& graph,
     return false;
   }
 
-  // Get input "mask" from "ReduceSum" node.
-  NodeArg* mask = reduce_sum_node.MutableInputDefs()[0];
-  if (!CheckInput(mask, logger)) {
-    DEBUG_LOG("Mask is not valid. ");
-    return false;
-  }
-
-  if (utils::GetTensorShapeFromTensorShapeProto(*(input_ids->Shape())) !=
-      utils::GetTensorShapeFromTensorShapeProto(*(mask->Shape()))) {
-    DEBUG_LOG("Input_ids and mask should have the same shape. ");
-    return false;
-  }
-
   NodeArg* gamma = layer_norm_node.MutableInputDefs()[1];
   NodeArg* beta = layer_norm_node.MutableInputDefs()[2];
   if (gamma->Shape() == nullptr || gamma->Shape()->dim()[0].dim_value() != hidden_size) {
@@ -789,14 +774,20 @@ static bool FuseSubGraphDistilBert(Graph& graph,
   }
 
   CreateEmbedLayernormNode(graph, input_ids, nullptr, word_embedding, position_embedding, nullptr,
-                           mask, layer_norm_node, reduce_sum_node);
+                           layer_norm_node);
+
+  if (!nodes_to_remove.empty()) {
+    graph_utils::RemoveNodesWithOneOutputBottomUp(graph, *graph.GetNode(nodes_to_remove[0]));
+  }
+
+  nodes_to_remove.clear();
 
   nodes_to_remove.push_back(word_gather_node.Index());
   nodes_to_remove.push_back(add_node.Index());
-  nodes_to_remove.push_back(reduce_sum_node.Index());
+
   nodes_to_remove.push_back(layer_norm_node.Index());
 
-  for (const auto& index : nodes_to_remove) {
+  for (const NodeIndex index : nodes_to_remove) {
     Node* node = graph.GetNode(index);
     graph_utils::RemoveNodeOutputEdges(graph, *node);
     graph.RemoveNode(node->Index());
@@ -805,7 +796,7 @@ static bool FuseSubGraphDistilBert(Graph& graph,
   return true;
 }
 /**
-Embed Layer Normalization will fuse embeddings and mask processing into one node :
+Embed Layer Normalization will fuse embeddings into one node :
 The embeddings before conversion:
   (input_ids) -------->  Gather ---------+       (segment_ids)
     |                                    |           |
@@ -842,12 +833,7 @@ Status EmbedLayerNormFusion::ApplyImpl(Graph& graph, bool& modified, int graph_l
         !graph_utils::IsSupportedProvider(attention_node, GetCompatibleExecutionProviders())) {
       continue;
     }
-    // Find ReduceSum --> Attention
     std::vector<const Node::EdgeEnd*> edges;
-    if (!graph_utils::FindPath(attention_node, true, {{0, 3, "ReduceSum", {1, 11, 13}, kOnnxDomain}}, edges, logger)) {
-      continue;
-    }
-    Node& reduce_sum_node = *graph.GetNode(edges[0]->GetNode().Index());
 
     // Find Add --> LayerNormalization
     if (!graph_utils::FindPath(layer_norm_node, true, {{0, 0, "Add", {7, 13}, kOnnxDomain}}, edges, logger)) {
@@ -857,11 +843,11 @@ Status EmbedLayerNormFusion::ApplyImpl(Graph& graph, bool& modified, int graph_l
 
     if (IsNeighborNodeExpectedTypes(layer_norm_add_node.InputEdgesBegin(), layer_norm_add_node.InputNodesEnd(), {"Gather", "Gather"})) {
       //DistilBert
-      if (FuseSubGraphDistilBert(graph, layer_norm_add_node, layer_norm_node, reduce_sum_node, logger)) {
+      if (FuseSubGraphDistilBert(graph, layer_norm_add_node, layer_norm_node, logger)) {
         modified = true;
       }
     } else {
-      if (FuseSubGraph(graph, layer_norm_add_node, layer_norm_node, reduce_sum_node, modified, logger)) {
+      if (FuseSubGraph(graph, layer_norm_add_node, layer_norm_node, modified, logger)) {
         modified = true;
       }
     }

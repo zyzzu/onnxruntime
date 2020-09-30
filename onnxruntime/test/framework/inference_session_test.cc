@@ -96,13 +96,11 @@ KernelRegistryAndStatus GetFusedKernelRegistry() {
 class FuseExecutionProvider : public IExecutionProvider {
  public:
   explicit FuseExecutionProvider() : IExecutionProvider{kFuseExecutionProvider} {
-    DeviceAllocatorRegistrationInfo device_info(
-        {OrtMemTypeDefault,
-         [](int) {
-           return onnxruntime::make_unique<CPUAllocator>(OrtMemoryInfo("Fuse", OrtAllocatorType::OrtDeviceAllocator));
-         },
-         std::numeric_limits<size_t>::max()});
-    InsertAllocator(device_info.factory(0));
+    AllocatorCreationInfo device_info{
+        [](int) {
+          return onnxruntime::make_unique<CPUAllocator>(OrtMemoryInfo("Fuse", OrtAllocatorType::OrtDeviceAllocator));
+        }};
+    InsertAllocator(device_info.device_alloc_factory(0));
   }
 
   std::vector<std::unique_ptr<ComputeCapability>>
@@ -668,6 +666,29 @@ TEST(InferenceSessionTests, CheckRunProfilerWithStartProfile) {
     }
     count++;
   }
+}
+
+TEST(InferenceSessionTests, CheckRunProfilerStartTime) {
+  // Test whether the InferenceSession can access the profiler's start time
+  SessionOptions so;
+
+  so.session_logid = "CheckRunProfiler";
+  so.enable_profiling = true;
+  so.profile_file_prefix = ORT_TSTR("onnxprofile_profile_test");
+
+  InferenceSession session_object(so, GetEnvironment());
+  ASSERT_STATUS_OK(session_object.Load(MODEL_URI));
+  ASSERT_STATUS_OK(session_object.Initialize());
+
+  uint64_t before_start_time = std::chrono::duration_cast<std::chrono::nanoseconds>(
+      std::chrono::high_resolution_clock::now().time_since_epoch()).count(); // get current time
+  session_object.StartProfiling("onnxruntime_profile_start");
+  uint64_t profiling_start_time = session_object.GetProfiling().GetStartTime();
+  uint64_t after_start_time = std::chrono::duration_cast<std::chrono::nanoseconds>(
+      std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+
+  // the profiler's start time needs to be between before_time and after_time
+  ASSERT_TRUE(before_start_time <= profiling_start_time && profiling_start_time <= after_start_time);
 }
 
 TEST(InferenceSessionTests, MultipleSessionsNoTimeout) {
@@ -1869,7 +1890,13 @@ TEST(InferenceSessionTests, TestParallelExecutionWithCudaProvider) {
 
   auto status = session_object.Initialize();
 
-  ASSERT_TRUE(!status.IsOK());
+  ASSERT_TRUE(status.IsOK());
+
+  const auto& so_queried = session_object.GetSessionOptions();
+
+  // execution mode is sequential since we have registered the CUDA EP
+  // (which isn't supported by the parallel execution mode)
+  ASSERT_TRUE(so_queried.execution_mode == ExecutionMode::ORT_SEQUENTIAL);
 }
 
 #endif
@@ -2013,18 +2040,21 @@ TEST(InferenceSessionTests, LoadModelWithInValidOrtConfigJson) {
   std::string model_path = "testdata/model_with_invalid_ort_config_json.onnx";
 
   // Create session (should throw as the json within the model is invalid/improperly formed)
-  try {
+  ORT_TRY {
     InferenceSession session_object_1{so, GetEnvironment(), model_path};
-  } catch (const std::exception& e) {
-    std::string e_message(std::string(e.what()));
-    ASSERT_TRUE(e_message.find("Could not finalize session options while constructing the inference session. Error Message:") != std::string::npos);
-    ASSERT_TRUE(e_message.find("Json stored in the `ort_config` key cannot be parsed.") != std::string::npos);
+  }
+  ORT_CATCH(const std::exception& e) {
+    ORT_HANDLE_EXCEPTION([&e]() {
+      std::string e_message(std::string(e.what()));
+      ASSERT_TRUE(e_message.find("Could not finalize session options while constructing the inference session. Error Message:") != std::string::npos);
+      ASSERT_TRUE(e_message.find("Json stored in the `ort_config` key cannot be parsed.") != std::string::npos);
+    });
   }
 
   // Part 2 - Load config from model feature disabled
   // The invalid/improperly formed config json in the model should not come into the picture here
 #ifdef _WIN32
-  (void)_putenv(ort_load_config_from_model_env_var_disabled);
+  ORT_IGNORE_RETURN_VALUE(_putenv(ort_load_config_from_model_env_var_disabled));
 #else
   putenv(ort_load_config_from_model_env_var_disabled);
 #endif
@@ -2107,30 +2137,42 @@ TEST(InferenceSessionTests, LoadModelWithEnvVarSetToUnsupportedVal) {
   std::string model_path = "testdata/model_with_valid_ort_config_json.onnx";
 
   // Create session (should throw because of the unsupported value for the env var - ORT_LOAD_CONFIG_FROM_MODEL)
-  try {
+  ORT_TRY {
     InferenceSession session_object_1{so, GetEnvironment(), model_path};
-  } catch (const std::exception& e) {
-    std::string e_message(std::string(e.what()));
-    ASSERT_TRUE(e_message.find("Could not finalize session options while constructing the inference session. Error Message:") != std::string::npos);
-    ASSERT_TRUE(e_message.find("The only supported values for the environment variable ") != std::string::npos);
-    ASSERT_TRUE(e_message.find("The environment variable contained the value: 10") != std::string::npos);
+  }
+  ORT_CATCH(const std::exception& e) {
+    ORT_HANDLE_EXCEPTION([&e]() {
+      std::string e_message(std::string(e.what()));
+      ASSERT_TRUE(e_message.find("Could not finalize session options while constructing the inference session. Error Message:") != std::string::npos);
+      ASSERT_TRUE(e_message.find("The only supported values for the environment variable ") != std::string::npos);
+      ASSERT_TRUE(e_message.find("The environment variable contained the value: 10") != std::string::npos);
+    });
   }
 
   // Disable the feature before exiting the test as this process is likely to be used for running other tests
 #ifdef _WIN32
-  (void)_putenv(ort_load_config_from_model_env_var_disabled);
+  (void)
+      _putenv(ort_load_config_from_model_env_var_disabled);
 #else
   putenv(ort_load_config_from_model_env_var_disabled);
 #endif
 }
 
+struct InferenceSessionExposingSessionState : public InferenceSession {
+  InferenceSessionExposingSessionState(const SessionOptions& session_options,
+                                       const Environment& env)
+      : InferenceSession(session_options, env) {
+  }
+  const SessionState& GetSessionState() const { return InferenceSession::GetSessionState(); }
+};
+
 // Global threadpool related tests
 // We test for 4 combinations
-class InferenceSessionTestGlobalThreadPools : public InferenceSession {
+class InferenceSessionTestGlobalThreadPools : public InferenceSessionExposingSessionState {
  public:
   InferenceSessionTestGlobalThreadPools(const SessionOptions& session_options,
                                         const Environment& env)
-      : InferenceSession(session_options, env) {
+      : InferenceSessionExposingSessionState(session_options, env) {
   }
 
   onnxruntime::concurrency::ThreadPool* GetIntraOpThreadPoolToUse() const {
@@ -2140,8 +2182,6 @@ class InferenceSessionTestGlobalThreadPools : public InferenceSession {
   onnxruntime::concurrency::ThreadPool* GetInterOpThreadPoolToUse() const {
     return InferenceSession::GetInterOpThreadPoolToUse();
   }
-
-  const SessionState& GetSessionState() { return InferenceSession::GetSessionState(); }
 };
 
 // Test 1: env created WITHOUT global tp / use per session tp (default case): in this case per session tps should be in use
@@ -2282,26 +2322,27 @@ TEST(InferenceSessionTests, InvalidSessionEnvCombination) {
   auto st = Environment::Create(std::move(logging_manager), env);
   ASSERT_TRUE(st.IsOK());
 
-  try {
+  ORT_TRY {
     InferenceSessionTestGlobalThreadPools session_object{so, *env.get()};
-  } catch (const std::exception& e) {
-    std::string e_message(std::string(e.what()));
-    ASSERT_TRUE(e_message.find(
-                    "When the session is not configured to use per session"
-                    " threadpools, the env must be created with the the CreateEnvWithGlobalThreadPools API") !=
-                std::string::npos);
+  }
+  ORT_CATCH(const std::exception& e) {
+    ORT_HANDLE_EXCEPTION([&e]() {
+      std::string e_message(std::string(e.what()));
+      ASSERT_TRUE(e_message.find(
+                      "When the session is not configured to use per session"
+                      " threadpools, the env must be created with the the CreateEnvWithGlobalThreadPools API") !=
+                  std::string::npos);
+    });
   }
 }
 
 // Tests for sharing allocators between sessions
-class InferenceSessionTestSharingAllocator : public InferenceSession {
+class InferenceSessionTestSharingAllocator : public InferenceSessionExposingSessionState {
  public:
   InferenceSessionTestSharingAllocator(const SessionOptions& session_options,
                                        const Environment& env)
-      : InferenceSession(session_options, env) {
+      : InferenceSessionExposingSessionState(session_options, env) {
   }
-
-  const SessionState& GetSessionState() { return InferenceSession::GetSessionState(); }
 };
 
 // Ensure sessions use the same allocator. It uses ORT created allocator.
@@ -2319,25 +2360,23 @@ TEST(InferenceSessionTests, AllocatorSharing_EnsureSessionsUseSameOrtCreatedAllo
   use_arena = false;
 #endif
   OrtMemoryInfo mem_info{onnxruntime::CPU, use_arena ? OrtArenaAllocator : OrtDeviceAllocator};
-  size_t max_mem = std::numeric_limits<size_t>::max();
-  DeviceAllocatorRegistrationInfo device_info{
-      OrtMemTypeDefault,
+  AllocatorCreationInfo device_info{
       [mem_info](int) { return onnxruntime::make_unique<TAllocator>(mem_info); },
-      max_mem};
+      0, use_arena};
 
-  AllocatorPtr allocator_ptr = CreateAllocator(device_info, 0, use_arena);
+  AllocatorPtr allocator_ptr = CreateAllocator(device_info);
   st = env->RegisterAllocator(allocator_ptr);
   ASSERT_STATUS_OK(st);
   // create sessions to share the allocator
 
   SessionOptions so1;
-  AddSessionConfigEntryImpl(so1, ORT_SESSION_OPTIONS_CONFIG_USE_ENV_ALLOCATORS, "1");
+  so1.AddConfigEntry(kOrtSessionOptionsConfigUseEnvAllocators, "1");
   InferenceSessionTestSharingAllocator sess1(so1, *env);
   ASSERT_STATUS_OK(sess1.Load(MODEL_URI));
   ASSERT_STATUS_OK(sess1.Initialize());
 
   SessionOptions so2;
-  AddSessionConfigEntryImpl(so2, ORT_SESSION_OPTIONS_CONFIG_USE_ENV_ALLOCATORS, "1");
+  so2.AddConfigEntry(kOrtSessionOptionsConfigUseEnvAllocators, "1");
   InferenceSessionTestSharingAllocator sess2(so2, *env);
   ASSERT_STATUS_OK(sess2.Load(MODEL_URI));
   ASSERT_STATUS_OK(sess2.Initialize());
@@ -2366,25 +2405,23 @@ TEST(InferenceSessionTests, AllocatorSharing_EnsureSessionsDontUseSameOrtCreated
   use_arena = false;
 #endif
   OrtMemoryInfo mem_info{onnxruntime::CPU, use_arena ? OrtArenaAllocator : OrtDeviceAllocator};
-  size_t max_mem = std::numeric_limits<size_t>::max();
-  DeviceAllocatorRegistrationInfo device_info{
-      OrtMemTypeDefault,
+  AllocatorCreationInfo device_info{
       [mem_info](int) { return onnxruntime::make_unique<TAllocator>(mem_info); },
-      max_mem};
+      0, use_arena};
 
-  AllocatorPtr allocator_ptr = CreateAllocator(device_info, 0, use_arena);
+  AllocatorPtr allocator_ptr = CreateAllocator(device_info);
   st = env->RegisterAllocator(allocator_ptr);
   ASSERT_STATUS_OK(st);
   // create sessions to share the allocator
 
   SessionOptions so1;
-  AddSessionConfigEntryImpl(so1, ORT_SESSION_OPTIONS_CONFIG_USE_ENV_ALLOCATORS, "1");
+  so1.AddConfigEntry(kOrtSessionOptionsConfigUseEnvAllocators, "1");
   InferenceSessionTestSharingAllocator sess1(so1, *env);
   ASSERT_STATUS_OK(sess1.Load(MODEL_URI));
   ASSERT_STATUS_OK(sess1.Initialize());
 
   SessionOptions so2;
-  AddSessionConfigEntryImpl(so2, ORT_SESSION_OPTIONS_CONFIG_USE_ENV_ALLOCATORS, "0");
+  so2.AddConfigEntry(kOrtSessionOptionsConfigUseEnvAllocators, "0");
   InferenceSessionTestSharingAllocator sess2(so2, *env);
   ASSERT_STATUS_OK(sess2.Load(MODEL_URI));
   ASSERT_STATUS_OK(sess2.Initialize());
@@ -2397,5 +2434,86 @@ TEST(InferenceSessionTests, AllocatorSharing_EnsureSessionsDontUseSameOrtCreated
   ASSERT_NE(sess1.GetSessionState().GetAllocator(mem_info).get(),
             sess2.GetSessionState().GetAllocator(mem_info).get());
 }
+
+class InferenceSessionTestSharingInitializer : public InferenceSessionExposingSessionState {
+ public:
+  InferenceSessionTestSharingInitializer(const SessionOptions& session_options,
+                                         const Environment& env)
+      : InferenceSessionExposingSessionState(session_options, env) {
+  }
+};
+
+TEST(InferenceSessionTests, InitializerSharing_EnsureSessionsUseUserAddedInitializer) {
+  auto logging_manager = onnxruntime::make_unique<logging::LoggingManager>(
+      std::unique_ptr<ISink>(new CLogSink()), logging::Severity::kVERBOSE, false,
+      LoggingManager::InstanceType::Temporal);
+
+  std::unique_ptr<Environment> env;
+  auto st = Environment::Create(std::move(logging_manager), env);
+  ASSERT_TRUE(st.IsOK());
+
+  // create initializer to share between sessions
+  const char* init_name = "W";
+  OrtValue val_to_share_from_allocator;
+  OrtValue val_to_share;
+  std::vector<float> input_data_vec{1., 2., 3., 4., 5., 6.};
+
+  auto allocator = TestCPUExecutionProvider()->GetAllocator(0, OrtMemTypeDefault);
+  CreateMLValue<float>(allocator, {3, 2}, input_data_vec, &val_to_share_from_allocator);
+
+  OrtMemoryInfo mem_info{CPU, OrtArenaAllocator};
+  CreateMLValue<float>({3, 2}, input_data_vec.data(), mem_info, &val_to_share);
+
+  // create sessions to share the allocator
+  SessionOptions so1;
+  ASSERT_STATUS_OK(so1.AddInitializer(init_name, &val_to_share));
+
+  // ensure an error is returned when an initializer with the same name is added.
+  ASSERT_FALSE(so1.AddInitializer(init_name, &val_to_share).IsOK());
+
+  // ensure an error is returned when an initializer with a buffer NOT owned by the user is added.
+  ASSERT_FALSE(so1.AddInitializer(init_name, &val_to_share_from_allocator).IsOK());
+
+  InferenceSessionTestSharingInitializer sess1(so1, *env);
+  ASSERT_STATUS_OK(sess1.Load(MODEL_URI));
+  ASSERT_STATUS_OK(sess1.Initialize());
+
+  SessionOptions so2;
+  ASSERT_STATUS_OK(so2.AddInitializer(init_name, &val_to_share));
+  InferenceSessionTestSharingInitializer sess2(so2, *env);
+  ASSERT_STATUS_OK(sess2.Load(MODEL_URI));
+  ASSERT_STATUS_OK(sess2.Initialize());
+
+  SessionOptions so3;
+  InferenceSessionTestSharingInitializer sess3(so3, *env);
+  ASSERT_STATUS_OK(sess3.Load(MODEL_URI));
+  ASSERT_STATUS_OK(sess3.Initialize());
+
+  int so1_idx;
+  ASSERT_STATUS_OK(sess1.GetSessionState().GetOrtValueNameIdxMap().GetIdx(init_name, so1_idx));
+  const auto* so1_init_buffer = sess1.GetSessionState().GetInitializedTensors().at(so1_idx).Get<Tensor>().Data<float>();
+
+  int so2_idx;
+  ASSERT_STATUS_OK(sess2.GetSessionState().GetOrtValueNameIdxMap().GetIdx(init_name, so2_idx));
+  const auto* so2_init_buffer = sess2.GetSessionState().GetInitializedTensors().at(so2_idx).Get<Tensor>().Data<float>();
+
+  // Ensure session1 stores the same data ptr as the one supplied by the user
+  ASSERT_EQ(so1_init_buffer, val_to_share.Get<Tensor>().Data<float>());
+
+  // Ensure both sessions share the same data ptr
+  ASSERT_EQ(so1_init_buffer, so2_init_buffer);
+
+  int so3_idx;
+  ASSERT_STATUS_OK(sess3.GetSessionState().GetOrtValueNameIdxMap().GetIdx(init_name, so3_idx));
+  const auto* so3_init_buffer = sess3.GetSessionState().GetInitializedTensors().at(so3_idx).Get<Tensor>().Data<float>();
+
+  // Ensure session 3 doesn't share the same data ptr as any other session
+  ASSERT_NE(so3_init_buffer, so1_init_buffer);
+  ASSERT_NE(so3_init_buffer, so2_init_buffer);
+
+  // Ensure session 3 doesn't share the same data ptr as the one supplied by the user for any of the other sessions
+  ASSERT_NE(so3_init_buffer, val_to_share.Get<Tensor>().Data<float>());
+}
+
 }  // namespace test
 }  // namespace onnxruntime
