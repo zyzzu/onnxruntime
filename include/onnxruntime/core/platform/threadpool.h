@@ -25,6 +25,7 @@ limitations under the License.
 #include "core/common/optional.h"
 
 #include <functional>
+#include <map>
 #include <memory>
 
 // This file use PIMPL to avoid having eigen headers here
@@ -35,6 +36,25 @@ class ThreadPoolInterface;
 }  // namespace Eigen
 
 namespace onnxruntime {
+
+  // Duplicate in EigenNonBlockingThreadPool.h
+#ifndef PER_NODE_STATS
+#define PER_NODE_STATS
+struct PerNodeStats {
+  uint64_t count = 0;
+  uint64_t total_ms = 0;
+  uint64_t pre_ms = 0;
+  uint64_t par_ms = 0;
+  uint64_t post_ms = 0;
+  uint64_t wait_ms = 0;
+};
+#endif
+
+
+  extern std::string stashed_name_for_profiling;
+  extern int stashed_loop_ctr;
+  extern bool stashed_dump_timing;
+  extern std::map<std::string, PerNodeStats> stashed_per_node_stats;  
 
 struct TensorOpCost {
   double bytes_loaded;

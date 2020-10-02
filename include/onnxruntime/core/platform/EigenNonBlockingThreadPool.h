@@ -12,6 +12,7 @@
 #include <iomanip>
 #include <iostream>
 #include <type_traits>
+#include <map>
 
 #pragma once
 #include "onnxruntime_config.h"
@@ -40,6 +41,25 @@
 
 namespace onnxruntime {
 
+// Duplicate in threadpool.h
+#ifndef PER_NODE_STATS
+#define PER_NODE_STATS
+struct PerNodeStats {
+  uint64_t count = 0;
+  uint64_t total_ms = 0;
+  uint64_t pre_ms = 0;
+  uint64_t par_ms = 0;
+  uint64_t post_ms = 0;
+  uint64_t wait_ms = 0;
+};
+#endif
+
+extern std::string stashed_name_for_profiling;
+extern int stashed_loop_ctr;
+  extern bool stashed_dump_timing;
+  extern uint64_t stashed_op_start_ms;
+  extern std::map<std::string,PerNodeStats> stashed_per_node_stats;
+
 namespace concurrency {
 
 // Extended Eigen thread pool interface, avoiding the need to modify the ThreadPoolInterface.h
@@ -47,6 +67,7 @@ namespace concurrency {
 
 class ExtendedThreadPoolInterface : public Eigen::ThreadPoolInterface {
  public:
+  
   // Run fn with up to n degree-of-parallelism enlisting the thread pool for
   // help.  The degree-of-parallelism includes the caller, and so if n==1
   // then the function will run directly in the caller.  The fork-join
@@ -479,6 +500,12 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
             case 't':
             ::std::cout << " - Timing enabled" << ::std::endl;
             dump_timing_ = true;
+	    stashed_dump_timing = true;
+            break;
+
+            case 'w':
+            ::std::cout << " - Worker timing enabled" << ::std::endl;
+            dump_worker_timing_ = true;
             break;
 
             case 'v':
@@ -492,6 +519,10 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
             break;
           }
         }
+      }
+      if (dump_worker_timing_ && !dump_timing_) {
+        ::std::cerr << "dump-worker-timing requires dump-timing" << ::std::endl;
+        abort();
       }
       if (dump_timing_ && !dump_statistics_) {
         ::std::cerr << "dump-timing requires dump-statistics" << ::std::endl;
@@ -536,6 +567,8 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
     // Output global thread-pool statistics.  Each worker thread outputs its own local stats.
     if (dump_statistics_) {
       std::unique_lock<OrtMutex> lock(statistics_output_lock_);
+      ::std::cerr << debug_name_ << "\n";
+      ::std::cerr << debug_name_ << " Task submission:\n";
       ::std::cerr << debug_name_ << 
         " num_tasks_rejected: " << num_tasks_rejected_ <<
         " stand_alone_tasks: " << num_tasks_scheduled_ << 
@@ -544,7 +577,70 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
         " total_scheduled: " << (num_tasks_scheduled_ + total_degree_of_parallelism_ - num_parallel_tasks_scheduled_) <<
         " total_revoked: " << num_tasks_revoked_ << 
         "\n";
+
+      uint64_t loop_count = 0;
       if (dump_timing_) {
+	::std::cerr << debug_name_ << "\n";
+	::std::cerr << debug_name_ << " Per loop:\n";
+	for (auto &i : profiling) {
+	  loop_count+=i.second.count;
+	  ::std::cerr << debug_name_ <<
+	    " node: " << i.first <<
+	    " count: " << i.second.count <<
+	    " mean_d_o_p: " << std::setprecision(2) << ((double)i.second.d_o_p) / i.second.count <<
+	    " time_pre_ms: " << i.second.time_scheduling_pre_ms << 
+	    " time_running_ms: " << i.second.time_running_ms <<
+	    " time_post_ms: " << i.second.time_scheduling_post_ms <<
+	    " time_waiting_ms: " << i.second.time_waiting_ms <<
+	    "\n";
+	  time_scheduling_pre_ms_ += i.second.time_scheduling_pre_ms;
+	  time_running_ms_ += i.second.time_running_ms;
+	  time_scheduling_post_ms_ += i.second.time_scheduling_post_ms;
+	  time_waiting_ms_ += i.second.time_waiting_ms;
+	  auto &pn = stashed_per_node_stats[i.second.base_name];
+	  pn.pre_ms += i.second.time_scheduling_pre_ms;
+	  pn.par_ms += i.second.time_running_ms;
+	  pn.post_ms += i.second.time_scheduling_post_ms;
+	  pn.wait_ms += i.second.time_waiting_ms;
+	}
+
+	::std::cerr << debug_name_ << "\n";
+	::std::cerr << debug_name_ << " Per node:\n";
+
+	uint64_t total_par_ms=0;
+	uint64_t total_wall_ms=0;
+	uint64_t node_count=0;
+
+	for (auto &i : stashed_per_node_stats) {
+	  auto par_ms = (i.second.pre_ms + i.second.par_ms + i.second.post_ms + i.second.wait_ms);
+	  total_par_ms += par_ms;
+	  node_count+=i.second.count;
+	  total_wall_ms += i.second.total_ms;
+	  
+	  ::std::cerr << debug_name_ <<
+	    " node: " << i.first <<
+	    " count: " << i.second.count <<
+	    " total_wall_ms: " << i.second.total_ms <<
+	    " total_par_ms: " << par_ms <<
+	    " frac_par: " << std::setprecision(2) << ((double)par_ms) / i.second.total_ms <<
+	    " par_pre_ms: " << i.second.pre_ms <<
+	    " par_running_ms: "  << i.second.par_ms <<
+	    " par_post_ms: " << i.second.post_ms <<
+	    " par_wait_ms: " << i.second.wait_ms <<
+	    "\n";
+	}
+
+	::std::cerr << debug_name_ << "\n";
+	::std::cerr << debug_name_ << " Total:\n";
+
+	::std::cerr << debug_name_ <<
+	    " nodes: " << node_count <<
+	    " loops: " << loop_count <<
+	    " total_wall_ms: " << total_wall_ms <<
+	    " total_par_ms: " << total_par_ms <<
+	    " frac_par: " << std::setprecision(2) << ((double)total_par_ms)/total_wall_ms <<
+	    "\n";
+	
         ::std::cerr << debug_name_ <<
           " time_pre_ms: " << time_scheduling_pre_ms_ << 
           " time_running_ms: " << time_running_ms_ <<
@@ -738,6 +834,18 @@ void GetGoodWorkerHints(int n, std::vector<unsigned>& good_hints, std::vector<un
   }
 }
 
+  struct ProfilingRec{
+    std::string base_name{};
+    uint64_t count = 0;
+    uint64_t d_o_p = 0;
+    uint64_t time_scheduling_pre_ms = 0;
+    uint64_t time_running_ms = 0;
+    uint64_t time_scheduling_post_ms = 0;
+    uint64_t time_waiting_ms = 0;
+  };
+
+  std::map<std::string,ProfilingRec> profiling;
+  
 void RunInParallel(std::function<void()> fn, unsigned n) override {
   PerThread* my_pt = GetPerThread();
   assert(n>=1);
@@ -749,6 +857,7 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
     fn();
   } else {
     uint64_t start_ms = dump_timing_ ? GetCurrentTimeMS() : 0;
+    uint64_t this_time_scheduling_pre_ms=0, this_time_running_ms=0, this_time_scheduling_post_ms=0, this_time_waiting_ms=0;
     bool all_threads = (all_threads_optimization_ && ((int)n==num_threads_+1));
 
     // We build a list of <thread,idx> pairs for each of the queues that accepts a work
@@ -811,7 +920,7 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
 
     if (dump_timing_) {
       uint64_t now = GetCurrentTimeMS();
-      time_scheduling_pre_ms_ += now - start_ms;
+      this_time_scheduling_pre_ms = now - start_ms;
       start_ms = now;
     }
     
@@ -820,7 +929,7 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
 
     if (dump_timing_) {
       uint64_t now = GetCurrentTimeMS();
-      time_running_ms_ += now - start_ms;
+      this_time_running_ms = now - start_ms;
       start_ms = now;
     }
     
@@ -838,7 +947,7 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
 
     if (dump_timing_) {
       uint64_t now = GetCurrentTimeMS();
-      time_scheduling_post_ms_ += now - start_ms;
+      this_time_scheduling_post_ms = now - start_ms;
       start_ms = now;
     }
         
@@ -848,8 +957,20 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
 
     if (dump_timing_) {
       uint64_t now = GetCurrentTimeMS();
-      time_waiting_ms_ += now - start_ms;
-      start_ms = now;
+      this_time_waiting_ms = now - start_ms;
+
+      // Accumulate totals
+      auto &profiling_rec = profiling[stashed_name_for_profiling + "_#" + std::to_string(stashed_loop_ctr)];
+      if (!profiling_rec.count) {
+	profiling_rec.base_name = stashed_name_for_profiling;
+      }
+      profiling_rec.time_scheduling_pre_ms += this_time_scheduling_pre_ms;
+      profiling_rec.time_running_ms += this_time_running_ms;
+      profiling_rec.time_scheduling_post_ms += this_time_scheduling_post_ms;
+      profiling_rec.time_waiting_ms += this_time_waiting_ms;
+      profiling_rec.count++;
+      profiling_rec.d_o_p += n;
+      stashed_loop_ctr++;
     }   
   }
 }
@@ -1048,6 +1169,7 @@ int CurrentThreadId() const EIGEN_FINAL {
   bool pin_work_to_threads_ = false;
   bool dump_statistics_ = false;
   bool dump_timing_ = false;
+  bool dump_worker_timing_ = false;
   bool spin_end_of_loop_ = false;
 
   // Statistics, collected if dump_statistics_ is set to true
@@ -1136,7 +1258,7 @@ int CurrentThreadId() const EIGEN_FINAL {
           // In addition, priodically make a best-effort attempt to steal from other
           // threads which are not themselves spinning.
 
-          uint64_t spin_start_ms = dump_timing_ ? GetCurrentTimeMS() : 0;
+          uint64_t spin_start_ms = dump_worker_timing_ ? GetCurrentTimeMS() : 0;
           if (!retain_affinity_) SetGoodWorkerHint(thread_id, true);
           for (int i = 0; (i < spin_count || always_spin_) && !t.f && !cancelled_ && !done_; i++) {
             if (prevent_stealing_) {
@@ -1153,7 +1275,7 @@ int CurrentThreadId() const EIGEN_FINAL {
             } 
           }
           if (!retain_affinity_) SetGoodWorkerHint(thread_id, false);
-          if (dump_timing_) time_spinning_ms += GetCurrentTimeMS() - spin_start_ms;
+          if (dump_worker_timing_) time_spinning_ms += GetCurrentTimeMS() - spin_start_ms;
           
           if (!t.f) {
             // No work passed to us while spinning; make a further full attempt to
@@ -1163,7 +1285,7 @@ int CurrentThreadId() const EIGEN_FINAL {
               if (t.f) num_ran_stolen++;
             }
             if (!t.f) {
-              uint64_t blocked_start_ms = dump_timing_ ? GetCurrentTimeMS() : 0;
+              uint64_t blocked_start_ms = dump_worker_timing_ ? GetCurrentTimeMS() : 0;
               num_tried_to_block++;
               td.SetBlocked(
                   // Pre-block test
@@ -1207,7 +1329,7 @@ int CurrentThreadId() const EIGEN_FINAL {
                   },
                   // Post-block update (executed only if we blocked)
                   [&]() {
-                    if (dump_timing_) time_blocked_ms += GetCurrentTimeMS() - blocked_start_ms;
+                    if (dump_worker_timing_) time_blocked_ms += GetCurrentTimeMS() - blocked_start_ms;
                     num_blocked++;
                     blocked_--;
                   });
@@ -1215,12 +1337,12 @@ int CurrentThreadId() const EIGEN_FINAL {
           }
         }
         if (t.f) {
-          uint64_t busy_start_ms = dump_timing_ ? GetCurrentTimeMS() : 0;
+          uint64_t busy_start_ms = dump_worker_timing_ ? GetCurrentTimeMS() : 0;
           td.SetActive();
           env_.ExecuteTask(t);
           if (retain_affinity_) { PushWorkerLIFO(thread_id); }
           td.SetSpinning();
-          if (dump_timing_) time_busy_ms += GetCurrentTimeMS() - busy_start_ms;
+          if (dump_worker_timing_) time_busy_ms += GetCurrentTimeMS() - busy_start_ms;
         }
       }
 
@@ -1239,7 +1361,7 @@ int CurrentThreadId() const EIGEN_FINAL {
           " ran_stolen: " << num_ran_stolen <<
           " tried_to_block: " << num_tried_to_block <<
           " blocked: " << num_blocked;
-        if (dump_timing_) {
+        if (dump_worker_timing_) {
           ::std::cerr << 
             " wall_ms: " << (GetCurrentTimeMS() - start_time_ms) <<
             " busy_ms: " << time_busy_ms <<

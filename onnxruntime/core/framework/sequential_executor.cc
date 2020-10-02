@@ -76,6 +76,10 @@ static void CalculateTotalOutputSizes(OpKernelContextInternal* op_kernel_context
     }
   }
 }
+  
+  static uint64_t GetCurrentTimeMS() { 
+    return ::std::chrono::duration_cast<::std::chrono::milliseconds>(::std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+  }
 
 static void CalculateTotalInputSizes(const OpKernelContextInternal* op_kernel_context,
                                      const onnxruntime::OpKernel* p_op_kernel,
@@ -279,6 +283,13 @@ Status SequentialExecutor::Execute(const SessionState& session_state, const std:
       return node.Name().empty() ? MakeString(node.OpType(), "_", node_index) : node.Name();
     }();
 
+    uint64_t start_ms=0;
+    if (stashed_dump_timing) {
+      stashed_name_for_profiling = MakeString(node.OpType(), "_", node_index);
+      stashed_loop_ctr = 1;
+      start_ms = GetCurrentTimeMS();
+    }    
+
     if (is_profiler_enabled) {
       session_state.Profiler().EndTimeAndRecordEvent(profiling::NODE_EVENT,
                                                      node_name_for_profiling + "_fence_before",
@@ -322,6 +333,12 @@ Status SequentialExecutor::Execute(const SessionState& session_state, const std:
 #ifdef CONCURRENCY_VISUALIZER
     }
 #endif
+
+    if (stashed_dump_timing) {
+      auto &per_node_stats = stashed_per_node_stats[stashed_name_for_profiling];
+      per_node_stats.count++;
+      per_node_stats.total_ms += GetCurrentTimeMS() - start_ms;
+    }
 
     if (is_profiler_enabled) {
       // Calculate total output sizes for this operation.

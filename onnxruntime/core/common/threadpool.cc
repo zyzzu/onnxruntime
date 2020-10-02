@@ -23,6 +23,14 @@ limitations under the License.
 
 namespace onnxruntime {
 
+// These settings are used to get information from sequential_executor to the thread pool
+// functions to dump profiler output.  This all needs to be refactored properly of course.
+
+std::string stashed_name_for_profiling;
+int stashed_loop_ctr = 0;
+bool stashed_dump_timing = false;
+std::map<std::string, PerNodeStats> stashed_per_node_stats;
+  
 namespace concurrency {
 
 // A sharded loop counter distributes loop iterations between a set of worker threads.  The iteration space of
