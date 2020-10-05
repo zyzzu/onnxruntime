@@ -44,7 +44,7 @@ REGISTER_ISFINITE_KERNEL_TYPED(double)
       T,                                                             \
       kCudaExecutionProvider,                                        \
       KernelDefBuilder()                                             \
-          .OutputMemoryType<OrtMemTypeCPUOutput>(0)                  \
+          .OutputMemoryType<OrtMemTypeCPUInput>(0)                   \
           .TypeConstraint("V", DataTypeImpl::GetTensorType<T>())     \
           .TypeConstraint("T", DataTypeImpl::GetTensorType<bool>()), \
       IsAllFiniteOp<T>);

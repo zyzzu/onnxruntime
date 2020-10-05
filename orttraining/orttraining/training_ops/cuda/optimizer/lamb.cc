@@ -46,24 +46,24 @@ std::vector<std::pair<int, int>> GenerateLambExtraAliasMapping() {
 }
 
 // TODO: Once Schema is checked in to onnx lets fix this to match that
-#define REGISTER_LAMB_KERNEL_TYPED(T1, T2, T3, T4, T_GRAD_NORM, T_MIXED_PRECISION_FP)                   \
-  ONNX_OPERATOR_TYPED_KERNEL_EX(                                                                        \
-      LambOptimizer,                                                                                    \
-      kMSDomain,                                                                                        \
-      1,                                                                                                \
-      T1##_##T2##_##T3##_##T4##_##T_GRAD_NORM##_##T_MIXED_PRECISION_FP,                                 \
-      kCudaExecutionProvider,                                                                           \
-      KernelDefBuilder()                                                                                \
-          .Alias(GenerateLambExtraAliasMapping())                                                       \
-          .InputMemoryType<OrtMemTypeCPUInput>(0)  /* Keep do_update in CPU */                          \
-          .InputMemoryType<OrtMemTypeCPUInput>(4)  /* Keep iteration_count in CPU */                    \
-          .OutputMemoryType<OrtMemTypeCPUOutput>(0)  /* Keep iteration_count in CPU */                  \
-          .TypeConstraint("T1", DataTypeImpl::GetTensorType<T1>())                                      \
-          .TypeConstraint("T2", DataTypeImpl::GetTensorType<T2>())                                      \
-          .TypeConstraint("T3", DataTypeImpl::GetTensorType<T3>())                                      \
-          .TypeConstraint("T4", DataTypeImpl::GetTensorType<T4>())                                      \
-          .TypeConstraint("T_MIXED_PRECISION_FP", DataTypeImpl::GetTensorType<T_MIXED_PRECISION_FP>())  \
-          .TypeConstraint("T_GRAD_NORM", DataTypeImpl::GetTensorType<T_GRAD_NORM>()),                   \
+#define REGISTER_LAMB_KERNEL_TYPED(T1, T2, T3, T4, T_GRAD_NORM, T_MIXED_PRECISION_FP)                  \
+  ONNX_OPERATOR_TYPED_KERNEL_EX(                                                                       \
+      LambOptimizer,                                                                                   \
+      kMSDomain,                                                                                       \
+      1,                                                                                               \
+      T1##_##T2##_##T3##_##T4##_##T_GRAD_NORM##_##T_MIXED_PRECISION_FP,                                \
+      kCudaExecutionProvider,                                                                          \
+      KernelDefBuilder()                                                                               \
+          .Alias(GenerateLambExtraAliasMapping())                                                      \
+          .InputMemoryType<OrtMemTypeCPUInput>(0)  /* Keep do_update in CPU */                         \
+          .InputMemoryType<OrtMemTypeCPUInput>(4)  /* Keep iteration_count in CPU */                   \
+          .OutputMemoryType<OrtMemTypeCPUInput>(0) /* Keep iteration_count in CPU */                   \
+          .TypeConstraint("T1", DataTypeImpl::GetTensorType<T1>())                                     \
+          .TypeConstraint("T2", DataTypeImpl::GetTensorType<T2>())                                     \
+          .TypeConstraint("T3", DataTypeImpl::GetTensorType<T3>())                                     \
+          .TypeConstraint("T4", DataTypeImpl::GetTensorType<T4>())                                     \
+          .TypeConstraint("T_MIXED_PRECISION_FP", DataTypeImpl::GetTensorType<T_MIXED_PRECISION_FP>()) \
+          .TypeConstraint("T_GRAD_NORM", DataTypeImpl::GetTensorType<T_GRAD_NORM>()),                  \
       LambOptimizer<T1, T2, T3, T4, T_GRAD_NORM, T_MIXED_PRECISION_FP>);
 
 REGISTER_LAMB_KERNEL_TYPED(float, float, MLFloat16, float, MLFloat16, MLFloat16)
@@ -112,7 +112,6 @@ Status copy_inputs_to_outputs(
     const int group_count,
     const int input_group_size,
     const int output_group_size) {
-
   const Tensor* step_tensor = ctx->Input<Tensor>(4);
   if (step_tensor) {
     const int64_t* step_data = step_tensor->template Data<int64_t>();
@@ -204,10 +203,8 @@ Status launch_lamb_compute_direction(
   for (int i = 0; i < group_count; ++i) {
     if (tensor_sizes[i] > max_tensor_size) {
       // For the first iteration (indexed by 0), the update count should be 2.
-      const float alpha_correction = do_bias_correction ?
-        onnxruntime::contrib::compute_bias_correction_coefficient(alphas[i], update_count) : 1.f;
-      const float beta_correction = do_bias_correction ?
-        onnxruntime::contrib::compute_bias_correction_coefficient(betas[i], update_count) : 1.f;
+      const float alpha_correction = do_bias_correction ? onnxruntime::contrib::compute_bias_correction_coefficient(alphas[i], update_count) : 1.f;
+      const float beta_correction = do_bias_correction ? onnxruntime::contrib::compute_bias_correction_coefficient(betas[i], update_count) : 1.f;
 
       LambComputeDirection(
           p_ws[i],
@@ -248,9 +245,9 @@ Status launch_lamb_compute_direction(
 
     // For the first iteration (indexed by 0), the update count should be 1.
     const float alpha_correction =
-      do_bias_correction ? onnxruntime::contrib::compute_bias_correction_coefficient(alpha, update_count) : 1.f;
+        do_bias_correction ? onnxruntime::contrib::compute_bias_correction_coefficient(alpha, update_count) : 1.f;
     const float beta_correction =
-      do_bias_correction ? onnxruntime::contrib::compute_bias_correction_coefficient(beta, update_count) : 1.f;
+        do_bias_correction ? onnxruntime::contrib::compute_bias_correction_coefficient(beta, update_count) : 1.f;
 
     typedef LambMultiTensorComputeDirectionFunctor<CudaT2, CudaT3, CudaT4, CudaT_GRAD_NORM> LambStage1;
     LambStage1 lamb_stage1;
@@ -406,12 +403,13 @@ Status launch_lamb_update(
   // Only launch multi-tensor function if we have at least one tensor in the buckets.
   if (tensor_sizes_in_bucket.size() > 0 && buckets.size() > 0) {
     typedef LambMultiTensorUpdateFunctor<
-      CudaT1, CudaT2, CudaT3, CudaT_MIXED_PRECISION_FP> LambStage2;
+        CudaT1, CudaT2, CudaT3, CudaT_MIXED_PRECISION_FP>
+        LambStage2;
     LambStage2 lamb_stage2;
 
     launch_multi_tensor_functor<
-      tensor_count_per_group, LambStage2,
-      const CudaT1*, const float, const float>(
+        tensor_count_per_group, LambStage2,
+        const CudaT1*, const float, const float>(
         2048 * 32,
         tensor_sizes_in_bucket,
         buckets,
@@ -625,7 +623,6 @@ Status LambOptimizer<T1, T2, T3, T4, T_GRAD_NORM, T_MIXED_PRECISION_FP>::Compute
     p_m2_news[group_index] = reinterpret_cast<CudaT4*>(m2_new->template MutableData<T4>());
     p_w_mixed_precision_news[group_index] = w_mixed_precision_new != nullptr ? reinterpret_cast<CudaT_MIXED_PRECISION_FP*>(w_mixed_precision_new->template MutableData<T_MIXED_PRECISION_FP>()) : nullptr;
   }
-
 
   launch_lamb_compute_direction(
       step_data ? *step_data : 0,

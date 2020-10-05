@@ -33,7 +33,7 @@ static common::Status DeserializeTensorProto(const Env& env, const std::basic_st
                                              OrtCallback& deleter,
                                              const DataTransferManager& data_transfer_mgr) {
   const OrtMemoryInfo& alloc_info = m.GetAllocInfo();
-  if (strcmp(alloc_info.name, CPU) == 0 || alloc_info.mem_type == OrtMemTypeCPUOutput) {
+  if (strcmp(alloc_info.name, CPU) == 0 || alloc_info.mem_type == OrtMemTypeCPUOutput || alloc_info.mem_type == OrtMemTypeCPUUInput) {
     // deserialize directly to CPU tensor
     return utils::TensorProtoToMLValue(env, proto_path.c_str(), tensor_proto, m, ort_value, deleter);
   }
