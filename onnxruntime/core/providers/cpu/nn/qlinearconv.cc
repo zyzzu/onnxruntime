@@ -145,7 +145,7 @@ Status QLinearConv<uint8_t>::Compute(OpKernelContext* context) const {
 
   const float real_multiplier = (X_scale_value * W_scale_value) / Y_scale_value;
 
-#ifdef MLAS_SUPPORTS_GEMM_U8X8
+#ifdef MLAS_SUPPORTS_GEMM_U8X8_AND_REQUANTIZE_OUTPUT
   // Use an intermediate int32_t buffer for the GEMM computation before
   // requantizing to the output type.
   auto gemm_output_data = alloc->Alloc(SafeInt<size_t>(sizeof(int32_t)) * Y_offset);
@@ -202,7 +202,7 @@ Status QLinearConv<uint8_t>::Compute(OpKernelContext* context) const {
         }
       }
 
-#ifdef MLAS_SUPPORTS_GEMM_U8X8
+#ifdef MLAS_SUPPORTS_GEMM_U8X8_AND_REQUANTIZE_OUTPUT
       QGemm(static_cast<int>(group_output_channels),
             static_cast<int>(output_image_size),
             static_cast<int>(kernel_dim),
