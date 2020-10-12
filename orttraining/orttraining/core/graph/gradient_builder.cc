@@ -668,6 +668,24 @@ IMPLEMENT_GRADIENT_BUILDER(GetReshapeGradient) {
               {GI(0)})};
 }
 
+IMPLEMENT_GRADIENT_BUILDER(GetFlattenGradient) {
+  return std::vector<NodeDef>{
+      NodeDef("Shape",
+              {I(0)},
+              {IA("x_shape")}),
+      NodeDef("Reshape",
+              {GO(0), IA("x_shape")},
+              {GI(0)})};
+}
+
+IMPLEMENT_GRADIENT_BUILDER(GetTopKGradient) {
+  return std::vector<NodeDef>{
+      NodeDef(OpDef{"TopKGrad", kMSDomain, 1},
+              {GO(0), O(1), I(0)},
+              {GI(0)},
+              SrcNodeAttributes())};
+}
+
 IMPLEMENT_GRADIENT_BUILDER(GetTransposeGradient) {
   std::vector<int64_t> bw_perm;
   auto attributes = SrcNodeAttributes();
@@ -751,7 +769,7 @@ IMPLEMENT_GRADIENT_BUILDER(GetConvGradient) {
     if (IsGradientRequiredForSrcNodeInput(i)) {
       outputs.push_back(GI(i));
     } else {
-      outputs.push_back(ArgDef("", nullptr));
+      outputs.push_back(IA("ConvInput_" + I(i).name));
     }
   }
 

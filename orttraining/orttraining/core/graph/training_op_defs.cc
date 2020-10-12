@@ -1591,6 +1591,25 @@ Example 4:
           "Constrain input and output types to float tensors.")
       .TypeAndShapeInferenceFunction(ONNX_NAMESPACE::propagateShapeAndTypeFromFirstInput);
 
+  ONNX_CONTRIB_OPERATOR_SCHEMA(TopKGrad)
+      .SetDomain(kMSDomain)
+      .SinceVersion(1)
+      .SetSupportLevel(OpSchema::SupportType::EXPERIMENTAL)
+      .SetDoc("TopKGrad")
+      .AllowUncheckedAttributes()
+      .Input(0, "dY", "The gradient tensor from output.", "T")
+      .Input(1, "Y1", "The indices output tensor.", "tensor(int64)")
+      .Input(2, "X", "The input tensor.", "T")
+      .Output(0, "dX", "Gradient of the input.", "T")
+      .TypeConstraint(
+          "T",
+          {"tensor(float16)", "tensor(float)", "tensor(double)", "tensor(bfloat16)"},
+          "Constrain input and output types to float tensors.")
+      .TypeAndShapeInferenceFunction([](ONNX_NAMESPACE::InferenceContext& ctx) {
+        propagateElemTypeFromInputToOutput(ctx, 2, 0);
+        propagateShapeFromInputToOutput(ctx, 2, 0);
+      });
+
   ONNX_CONTRIB_OPERATOR_SCHEMA(LayerNormalizationGrad)
       .SetDomain(kMSDomain)
       .SinceVersion(1)

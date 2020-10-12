@@ -1958,6 +1958,36 @@ TEST(GradientCheckerTest, ExpandGrad) {
   }
 }
 
+TEST(GradientCheckerTest, FlattenGrad) {
+  float max_error;
+  GradientChecker<float, float, float> gradient_checker;
+  OpDef op_def{"Flatten"};
+
+  {
+    TensorInfo x_info({2, 1, 4}, true);
+    TensorInfo y_info({2, 4}, true);
+    std::vector<std::vector<float>> x_datas = {{1, 2, 3, 4, 5, 6, 7, 8}};
+    gradient_checker.ComputeGradientError(op_def, {x_info}, {y_info}, &max_error, x_datas, {MakeAttribute("axis", int64_t(1))}, true, true);
+    EXPECT_IS_TINY(max_error);
+  }
+}
+
+TEST(GradientCheckerTest, TopKGrad) {
+  float max_error;
+  GradientChecker<float, float, float> gradient_checker;
+  OpDef op_def{"TopK", kOnnxDomain, 11};
+
+  {
+    TensorInfo x_info({2, 2, 2}, true);
+    TensorInfo k_info({1}, false, nullptr, DataTypeImpl::GetTensorType<int64_t>());
+    std::vector<std::vector<float>> x_datas = {{1, 2, 3, 4, 5, 6, 7, 8}, {1}};
+    TensorInfo y1_info({2, 2, 1}, true);
+    TensorInfo y2_info({2, 2, 1}, false, nullptr, DataTypeImpl::GetTensorType<int64_t>());
+    gradient_checker.ComputeGradientError(op_def, {x_info, k_info}, {y1_info, y2_info}, &max_error, x_datas, {}, true, true);
+    EXPECT_IS_TINY(max_error);
+  }
+}
+
 }  // namespace test
 }  // namespace onnxruntime
 

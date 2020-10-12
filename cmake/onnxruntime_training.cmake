@@ -182,3 +182,21 @@ if (onnxruntime_USE_HOROVOD)
 endif()
 target_link_libraries(onnxruntime_training_gpt2 PRIVATE onnxruntime_training_runner onnxruntime_training ${ONNXRUNTIME_LIBS} ${onnxruntime_EXTERNAL_LIBRARIES})
 set_target_properties(onnxruntime_training_gpt2 PROPERTIES FOLDER "ONNXRuntimeTest")
+
+# CDSSM
+file(GLOB_RECURSE training_cdssm_src
+    "${ORTTRAINING_SOURCE_DIR}/models/cdssm/*.h"
+    "${ORTTRAINING_SOURCE_DIR}/models/cdssm/*.cc"
+)
+add_executable(onnxruntime_training_cdssm ${training_cdssm_src})
+if(UNIX AND NOT APPLE)
+  target_compile_options(onnxruntime_training_cdssm PUBLIC "-Wno-maybe-uninitialized")
+endif()
+onnxruntime_add_include_to_target(onnxruntime_training_cdssm onnxruntime_common onnx onnx_proto protobuf::libprotobuf onnxruntime_training flatbuffers)
+target_include_directories(onnxruntime_training_cdssm PUBLIC ${CMAKE_CURRENT_BINARY_DIR} ${ONNXRUNTIME_ROOT} ${ORTTRAINING_ROOT} ${MPI_INCLUDE_DIRS} ${eigen_INCLUDE_DIRS} ${CXXOPTS} ${extra_includes} ${onnxruntime_graph_header} ${onnxruntime_exec_src_dir} ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_BINARY_DIR}/onnx onnxruntime_training_runner)
+
+if (onnxruntime_USE_HOROVOD)
+  target_include_directories(onnxruntime_training_cdssm PUBLIC ${HOROVOD_INCLUDE_DIRS})
+endif()
+target_link_libraries(onnxruntime_training_cdssm PRIVATE onnxruntime_training_runner onnxruntime_training ${ONNXRUNTIME_LIBS} ${onnxruntime_EXTERNAL_LIBRARIES})
+set_target_properties(onnxruntime_training_cdssm PROPERTIES FOLDER "ONNXRuntimeTest")

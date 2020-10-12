@@ -180,7 +180,7 @@ Status TrainingSession::ConfigureForTraining(
 
   is_mixed_precision_enabled_ = config.mixed_precision_config.has_value();
 
-  std::string loss_name{};
+  std::string loss_name = "loss";
   // Enable loss scale if mixed precision is enabled AND at pipeline last stage if pipeline is used.
   // We are currently making the assumption that no data parallelism is used together with model parallelism.
   // So we can check the last stage by checking the world_rank and world_size. Once DP and MP combination is
