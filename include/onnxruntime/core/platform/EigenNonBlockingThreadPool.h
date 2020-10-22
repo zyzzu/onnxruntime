@@ -598,13 +598,13 @@ void EndParallel() override {
 
   // Attempt to cancel any tasks that were sent to workers but not
   // started. 
-  for (auto& item : my_pt->pending_items) {
-    Queue& q = worker_data_[item.first].queue;
-    if (q.RevokeWithTag(my_pt->tag, item.second)) {
-      my_pt->num_workers--;
-    }
-  }
-  my_pt->pending_items.clear();
+  //  for (auto& item : my_pt->pending_items) {
+  //    Queue& q = worker_data_[item.first].queue;
+  //    if (q.RevokeWithTag(my_pt->tag, item.second)) {
+  //      my_pt->num_workers--;
+  //    }
+  //  }
+  //  my_pt->pending_items.clear();
   
   // Wait for workers to exit ParLoopWorker
   while (my_pt->num_workers) {
