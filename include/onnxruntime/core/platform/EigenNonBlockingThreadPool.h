@@ -620,6 +620,13 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
   ORT_ENFORCE(my_pt->in_parallel, "RunInParallel, but not in parallel section");
   ORT_ENFORCE(n > 1, "Trivial parallel section; should be avoided by caller");
 
+  std::function<void()> work_item = [&]() {
+    fn();
+  };
+
+  ORT_ENFORCE(!my_pt->current_work_item);
+  my_pt->current_work_item = &work_item;
+  
   int extra_needed = (n-1) - my_pt->num_workers;
   if (extra_needed) {
     //    ::std::cout << "Extending gang " << my_pt->num_workers << " -> " << (n-1) << "\n";
@@ -654,6 +661,7 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
   
   // Run the loop ourselves, for a total of n degree-of-parallelism
   fn();
+  my_pt->current_work_item = 0;
 }
 
 void Cancel() override {
@@ -740,6 +748,7 @@ int CurrentThreadId() const EIGEN_FINAL {
     std::atomic<int> num_workers{0}; // Could merge with in_parallel
     std::atomic<bool> par_section_active{false};
     std::vector<std::pair<int, unsigned>> pending_items;
+    std::function<void()> *current_work_item{0};
   };
 
   //  static_assert(std::is_trivially_destructible<PerThread>::value, "Per-thread state should be trivially destructible");
@@ -855,6 +864,10 @@ void ParLoopWorker(PerThread* leader_pt) {
   my_pt->in_parallel = true;
 
   while (leader_pt->par_section_active) {
+    std::function<void()> *work_item = leader_pt->current_work_item;
+    if (work_item) {
+      (*work_item)();
+    }
   }
 
   my_pt->in_parallel = false;
