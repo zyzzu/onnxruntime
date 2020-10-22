@@ -629,7 +629,7 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
   
   int extra_needed = (n-1) - my_pt->num_workers;
   if (extra_needed) {
-    //    ::std::cout << "Extending gang " << my_pt->num_workers << " -> " << (n-1) << "\n";
+    ::std::cout << "Extending gang " << my_pt->num_workers << " -> " << (n-1) << "\n";
 
     std::vector<unsigned> good_hints, alt_hints;
     GetGoodWorkerHints(extra_needed, good_hints, alt_hints);
@@ -660,11 +660,15 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
   }
   
   // Run the loop ourselves, for a total of n degree-of-parallelism
+  ::std::cout << "Have " << my_pt->num_workers << "\n";
   fn();
   my_pt->current_work_item = 0;
 
+  ::std::cout << "In loop " << my_pt->workers_in_loop << "\n";
   while (my_pt->workers_in_loop) {
   }
+
+  ::std::cout << "OK\n";
 }
 
 void Cancel() override {
