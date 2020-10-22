@@ -245,7 +245,7 @@ class ThreadPool {
   // by fn() is safe from concurrent access once RunWithHelp returns.
   void StartParallel();
   void RunInParallel(std::function<void()> fn, int n);
-  void StopParallel();
+  void EndParallel();
 
   // Divides the work represented by the range [0, total) into k shards.
   // Calls fn(i*block_size, (i+1)*block_size) from the ith shard (0 <= i < k).
