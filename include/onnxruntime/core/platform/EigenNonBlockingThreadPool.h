@@ -660,15 +660,15 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
   }
   
   // Run the loop ourselves, for a total of n degree-of-parallelism
-  ::std::cout << "Have " << my_pt->num_workers << "\n";
+  //  ::std::cout << "Have " << my_pt->num_workers << "\n";
   fn();
   my_pt->current_work_item = 0;
 
-  ::std::cout << "In loop " << my_pt->workers_in_loop << "\n";
+  //  ::std::cout << "In loop " << my_pt->workers_in_loop << "\n";
   while (my_pt->workers_in_loop) {
   }
 
-  ::std::cout << "OK\n";
+  //  ::std::cout << "OK\n";
 }
 
 void Cancel() override {
@@ -756,7 +756,7 @@ int CurrentThreadId() const EIGEN_FINAL {
     std::atomic<bool> par_section_active{false};
     std::atomic<int> workers_in_loop{0};
     std::vector<std::pair<int, unsigned>> pending_items;
-    std::function<void()> *current_work_item{0};
+    volatile std::function<void()> *current_work_item{0};
   };
 
   //  static_assert(std::is_trivially_destructible<PerThread>::value, "Per-thread state should be trivially destructible");
@@ -873,7 +873,7 @@ void ParLoopWorker(PerThread* leader_pt) {
 
   while (leader_pt->par_section_active) {
     if (leader_pt->current_work_item) {
-      leader_pt->workers_in_loop++; // Race here?
+      leader_pt->workers_in_loop++;
       std::function<void()> *work_item = leader_pt->current_work_item;
       if (work_item) {
         (*work_item)();
