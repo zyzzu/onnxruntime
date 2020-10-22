@@ -39,6 +39,26 @@
 
 namespace onnxruntime {
 
+struct OrtSpinlock {
+  std::atomic<bool> locked = ATOMIC_FLAG_INIT;
+
+ public:
+  void lock() {
+    while (locked) {
+      //      _mm_pause();
+    }
+    bool expect = false;
+    while (!locked.compare_exchange_strong(expect, true, std::memory_order_acquire)) {
+      expect = false;
+      while (locked) {
+        _mm_pause();
+      }
+    }
+  }
+  void unlock() { locked.store(false, std::memory_order_release); }
+};
+
+
 namespace concurrency {
 
 // Extended Eigen thread pool interface, avoiding the need to modify the ThreadPoolInterface.h
@@ -124,7 +144,7 @@ class RunQueue {
   // PushBack adds w at the end of the queue.
   // If queue is full returns w, otherwise returns default-constructed Work.
   Work PushBack(Work w) {
-    std::unique_lock<OrtMutex> lock(mutex_);
+    std::unique_lock<OrtSpinlock> lock(mutex_);
     unsigned back = back_.load(std::memory_order_relaxed);
     Elem& e = array_[(back - 1) & kMask];
     ElemState s = e.state.load(std::memory_order_relaxed);
@@ -146,7 +166,7 @@ class RunQueue {
   //
   // If the queue is full, returns w, otherwise returns default-constructed work.
   Work PushBackWithTag(Work w, Tag tag, unsigned &w_idx) {
-    std::unique_lock<OrtMutex> lock(mutex_);
+    std::unique_lock<OrtSpinlock> lock(mutex_);
     unsigned back = back_.load(std::memory_order_relaxed);
     w_idx = (back-1) & kMask;
     Elem& e = array_[w_idx];
@@ -166,7 +186,7 @@ class RunQueue {
   Work PopBack() {
     if (Empty())
       return Work();
-    std::unique_lock<OrtMutex> lock(mutex_);
+    std::unique_lock<OrtSpinlock> lock(mutex_);
     unsigned back;
     Elem *e;
     ElemState s;
@@ -208,7 +228,7 @@ class RunQueue {
 
   bool RevokeWithTag(Tag tag, unsigned w_idx) {
     bool revoked = false;
-    std::unique_lock<OrtMutex> lock(mutex_);
+    std::unique_lock<OrtSpinlock> lock(mutex_);
     Elem& e = array_[w_idx];
     ElemState s = e.state.load(std::memory_order_relaxed);
     if (s == ElemState::kReady &&
@@ -282,7 +302,7 @@ class RunQueue {
     Work w;
   };
 
-  OrtMutex mutex_;
+  OrtSpinlock mutex_;
   // Low log(kSize) + 1 bits in front_ and back_ contain rolling index of
   // front/back, respectively. The remaining bits contain modification counters
   // that are incremented on Push operations. This allows us to (1) distinguish
