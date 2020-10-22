@@ -40,17 +40,17 @@
 
 namespace onnxruntime {
 
-//#define LOCK_TYPE OrtSpinlock
+#define LOCK_TYPE OrtSpinlock
 //#define LOCK_TYPE OrtMutex
-#define LOCK_TYPE std::mutex
+//#define LOCK_TYPE std::mutex
 
 struct OrtSpinlock {
-  std::atomic<bool> locked = ATOMIC_FLAG_INIT;
+  std::atomic<bool> locked{false};
 
  public:
   void lock() {
     while (locked) {
-      //      _mm_pause();
+      _mm_pause();
     }
     bool expect = false;
     while (!locked.compare_exchange_strong(expect, true, std::memory_order_acquire)) {
