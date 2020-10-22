@@ -756,7 +756,7 @@ int CurrentThreadId() const EIGEN_FINAL {
     std::atomic<bool> par_section_active{false};
     std::atomic<int> workers_in_loop{0};
     std::vector<std::pair<int, unsigned>> pending_items;
-    volatile std::function<void()> *current_work_item{0};
+    std::function<void()> * volatile current_work_item{0};
   };
 
   //  static_assert(std::is_trivially_destructible<PerThread>::value, "Per-thread state should be trivially destructible");
