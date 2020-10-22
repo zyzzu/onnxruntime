@@ -77,6 +77,8 @@ class ExtendedThreadPoolInterface : public Eigen::ThreadPoolInterface {
   // synchronization is handled in the thread pool, and so any state captured
   // by fn() is safe from concurrent access once RunInParallel returns.
   virtual void RunInParallel(std::function<void()> fn, unsigned n) = 0;
+  virtual void StartParallel() = 0;
+  virtual void EndParallel() = 0;  
 };
 
 }  // namespace concurrency
