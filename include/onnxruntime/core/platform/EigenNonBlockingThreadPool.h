@@ -586,27 +586,27 @@ void StartParallel() override {
   if (!my_pt->tag.Get()) {
     my_pt->tag = Tag::GetNext();
   }
+  my_pt->par_section_active = true;
 }
 
 void EndParallel() override {
   PerThread* my_pt = GetPerThread();
   ORT_ENFORCE(my_pt->in_parallel, "Ending parallel section, but none started");
 
-  // Notify the barrier for the work we completed, plus any work that we successfully
-  // revoke from the work queues
-  //int notifications_needed = 1;
+  // Notify workers to exit from ParLoopWorker
+  my_pt->par_section_active = false;
+
+  // Attempt to cancel any tasks that were sent to workers but not
+  // started. 
   for (auto& item : my_pt->pending_items) {
     Queue& q = worker_data_[item.first].queue;
     if (q.RevokeWithTag(my_pt->tag, item.second)) {
       my_pt->num_workers--;
-      //    notifications_needed++;
     }
   }
   my_pt->pending_items.clear();
-  //b.Notify(notifications_needed);
   
-  // Synchronize with any work items that are still running
-  //b.Wait();
+  // Wait for workers to exit ParLoopWorker
   while (my_pt->num_workers) {
     _mm_pause();
   }
@@ -622,7 +622,7 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
 
   int extra_needed = (n-1) - my_pt->num_workers;
   if (extra_needed) {
-    ::std::cout << "Extending gang " << my_pt->num_workers << " -> " << (n-1) << "\n";
+    //    ::std::cout << "Extending gang " << my_pt->num_workers << " -> " << (n-1) << "\n";
 
     std::vector<unsigned> good_hints, alt_hints;
     GetGoodWorkerHints(extra_needed, good_hints, alt_hints);
@@ -738,6 +738,7 @@ int CurrentThreadId() const EIGEN_FINAL {
     Tag tag{};                         // Work item tag used to identify this thread.
     bool in_parallel{false};           // Inside a parallel section (hence tag not unique if we re-use)
     std::atomic<int> num_workers{0}; // Could merge with in_parallel
+    std::atomic<bool> par_section_active{false};
     std::vector<std::pair<int, unsigned>> pending_items;
   };
 
@@ -852,7 +853,10 @@ void ParLoopWorker(PerThread* leader_pt) {
   ORT_ENFORCE(leader_pt);
   ORT_ENFORCE(leader_pt->in_parallel);      
   my_pt->in_parallel = true;
-  ::std::cout << "Hello";
+
+  while (leader_pt->par_section_active) {
+  }
+
   my_pt->in_parallel = false;
   leader_pt->num_workers--;
 }
