@@ -602,6 +602,7 @@ void EndParallel() override {
       //    notifications_needed++;
     }
   }
+  my_pt->pending_items.clear();
   //b.Notify(notifications_needed);
   
   // Synchronize with any work items that are still running
@@ -621,7 +622,7 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
 
   int extra_needed = (n-1) - my_pt->num_workers;
   if (extra_needed) {
-    ::std::cout << "Extending gang " << my_pt->num_workers << " -> " << n << "\n";
+    ::std::cout << "Extending gang " << my_pt->num_workers << " -> " << (n-1) << "\n";
 
     std::vector<unsigned> good_hints, alt_hints;
     GetGoodWorkerHints(extra_needed, good_hints, alt_hints);
