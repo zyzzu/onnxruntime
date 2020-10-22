@@ -652,7 +652,7 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
       t = q.PushBackWithTag(std::move(t), my_pt->tag, w_idx);
       if (!t.f) {
         // The queue accepted the work, ensure that the thread is servicing the queue
-        my_pt->pending_items.push_back({q_idx, w_idx});
+        //        my_pt->pending_items.push_back({q_idx, w_idx});
         td.EnsureAwake();
         my_pt->num_workers++;
       }
