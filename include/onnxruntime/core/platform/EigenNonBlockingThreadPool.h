@@ -574,78 +574,84 @@ void GetGoodWorkerHints(int n, std::vector<unsigned>& good_hints, std::vector<un
   }
 }
 
+void StartParallel() override {
+  PerThread* my_pt = GetPerThread();
+  ORT_ENFORCE(!my_pt->in_parallel, "Nested parallelism not supported");
+  my_pt->in_parallel=true;
+  if (!my_pt->tag.Get()) {
+    my_pt->tag = Tag::GetNext();
+  }
+}
+
+void EndParallel() override {
+  PerThread* my_pt = GetPerThread();
+  ORT_ENFORCE(my_pt->in_parallel, "Ending parallel section, but none started");
+  my_pt->in_parallel=false;
+}
+  
 void RunInParallel(std::function<void()> fn, unsigned n) override {
   PerThread* my_pt = GetPerThread();
-  assert(n>=1);
-  if (n == 1 || my_pt->in_parallel) {
-    fn();
-  } else {
-    // We build a list of <thread,idx> pairs for each of the queues that accepts a work
-    // item.  This lets us remove any work items that do not get executed by the threads
-    // that we push them to.
-    std::vector<std::pair<int, unsigned>> pending_items;
-    Barrier b(n, allow_spinning_);
+  ORT_ENFORCE(n > 1, "Trivial parallel section; should be avoided by caller");
 
-    my_pt->in_parallel = true;
-    if (!my_pt->tag.Get()) {
-      my_pt->tag = Tag::GetNext();
-    }
-
-    // Push up to n-1 copies of the work item into the queues
-    std::vector<unsigned> good_hints, alt_hints;
-    GetGoodWorkerHints(n - 1, good_hints, alt_hints);
-    for (unsigned i = 0; i < n - 1; i++) {
-      Task t = env_.CreateTask([&b, &fn]() {
-        fn();
-        b.Notify(1);
-      });
-      int q_idx;
-      if (i < good_hints.size()) {
-        q_idx = good_hints[i];
+  // We build a list of <thread,idx> pairs for each of the queues that accepts a work
+  // item.  This lets us remove any work items that do not get executed by the threads
+  // that we push them to.
+  std::vector<std::pair<int, unsigned>> pending_items;
+  Barrier b(n, allow_spinning_);
+  
+  // Push up to n-1 copies of the work item into the queues
+  std::vector<unsigned> good_hints, alt_hints;
+  GetGoodWorkerHints(n - 1, good_hints, alt_hints);
+  for (unsigned i = 0; i < n - 1; i++) {
+    Task t = env_.CreateTask([&b, &fn]() {
+      fn();
+      b.Notify(1);
+    });
+    int q_idx;
+    if (i < good_hints.size()) {
+      q_idx = good_hints[i];
+    } else {
+      auto alt_i = i - static_cast<unsigned>(good_hints.size());
+      if (alt_i < alt_hints.size()) {
+        q_idx = alt_hints[alt_i];
       } else {
-        auto alt_i = i - static_cast<unsigned>(good_hints.size());
-        if (alt_i < alt_hints.size()) {
-          q_idx = alt_hints[alt_i];
-        } else {
-          q_idx = Rand(&my_pt->rand) % num_threads_;
-        }
-      }
-      WorkerData& td = worker_data_[q_idx];
-      Queue& q = td.queue;
-      unsigned w_idx;
-      t = q.PushBackWithTag(std::move(t), my_pt->tag, w_idx);
-      if (t.f) {
-        // The queue rejected the work.  Account for the missing capacity for work
-        // on the synchronization barrier.  The semantics for RunInParallel are that
-        // the function is called with up to n-way parallelism, and so the
-        // work itself will be performed in the current thread's call to fn()
-        // after finishing adding work to the pool.
-        b.Notify(1);
-      } else {
-        // The queue accepted the work, ensure that the thread is servicing the queue
-        pending_items.push_back({q_idx, w_idx});
-        td.EnsureAwake();
+        q_idx = Rand(&my_pt->rand) % num_threads_;
       }
     }
-
-    // Run the final copy ourselves, for the total of n degree-of-parallelism
-    fn();
-
-    // Notify the barrier for the work we completed, plus any work that we successfully
-    // revoke from the work queues
-    int notifications_needed = 1;
-    for (auto& item : pending_items) {
-      Queue& q = worker_data_[item.first].queue;
-      if (q.RevokeWithTag(my_pt->tag, item.second)) {
-        notifications_needed++;
-      }
+    WorkerData& td = worker_data_[q_idx];
+    Queue& q = td.queue;
+    unsigned w_idx;
+    t = q.PushBackWithTag(std::move(t), my_pt->tag, w_idx);
+    if (t.f) {
+      // The queue rejected the work.  Account for the missing capacity for work
+      // on the synchronization barrier.  The semantics for RunInParallel are that
+      // the function is called with up to n-way parallelism, and so the
+      // work itself will be performed in the current thread's call to fn()
+      // after finishing adding work to the pool.
+      b.Notify(1);
+    } else {
+      // The queue accepted the work, ensure that the thread is servicing the queue
+      pending_items.push_back({q_idx, w_idx});
+      td.EnsureAwake();
     }
-    b.Notify(notifications_needed);
-
-    // Synchronize with any work items that are still running
-    b.Wait();
-    my_pt->in_parallel = false;
+    }
+  
+  // Run the final copy ourselves, for the total of n degree-of-parallelism
+  fn();
+  
+  // Notify the barrier for the work we completed, plus any work that we successfully
+  // revoke from the work queues
+  int notifications_needed = 1;
+  for (auto& item : pending_items) {
+    Queue& q = worker_data_[item.first].queue;
+    if (q.RevokeWithTag(my_pt->tag, item.second)) {
+      notifications_needed++;
+    }
   }
+  b.Notify(notifications_needed);
+  
+  // Synchronize with any work items that are still running
+  b.Wait();
 }
 
 void Cancel() override {

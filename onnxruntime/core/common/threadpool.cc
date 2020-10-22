@@ -184,7 +184,9 @@ void ThreadPool::ParallelForFixedBlockSizeScheduling(const std::ptrdiff_t total,
   // Run the work in the thread pool (and in the current thread).  Synchronization with helping
   // threads is handled within RunInParallel, hence we can deallocate lc and other state captured by
   // run_work.
+  StartParallel();
   RunInParallel(run_work, num_work_items);
+  StopParallel();
 }
 
 void ThreadPool::SimpleParallelFor(std::ptrdiff_t total, const std::function<void(std::ptrdiff_t)>& fn) {
@@ -201,6 +203,18 @@ void ThreadPool::Schedule(std::function<void()> fn) {
     underlying_threadpool_->Schedule(std::move(fn));
   } else {
     fn();
+  }
+}
+
+void ThreadPool::StartParallel() {
+  if (underlying_threadpool_) {
+    underlying_threadpool_->StartParallel();
+  }
+}
+
+void ThreadPool::EndParallel() {
+  if (underlying_threadpool_) {
+    underlying_threadpool_->EndParallel();
   }
 }
 
