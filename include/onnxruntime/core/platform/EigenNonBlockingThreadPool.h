@@ -662,6 +662,9 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
   // Run the loop ourselves, for a total of n degree-of-parallelism
   fn();
   my_pt->current_work_item = 0;
+
+  while (my_pt->workers_in_loop) {
+  }
 }
 
 void Cancel() override {
@@ -747,6 +750,7 @@ int CurrentThreadId() const EIGEN_FINAL {
     bool in_parallel{false};           // Inside a parallel section (hence tag not unique if we re-use)
     std::atomic<int> num_workers{0}; // Could merge with in_parallel
     std::atomic<bool> par_section_active{false};
+    std::atomic<int> workers_in_loop{0};
     std::vector<std::pair<int, unsigned>> pending_items;
     std::function<void()> *current_work_item{0};
   };
@@ -864,9 +868,13 @@ void ParLoopWorker(PerThread* leader_pt) {
   my_pt->in_parallel = true;
 
   while (leader_pt->par_section_active) {
-    std::function<void()> *work_item = leader_pt->current_work_item;
-    if (work_item) {
-      (*work_item)();
+    if (leader_pt->current_work_item) {
+      leader_pt->workers_in_loop++; // Race here?
+      std::function<void()> *work_item = leader_pt->current_work_item;
+      if (work_item) {
+        (*work_item)();
+      }
+      leader_pt->workers_in_loop--;
     }
   }
 
