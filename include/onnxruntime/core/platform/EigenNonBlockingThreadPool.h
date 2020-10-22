@@ -11,6 +11,7 @@
 
 #include <type_traits>
 #include <mutex>
+#include <iostream>
 
 #pragma once
 #include "onnxruntime_config.h"
@@ -579,6 +580,8 @@ void GetGoodWorkerHints(int n, std::vector<unsigned>& good_hints, std::vector<un
 void StartParallel() override {
   PerThread* my_pt = GetPerThread();
   ORT_ENFORCE(!my_pt->in_parallel, "Nested parallelism not supported");
+  ORT_ENFORCE(my_pt->num_workers == 0);
+  ORT_ENFORCE(my_pt->pending_items.size() == 0);
   my_pt->in_parallel=true;
   if (!my_pt->tag.Get()) {
     my_pt->tag = Tag::GetNext();
@@ -588,72 +591,68 @@ void StartParallel() override {
 void EndParallel() override {
   PerThread* my_pt = GetPerThread();
   ORT_ENFORCE(my_pt->in_parallel, "Ending parallel section, but none started");
-  my_pt->in_parallel=false;
-}
-  
-void RunInParallel(std::function<void()> fn, unsigned n) override {
-  PerThread* my_pt = GetPerThread();
-  ORT_ENFORCE(n > 1, "Trivial parallel section; should be avoided by caller");
 
-  // We build a list of <thread,idx> pairs for each of the queues that accepts a work
-  // item.  This lets us remove any work items that do not get executed by the threads
-  // that we push them to.
-  std::vector<std::pair<int, unsigned>> pending_items;
-  Barrier b(n, allow_spinning_);
-  
-  // Push up to n-1 copies of the work item into the queues
-  std::vector<unsigned> good_hints, alt_hints;
-  GetGoodWorkerHints(n - 1, good_hints, alt_hints);
-  for (unsigned i = 0; i < n - 1; i++) {
-    Task t = env_.CreateTask([&b, &fn]() {
-      fn();
-      b.Notify(1);
-    });
-    int q_idx;
-    if (i < good_hints.size()) {
-      q_idx = good_hints[i];
-    } else {
-      auto alt_i = i - static_cast<unsigned>(good_hints.size());
-      if (alt_i < alt_hints.size()) {
-        q_idx = alt_hints[alt_i];
-      } else {
-        q_idx = Rand(&my_pt->rand) % num_threads_;
-      }
-    }
-    WorkerData& td = worker_data_[q_idx];
-    Queue& q = td.queue;
-    unsigned w_idx;
-    t = q.PushBackWithTag(std::move(t), my_pt->tag, w_idx);
-    if (t.f) {
-      // The queue rejected the work.  Account for the missing capacity for work
-      // on the synchronization barrier.  The semantics for RunInParallel are that
-      // the function is called with up to n-way parallelism, and so the
-      // work itself will be performed in the current thread's call to fn()
-      // after finishing adding work to the pool.
-      b.Notify(1);
-    } else {
-      // The queue accepted the work, ensure that the thread is servicing the queue
-      pending_items.push_back({q_idx, w_idx});
-      td.EnsureAwake();
-    }
-    }
-  
-  // Run the final copy ourselves, for the total of n degree-of-parallelism
-  fn();
-  
   // Notify the barrier for the work we completed, plus any work that we successfully
   // revoke from the work queues
-  int notifications_needed = 1;
-  for (auto& item : pending_items) {
+  //int notifications_needed = 1;
+  for (auto& item : my_pt->pending_items) {
     Queue& q = worker_data_[item.first].queue;
     if (q.RevokeWithTag(my_pt->tag, item.second)) {
-      notifications_needed++;
+      my_pt->num_workers--;
+      //    notifications_needed++;
     }
   }
-  b.Notify(notifications_needed);
+  //b.Notify(notifications_needed);
   
   // Synchronize with any work items that are still running
-  b.Wait();
+  //b.Wait();
+  while (my_pt->num_workers) {
+    _mm_pause();
+  }
+  
+  ORT_ENFORCE(my_pt->num_workers == 0);
+  my_pt->in_parallel=false;
+}
+
+void RunInParallel(std::function<void()> fn, unsigned n) override {
+  PerThread* my_pt = GetPerThread();
+  ORT_ENFORCE(my_pt->in_parallel, "RunInParallel, but not in parallel section");
+  ORT_ENFORCE(n > 1, "Trivial parallel section; should be avoided by caller");
+
+  int extra_needed = (n-1) - my_pt->num_workers;
+  if (extra_needed) {
+    ::std::cout << "Extending gang " << my_pt->num_workers << " -> " << n << "\n";
+
+    std::vector<unsigned> good_hints, alt_hints;
+    GetGoodWorkerHints(extra_needed, good_hints, alt_hints);
+    for (int i = 0; i < extra_needed; i++) {
+      Task t = env_.CreateTask([=]{ ParLoopWorker(my_pt); });
+      int q_idx;
+      if (i < good_hints.size()) {
+        q_idx = good_hints[i];
+      } else {
+        auto alt_i = i - static_cast<unsigned>(good_hints.size());
+        if (alt_i < alt_hints.size()) {
+          q_idx = alt_hints[alt_i];
+        } else {
+          q_idx = Rand(&my_pt->rand) % num_threads_;
+        }
+      }
+      WorkerData& td = worker_data_[q_idx];
+      Queue& q = td.queue;
+      unsigned w_idx;
+      t = q.PushBackWithTag(std::move(t), my_pt->tag, w_idx);
+      if (!t.f) {
+        // The queue accepted the work, ensure that the thread is servicing the queue
+        my_pt->pending_items.push_back({q_idx, w_idx});
+        td.EnsureAwake();
+        my_pt->num_workers++;
+      }
+    }
+  }
+  
+  // Run the loop ourselves, for a total of n degree-of-parallelism
+  fn();
 }
 
 void Cancel() override {
@@ -737,9 +736,11 @@ int CurrentThreadId() const EIGEN_FINAL {
     int thread_id{-1};                 // Worker thread index in pool.
     Tag tag{};                         // Work item tag used to identify this thread.
     bool in_parallel{false};           // Inside a parallel section (hence tag not unique if we re-use)
+    std::atomic<int> num_workers{0}; // Could merge with in_parallel
+    std::vector<std::pair<int, unsigned>> pending_items;
   };
 
-  static_assert(std::is_trivially_destructible<PerThread>::value, "Per-thread state should be trivially destructible");
+  //  static_assert(std::is_trivially_destructible<PerThread>::value, "Per-thread state should be trivially destructible");
 
   struct WorkerData {
     constexpr WorkerData() : thread(), queue() {
@@ -842,6 +843,18 @@ int CurrentThreadId() const EIGEN_FINAL {
   std::atomic<unsigned> blocked_;  // Count of blocked workers, used as a termination condition
   std::atomic<bool> done_;
   std::atomic<bool> cancelled_;
+
+
+void ParLoopWorker(PerThread* leader_pt) {
+  PerThread* my_pt = GetPerThread();
+  ORT_ENFORCE(!my_pt->in_parallel);
+  ORT_ENFORCE(leader_pt);
+  ORT_ENFORCE(leader_pt->in_parallel);      
+  my_pt->in_parallel = true;
+  ::std::cout << "Hello";
+  my_pt->in_parallel = false;
+  leader_pt->num_workers--;
+}
 
   // Allow control over how many bits to use in each entry in good_worker_hints_.
   // We reduce this below the full 64-bit word size for two reasons.  First, it
