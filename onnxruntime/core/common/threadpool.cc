@@ -186,7 +186,7 @@ void ThreadPool::ParallelForFixedBlockSizeScheduling(const std::ptrdiff_t total,
   // run_work.
   StartParallel();
   RunInParallel(run_work, num_work_items);
-  StopParallel();
+  EndParallel();
 }
 
 void ThreadPool::SimpleParallelFor(std::ptrdiff_t total, const std::function<void(std::ptrdiff_t)>& fn) {
