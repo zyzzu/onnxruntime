@@ -10,6 +10,7 @@
 /* Modifications Copyright (c) Microsoft. */
 
 #include <type_traits>
+#include <mutex>
 
 #pragma once
 #include "onnxruntime_config.h"
@@ -38,6 +39,10 @@
 #include "core/platform/Barrier.h"
 
 namespace onnxruntime {
+
+//#define LOCK_TYPE OrtSpinlock
+//#define LOCK_TYPE OrtMutex
+#define LOCK_TYPE std::mutex
 
 struct OrtSpinlock {
   std::atomic<bool> locked = ATOMIC_FLAG_INIT;
@@ -144,7 +149,7 @@ class RunQueue {
   // PushBack adds w at the end of the queue.
   // If queue is full returns w, otherwise returns default-constructed Work.
   Work PushBack(Work w) {
-    std::unique_lock<OrtSpinlock> lock(mutex_);
+    std::unique_lock<LOCK_TYPE> lock(mutex_);
     unsigned back = back_.load(std::memory_order_relaxed);
     Elem& e = array_[(back - 1) & kMask];
     ElemState s = e.state.load(std::memory_order_relaxed);
@@ -166,7 +171,7 @@ class RunQueue {
   //
   // If the queue is full, returns w, otherwise returns default-constructed work.
   Work PushBackWithTag(Work w, Tag tag, unsigned &w_idx) {
-    std::unique_lock<OrtSpinlock> lock(mutex_);
+    std::unique_lock<LOCK_TYPE> lock(mutex_);
     unsigned back = back_.load(std::memory_order_relaxed);
     w_idx = (back-1) & kMask;
     Elem& e = array_[w_idx];
@@ -186,7 +191,7 @@ class RunQueue {
   Work PopBack() {
     if (Empty())
       return Work();
-    std::unique_lock<OrtSpinlock> lock(mutex_);
+    std::unique_lock<LOCK_TYPE> lock(mutex_);
     unsigned back;
     Elem *e;
     ElemState s;
@@ -228,7 +233,7 @@ class RunQueue {
 
   bool RevokeWithTag(Tag tag, unsigned w_idx) {
     bool revoked = false;
-    std::unique_lock<OrtSpinlock> lock(mutex_);
+    std::unique_lock<LOCK_TYPE> lock(mutex_);
     Elem& e = array_[w_idx];
     ElemState s = e.state.load(std::memory_order_relaxed);
     if (s == ElemState::kReady &&
@@ -302,7 +307,7 @@ class RunQueue {
     Work w;
   };
 
-  OrtSpinlock mutex_;
+  LOCK_TYPE mutex_;
   // Low log(kSize) + 1 bits in front_ and back_ contain rolling index of
   // front/back, respectively. The remaining bits contain modification counters
   // that are incremented on Push operations. This allows us to (1) distinguish
