@@ -311,19 +311,35 @@ TEST(ThreadPoolTest, TestMultiLoopSections_1Thread_0Loop) {
 }
     
 TEST(ThreadPoolTest, TestMultiLoopSections_1Thread_1Loop) {
-  TestMultiLoopSections("TestMultiLoopSections_1Thread_0Loop", 1, 1);
+  TestMultiLoopSections("TestMultiLoopSections_1Thread_1Loop", 1, 1);
+}
+    
+TEST(ThreadPoolTest, TestMultiLoopSections_2Thread_0Loop) {
+  TestMultiLoopSections("TestMultiLoopSections_2Thread_0Loop", 2, 0);
+}
+    
+TEST(ThreadPoolTest, TestMultiLoopSections_2Thread_1Loop) {
+  TestMultiLoopSections("TestMultiLoopSections_2Thread_1Loop", 2, 1);
+}
+    
+TEST(ThreadPoolTest, TestMultiLoopSections_2Thread_2Loop) {
+  TestMultiLoopSections("TestMultiLoopSections_2Thread_2Loop", 2, 2);
+}
+    
+TEST(ThreadPoolTest, TestMultiLoopSections_2Thread_100Loop) {
+  TestMultiLoopSections("TestMultiLoopSections_2Thread_100Loop", 2, 100);
 }
     
 TEST(ThreadPoolTest, TestMultiLoopSections_4Thread_1Loop) {
-  TestMultiLoopSections("TestMultiLoopSections_1Thread_0Loop", 4, 1);
+  TestMultiLoopSections("TestMultiLoopSections_4Thread_1Loop", 4, 1);
 }
     
 TEST(ThreadPoolTest, TestMultiLoopSections_4Thread_10Loop) {
-  TestMultiLoopSections("TestMultiLoopSections_1Thread_10Loop", 4, 10);
+  TestMultiLoopSections("TestMultiLoopSections_4Thread_10Loop", 4, 10);
 }
     
 TEST(ThreadPoolTest, TestMultiLoopSections_4Thread_100Loop) {
-  TestMultiLoopSections("TestMultiLoopSections_1Thread_10Loop", 4, 100);
+  TestMultiLoopSections("TestMultiLoopSections_4Thread_100Loop", 4, 100);
 }
     
 #ifdef _WIN32

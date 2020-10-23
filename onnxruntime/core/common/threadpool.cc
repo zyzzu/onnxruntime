@@ -171,13 +171,15 @@ void ThreadPool::ParallelForFixedBlockSizeScheduling(const std::ptrdiff_t total,
   assert(num_work_items > 0);
 
   LoopCounter lc(*this, total, block_size);
-  std::function<void()> run_work = [&]() {
-    int my_home_shard = lc.GetHomeShard();
-    int my_shard = my_home_shard;
-    uint64_t my_iter_start, my_iter_end;
-    while (lc.ClaimIterations(my_home_shard, my_shard, my_iter_start, my_iter_end)) {
-      fn(static_cast<std::ptrdiff_t>(my_iter_start),
-         static_cast<std::ptrdiff_t>(my_iter_end));
+  std::function<void(int,int)> run_work = [&](int idx, int) {
+    if (idx < total) {
+      int my_home_shard = lc.GetHomeShard();
+      int my_shard = my_home_shard;
+      uint64_t my_iter_start, my_iter_end;
+      while (lc.ClaimIterations(my_home_shard, my_shard, my_iter_start, my_iter_end)) {
+	fn(static_cast<std::ptrdiff_t>(my_iter_start),
+	   static_cast<std::ptrdiff_t>(my_iter_end));
+      }
     }
   };
 
@@ -222,7 +224,7 @@ void ThreadPool::EndParallel() {
   is_parallel = false;
 }
 
-void ThreadPool::RunInParallel(std::function<void()> fn, int n) {
+void ThreadPool::RunInParallel(std::function<void(int,int)> fn, int n) {
   ORT_ENFORCE(fn != nullptr);
   if (underlying_threadpool_) {
     bool started = false;
@@ -235,7 +237,7 @@ void ThreadPool::RunInParallel(std::function<void()> fn, int n) {
       EndParallel();
     }
   } else {
-    fn();
+    fn(0,1);
   }
 }
 

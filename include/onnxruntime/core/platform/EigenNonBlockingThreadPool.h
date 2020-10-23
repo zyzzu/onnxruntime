@@ -41,8 +41,8 @@
 
 namespace onnxruntime {
 
-//#define LOCK_TYPE OrtSpinlock
-#define LOCK_TYPE OrtMutex
+#define LOCK_TYPE OrtSpinlock
+//#define LOCK_TYPE OrtMutex
 //#define LOCK_TYPE std::mutex
 
 struct OrtSpinlock {
@@ -77,7 +77,7 @@ class ExtendedThreadPoolInterface : public Eigen::ThreadPoolInterface {
   // then the function will run directly in the caller.  The fork-join
   // synchronization is handled in the thread pool, and so any state captured
   // by fn() is safe from concurrent access once RunInParallel returns.
-  virtual void RunInParallel(std::function<void()> fn, unsigned n) = 0;
+  virtual void RunInParallel(std::function<void(int,int)> fn, unsigned n) = 0;
   virtual void StartParallel() = 0;
   virtual void EndParallel() = 0;  
 };
@@ -582,6 +582,7 @@ void StartParallel() override {
   ORT_ENFORCE(!my_pt->in_parallel, "Nested parallelism not supported");
   ORT_ENFORCE(my_pt->num_workers == 0);
   ORT_ENFORCE(my_pt->pending_items.size() == 0);
+  ORT_ENFORCE(my_pt->workers_started == 0);
   my_pt->in_parallel=true;
   if (!my_pt->tag.Get()) {
     my_pt->tag = Tag::GetNext();
@@ -612,20 +613,17 @@ void EndParallel() override {
   }
   
   ORT_ENFORCE(my_pt->num_workers == 0);
+  my_pt->workers_started = 0;
   my_pt->in_parallel=false;
 }
 
-void RunInParallel(std::function<void()> fn, unsigned n) override {
+ void RunInParallel(std::function<void(int,int)> fn, unsigned n) override {
   PerThread* my_pt = GetPerThread();
   ORT_ENFORCE(my_pt->in_parallel, "RunInParallel, but not in parallel section");
   ORT_ENFORCE(n > 1, "Trivial parallel section; should be avoided by caller");
 
-  std::function<void()> work_item = [&]() {
-    fn();
-  };
-
   ORT_ENFORCE(!my_pt->current_work_item);
-  my_pt->current_work_item = &work_item;
+  my_pt->current_work_item = &fn;
   
   int extra_needed = (n-1) - my_pt->num_workers;
   if (extra_needed > 0) {
@@ -659,11 +657,12 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
   
   // Run the loop ourselves, for a total of n degree-of-parallelism
   //  ::std::cout << "Have " << my_pt->num_workers << "\n";
-  fn();
+  fn(0, my_pt->workers_started+1);
   my_pt->current_work_item = 0;
 
   //  ::std::cout << "In loop " << my_pt->workers_in_loop << "\n";
   while (my_pt->workers_in_loop) {
+    _mm_pause();
   }
 
   //  ::std::cout << "OK\n";
@@ -751,10 +750,11 @@ int CurrentThreadId() const EIGEN_FINAL {
     Tag tag{};                         // Work item tag used to identify this thread.
     bool in_parallel{false};           // Inside a parallel section (hence tag not unique if we re-use)
     std::atomic<int> num_workers{0}; // Could merge with in_parallel
+    std::atomic<int> workers_started{0}; // Could merge with in_parallel
     std::atomic<bool> par_section_active{false};
     std::atomic<int> workers_in_loop{0};
     std::vector<std::pair<int, unsigned>> pending_items;
-    std::function<void()> * volatile current_work_item{0};
+    std::atomic<std::function<void(int,int)> *> current_work_item{0};
   };
 
   //  static_assert(std::is_trivially_destructible<PerThread>::value, "Per-thread state should be trivially destructible");
@@ -869,12 +869,14 @@ void ParLoopWorker(PerThread* leader_pt) {
   ORT_ENFORCE(leader_pt->in_parallel);      
   my_pt->in_parallel = true;
 
+  int my_idx = (++leader_pt->workers_started);
+
   while (leader_pt->par_section_active) {
     if (leader_pt->current_work_item) {
       leader_pt->workers_in_loop++;
-      std::function<void()> *work_item = leader_pt->current_work_item;
+      std::function<void(int,int)> *work_item = leader_pt->current_work_item;
       if (work_item) {
-	(*work_item)();
+	(*work_item)(my_idx, leader_pt->workers_started+1);
       }
       leader_pt->workers_in_loop--;
     }
