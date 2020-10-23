@@ -184,9 +184,7 @@ void ThreadPool::ParallelForFixedBlockSizeScheduling(const std::ptrdiff_t total,
   // Run the work in the thread pool (and in the current thread).  Synchronization with helping
   // threads is handled within RunInParallel, hence we can deallocate lc and other state captured by
   // run_work.
-  StartParallel();
   RunInParallel(run_work, num_work_items);
-  EndParallel();
 }
 
 void ThreadPool::SimpleParallelFor(std::ptrdiff_t total, const std::function<void(std::ptrdiff_t)>& fn) {
@@ -206,22 +204,36 @@ void ThreadPool::Schedule(std::function<void()> fn) {
   }
 }
 
+static thread_local bool is_parallel{false};
+
 void ThreadPool::StartParallel() {
+  ORT_ENFORCE(!is_parallel);
   if (underlying_threadpool_) {
     underlying_threadpool_->StartParallel();
   }
+  is_parallel = true;
 }
 
 void ThreadPool::EndParallel() {
+  ORT_ENFORCE(is_parallel);
   if (underlying_threadpool_) {
     underlying_threadpool_->EndParallel();
   }
+  is_parallel = false;
 }
 
 void ThreadPool::RunInParallel(std::function<void()> fn, int n) {
   ORT_ENFORCE(fn != nullptr);
   if (underlying_threadpool_) {
+    bool started = false;
+    if (!is_parallel) {
+      started = true;
+      StartParallel();
+    }
     underlying_threadpool_->RunInParallel(std::move(fn), n);
+    if (started) {
+      EndParallel();
+    }
   } else {
     fn();
   }
@@ -350,6 +362,24 @@ int ThreadPool::DegreeOfParallelism(const concurrency::ThreadPool* tp) {
   // When not using OpenMP, we parallelise over the N threads created by the pool
   // tp, plus 1 for the thread entering a loop.
   return tp ? (tp->NumThreads()+1) : 1;
+#endif
+}
+
+void ThreadPool::StartParallel(concurrency::ThreadPool* tp) {
+#ifdef _OPENMP
+#else
+  if (tp) {
+    tp->StartParallel();
+  }
+#endif
+}
+
+void ThreadPool::EndParallel(concurrency::ThreadPool* tp) {
+#ifdef _OPENMP
+#else
+  if (tp) {
+    tp->EndParallel();
+  }
 #endif
 }
 

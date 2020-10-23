@@ -598,13 +598,13 @@ void EndParallel() override {
 
   // Attempt to cancel any tasks that were sent to workers but not
   // started. 
-  //  for (auto& item : my_pt->pending_items) {
-  //    Queue& q = worker_data_[item.first].queue;
-  //    if (q.RevokeWithTag(my_pt->tag, item.second)) {
-  //      my_pt->num_workers--;
-  //    }
-  //  }
-  //  my_pt->pending_items.clear();
+  for (auto& item : my_pt->pending_items) {
+    Queue& q = worker_data_[item.first].queue;
+    if (q.RevokeWithTag(my_pt->tag, item.second)) {
+      my_pt->num_workers--;
+    }
+  }
+  my_pt->pending_items.clear();
   
   // Wait for workers to exit ParLoopWorker
   while (my_pt->num_workers) {
@@ -636,7 +636,7 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
     for (int i = 0; i < extra_needed; i++) {
       Task t = env_.CreateTask([=]{ ParLoopWorker(my_pt); });
       int q_idx;
-      if (i < good_hints.size()) {
+      if (i < (int)good_hints.size()) {
         q_idx = good_hints[i];
       } else {
         auto alt_i = i - static_cast<unsigned>(good_hints.size());
@@ -652,7 +652,7 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
       t = q.PushBackWithTag(std::move(t), my_pt->tag, w_idx);
       if (!t.f) {
         // The queue accepted the work, ensure that the thread is servicing the queue
-        //        my_pt->pending_items.push_back({q_idx, w_idx});
+	my_pt->pending_items.push_back({q_idx, w_idx});
         td.EnsureAwake();
         my_pt->num_workers++;
       }
@@ -876,7 +876,7 @@ void ParLoopWorker(PerThread* leader_pt) {
       leader_pt->workers_in_loop++;
       std::function<void()> *work_item = leader_pt->current_work_item;
       if (work_item) {
-        (*work_item)();
+	(*work_item)();
       }
       leader_pt->workers_in_loop--;
     }

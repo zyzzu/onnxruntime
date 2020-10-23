@@ -122,6 +122,9 @@ class ThreadPool {
   // working in combination with the thread initiating the loop.
   static int DegreeOfParallelism(const concurrency::ThreadPool* tp);
 
+  static void StartParallel(concurrency::ThreadPool *tp);
+  static void EndParallel(concurrency::ThreadPool* tp);
+
   // Directly schedule the 'total' tasks to the underlying threadpool, without
   // cutting them by halves
   void SimpleParallelFor(std::ptrdiff_t total, const std::function<void(std::ptrdiff_t)>& fn);
@@ -227,6 +230,7 @@ class ThreadPool {
 
   ORT_DISALLOW_COPY_AND_ASSIGNMENT(ThreadPool);
 
+  
  private:
   friend class LoopCounter;
 
@@ -243,8 +247,8 @@ class ThreadPool {
   // then the function will run directly in the caller.  The fork-join
   // synchronization is handled in the thread pool, and so any state captured
   // by fn() is safe from concurrent access once RunWithHelp returns.
-  void StartParallel();
   void RunInParallel(std::function<void()> fn, int n);
+  void StartParallel();
   void EndParallel();
 
   // Divides the work represented by the range [0, total) into k shards.
