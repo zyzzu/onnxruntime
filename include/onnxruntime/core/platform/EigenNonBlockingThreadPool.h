@@ -41,8 +41,8 @@
 
 namespace onnxruntime {
 
-#define LOCK_TYPE OrtSpinlock
-//#define LOCK_TYPE OrtMutex
+//#define LOCK_TYPE OrtSpinlock
+#define LOCK_TYPE OrtMutex
 //#define LOCK_TYPE std::mutex
 
 struct OrtSpinlock {
@@ -628,9 +628,7 @@ void RunInParallel(std::function<void()> fn, unsigned n) override {
   my_pt->current_work_item = &work_item;
   
   int extra_needed = (n-1) - my_pt->num_workers;
-  if (extra_needed) {
-    //    ::std::cout << "Extending gang " << my_pt->num_workers << " -> " << (n-1) << "\n";
-
+  if (extra_needed > 0) {
     std::vector<unsigned> good_hints, alt_hints;
     GetGoodWorkerHints(extra_needed, good_hints, alt_hints);
     for (int i = 0; i < extra_needed; i++) {
