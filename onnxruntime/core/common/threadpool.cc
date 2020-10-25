@@ -14,6 +14,7 @@ limitations under the License.
 ==============================================================================*/
 
 #include <memory>
+#include <iostream>
 
 #include "core/platform/threadpool.h"
 #include "core/common/common.h"
@@ -38,15 +39,15 @@ namespace concurrency {
 #pragma warning(disable : 4324) /* Padding added to LoopCounterShard, LoopCounter for alignment */
 #endif
 
-static constexpr int CACHE_LINE_BYTES = 64;
-static constexpr int NUM_SHARDS = 8;
+  //static constexpr int CACHE_LINE_BYTES = 64;
+static constexpr uint64_t MAX_SHARDS = 8;
 
-struct alignas(CACHE_LINE_BYTES) LoopCounterShard {
+  struct /*alignas(CACHE_LINE_BYTES)*/ LoopCounterShard {
   ::std::atomic<uint64_t> _next;
   uint64_t _end;
 };
 
-class alignas(CACHE_LINE_BYTES) LoopCounter {
+  class /* alignas(CACHE_LINE_BYTES)*/ LoopCounter {
 public:
  LoopCounter(const ThreadPool& tp,
              uint64_t num_iterations,
@@ -55,41 +56,55 @@ public:
    assert(sizeof(LoopCounterShard) == 64);
    assert(block_size != 0);
 
-   // Divide the iteration space into NUM_SHARDS pieces.  If the iteration space does not
-   // divide evenly into shards of multiples of block_size then the final shard is left uneven.
-   double iterations_per_shard = static_cast<double>(num_iterations) / NUM_SHARDS;
-   uint64_t split = 0;
-   for (uint64_t shard = 0; shard < NUM_SHARDS; shard++) {
-     _shards[shard]._next = split;
-     split = (static_cast<uint64_t>((shard + 1) * iterations_per_shard) / block_size) * block_size;
-     _shards[shard]._end = split;
-   }
+   ORT_ENFORCE(block_size == 1, "block_size != 1 not implemented");
+   
+   _num_shards = ::std::min(num_iterations, MAX_SHARDS);
+   ORT_ENFORCE(_num_shards == (uint64_t)num_iterations, "loops > MAX_SHARDS not implemented");
 
+   // Divide the iteration space into MAX_SHARDS pieces.  If the iteration space does not
+   // divide evenly into shards of multiples of block_size then the final shard is left uneven.
+   //   double iterations_per_shard = static_cast<double>(num_iterations) / MAX_SHARDS;
+   //   uint64_t split = 0;
+   //   for (uint64_t shard = 0; shard < MAX_SHARDS; shard++) {
+   //     _shards[shard]._next = split;
+   //     split = (static_cast<uint64_t>((shard + 1) * iterations_per_shard) / block_size) * block_size;
+   //     _shards[shard]._end = split;
+   //   }
+
+   for (uint64_t shard = 0; shard < _num_shards; shard++) {
+     _shards[shard]._next = shard;
+     //     split = (static_cast<uint64_t>((shard + 1) * iterations_per_shard) / block_size) * block_size;
+     _shards[shard]._end = shard+1;
+   }
+  
    // Ensure that the final shard finishes precisely at the end of the iteration space
-   _shards[NUM_SHARDS - 1]._end = num_iterations;
+   //   _shards[MAX_SHARDS - 1]._end = num_iterations;
  }
 
   int GetHomeShard() const {
+    return (_tp.CurrentThreadId() + 1) % _num_shards;
     // Allocate each thread to a home shard, from which it starts claiming iterations.  The allocation
     // does not need to be unique, but we aim for a good distribution, particularly in the case where
     // most/all of the thread pool's threads are active in the loop.  Threads outside the pool may
     // also be claiming work, with CurrentThreadId -1.
-    int d_of_p = ThreadPool::DegreeOfParallelism(&_tp);
-    int my_thread_idx = (_tp.CurrentThreadId() + 1) % d_of_p;
-    assert(my_thread_idx >= 0 && my_thread_idx < d_of_p);
-
-    int home_shard;
-    if (d_of_p >= NUM_SHARDS) {
-      // More threads than shards => allocate them home shards round-robin, aiming to sprace the load across
-      // the shards
-      home_shard = my_thread_idx % NUM_SHARDS;
-    } else {
+    //   int d_of_p = ThreadPool::DegreeOfParallelism(&_tp);
+    //   int my_thread_idx = (_tp.CurrentThreadId() + 1) % d_of_p;
+    //    assert(my_thread_idx >= 0 && my_thread_idx < d_of_p);
+    //
+    //    
+    //
+    //    int home_shard;
+    //    if (d_of_p >= (int)_num_shards) {
+    //      // More threads than shards => allocate them home shards round-robin, aiming to sprace the load across
+    //      // the shards
+    //      home_shard = my_thread_idx % _num_shards;
+//    } else {
       // Fewer threads than shards => spread the threads evenly across the shards, so each will work
       // on a run of successive shards before contention
-      home_shard = (my_thread_idx * NUM_SHARDS) / d_of_p;
-    }
-    assert(home_shard >= 0 && home_shard < NUM_SHARDS);
-    return home_shard;
+    //      home_shard = (my_thread_idx * _num_shards) / d_of_p;
+    //    }
+    //    assert(home_shard >= 0 && home_shard < _num_shards);
+    //    return home_shard;
   }
 
   // Attempt to claim iterations from the sharded counter.  The function either
@@ -111,13 +126,14 @@ public:
       }
       // Work in the current shard is exhausted, move to the next shard, until
       // we are back at the home shard.
-      my_shard = (my_shard + 1) % NUM_SHARDS;
+      my_shard = (my_shard + 1) % _num_shards;
     } while (my_shard != my_home_shard);
     return false;
   }
 
 private:
-  alignas(CACHE_LINE_BYTES) LoopCounterShard _shards[NUM_SHARDS];
+  /*  alignas(CACHE_LINE_BYTES)*/ LoopCounterShard _shards[MAX_SHARDS];
+  uint64_t _num_shards;
   const ThreadPool& _tp;
   const uint64_t _block_size;
 };
