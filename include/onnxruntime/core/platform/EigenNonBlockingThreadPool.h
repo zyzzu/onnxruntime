@@ -77,7 +77,7 @@ class ExtendedThreadPoolInterface : public Eigen::ThreadPoolInterface {
   // then the function will run directly in the caller.  The fork-join
   // synchronization is handled in the thread pool, and so any state captured
   // by fn() is safe from concurrent access once RunInParallel returns.
-  virtual void RunInParallel(std::function<void(int,int)> fn, unsigned n) = 0;
+  virtual void RunInParallel(std::function<void(int idx)> fn, unsigned n) = 0;
   virtual void StartParallel() = 0;
   virtual void EndParallel() = 0;  
 };
@@ -617,13 +617,21 @@ void EndParallel() override {
   my_pt->in_parallel=false;
 }
 
- void RunInParallel(std::function<void(int,int)> fn, unsigned n) override {
+ void RunInParallel(std::function<void(int idx)> fn, unsigned n) override {
   PerThread* my_pt = GetPerThread();
   ORT_ENFORCE(my_pt->in_parallel, "RunInParallel, but not in parallel section");
   ORT_ENFORCE(n > 1, "Trivial parallel section; should be avoided by caller");
 
   ORT_ENFORCE(!my_pt->current_work_item);
-  my_pt->current_work_item = &fn;
+  std::function<void(int idx)> work_item{
+    [&](int idx) {
+      if (idx < (int)n) {
+	fn(idx);
+      }
+    }
+  };
+  
+  my_pt->current_work_item = &work_item;
   
   int extra_needed = (n-1) - my_pt->num_workers;
   if (extra_needed > 0) {
@@ -656,16 +664,12 @@ void EndParallel() override {
   }
   
   // Run the loop ourselves, for a total of n degree-of-parallelism
-  //  ::std::cout << "Have " << my_pt->num_workers << "\n";
-  fn(0, my_pt->workers_started+1);
+  work_item(0);
   my_pt->current_work_item = 0;
 
-  //  ::std::cout << "In loop " << my_pt->workers_in_loop << "\n";
   while (my_pt->workers_in_loop) {
     _mm_pause();
   }
-
-  //  ::std::cout << "OK\n";
 }
 
 void Cancel() override {
@@ -754,7 +758,7 @@ int CurrentThreadId() const EIGEN_FINAL {
     std::atomic<bool> par_section_active{false};
     std::atomic<int> workers_in_loop{0};
     std::vector<std::pair<int, unsigned>> pending_items;
-    std::atomic<std::function<void(int,int)> *> current_work_item{0};
+    std::atomic<std::function<void(int)> *> current_work_item{0};
   };
 
   //  static_assert(std::is_trivially_destructible<PerThread>::value, "Per-thread state should be trivially destructible");
@@ -874,9 +878,9 @@ void ParLoopWorker(PerThread* leader_pt) {
   while (leader_pt->par_section_active) {
     if (leader_pt->current_work_item) {
       leader_pt->workers_in_loop++;
-      std::function<void(int,int)> *work_item = leader_pt->current_work_item;
+      std::function<void(int)> *work_item = leader_pt->current_work_item;
       if (work_item) {
-	(*work_item)(my_idx, leader_pt->workers_started+1);
+	(*work_item)(my_idx);
       }
       leader_pt->workers_in_loop--;
     }

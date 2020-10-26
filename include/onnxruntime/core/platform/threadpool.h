@@ -246,8 +246,8 @@ class ThreadPool {
   // help.  The degree-of-parallelism includes the caller, and so if n==1
   // then the function will run directly in the caller.  The fork-join
   // synchronization is handled in the thread pool, and so any state captured
-  // by fn() is safe from concurrent access once RunWithHelp returns.
-  void RunInParallel(std::function<void(int,int)> fn, int n);
+  // by fn() is safe from concurrent access once RunInParallel returns.
+  void RunInParallel(std::function<void(int idx)> fn, int n);
   void StartParallel();
   void EndParallel();
 

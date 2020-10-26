@@ -80,31 +80,14 @@ public:
    // Ensure that the final shard finishes precisely at the end of the iteration space
    //   _shards[MAX_SHARDS - 1]._end = num_iterations;
  }
-
-  int GetHomeShard() const {
-    return (_tp.CurrentThreadId() + 1) % _num_shards;
+    
     // Allocate each thread to a home shard, from which it starts claiming iterations.  The allocation
     // does not need to be unique, but we aim for a good distribution, particularly in the case where
     // most/all of the thread pool's threads are active in the loop.  Threads outside the pool may
     // also be claiming work, with CurrentThreadId -1.
-    //   int d_of_p = ThreadPool::DegreeOfParallelism(&_tp);
-    //   int my_thread_idx = (_tp.CurrentThreadId() + 1) % d_of_p;
-    //    assert(my_thread_idx >= 0 && my_thread_idx < d_of_p);
-    //
-    //    
-    //
-    //    int home_shard;
-    //    if (d_of_p >= (int)_num_shards) {
-    //      // More threads than shards => allocate them home shards round-robin, aiming to sprace the load across
-    //      // the shards
-    //      home_shard = my_thread_idx % _num_shards;
-//    } else {
-      // Fewer threads than shards => spread the threads evenly across the shards, so each will work
-      // on a run of successive shards before contention
-    //      home_shard = (my_thread_idx * _num_shards) / d_of_p;
-    //    }
-    //    assert(home_shard >= 0 && home_shard < _num_shards);
-    //    return home_shard;
+  int GetHomeShard(int idx) const {
+    return idx % _num_shards;
+    return (_tp.CurrentThreadId() + 1) % _num_shards;
   }
 
   // Attempt to claim iterations from the sharded counter.  The function either
@@ -187,16 +170,14 @@ void ThreadPool::ParallelForFixedBlockSizeScheduling(const std::ptrdiff_t total,
   assert(num_work_items > 0);
 
   LoopCounter lc(*this, total, block_size);
-  std::function<void(int,int)> run_work = [&](int idx, int) {
-    if (idx < total) {
-      int my_home_shard = lc.GetHomeShard();
+  std::function<void(int idx)> run_work = [&](int idx) {
+      int my_home_shard = lc.GetHomeShard(idx);
       int my_shard = my_home_shard;
       uint64_t my_iter_start, my_iter_end;
       while (lc.ClaimIterations(my_home_shard, my_shard, my_iter_start, my_iter_end)) {
 	fn(static_cast<std::ptrdiff_t>(my_iter_start),
 	   static_cast<std::ptrdiff_t>(my_iter_end));
       }
-    }
   };
 
   // Run the work in the thread pool (and in the current thread).  Synchronization with helping
@@ -240,7 +221,7 @@ void ThreadPool::EndParallel() {
   is_parallel = false;
 }
 
-void ThreadPool::RunInParallel(std::function<void(int,int)> fn, int n) {
+void ThreadPool::RunInParallel(std::function<void(int idx)> fn, int n) {
   ORT_ENFORCE(fn != nullptr);
   if (underlying_threadpool_) {
     bool started = false;
@@ -253,7 +234,7 @@ void ThreadPool::RunInParallel(std::function<void(int,int)> fn, int n) {
       EndParallel();
     }
   } else {
-    fn(0,1);
+    fn(0);
   }
 }
 
