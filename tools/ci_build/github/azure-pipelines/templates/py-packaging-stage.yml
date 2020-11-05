@@ -639,12 +639,8 @@ stages:
         GDN_CODESIGN_TARGETDIRECTORY: '$(Build.BinariesDirectory)\RelWithDebInfo\RelWithDebInfo\dist'
       strategy:
         matrix:
-          Python35:
-            python.version: '3.5'
-          Python36:
-            python.version: '3.6'
-          Python37:
-            python.version: '3.7'
+          Python38:
+            python.version: '3.8'
       steps:
       - checkout: self
         clean: true
@@ -744,9 +740,7 @@ stages:
         parameters:
           condition: 'succeeded'
 
-      - task: mspremier.PostBuildCleanup.PostBuildCleanup-task.PostBuildCleanup@3
-        displayName: 'Clean Agent Directories'
-        condition: always()
+
 
   - ${{ if eq(parameters.enable_mac_cpu, true) }}:
     - job: MacOS_py_Wheels
