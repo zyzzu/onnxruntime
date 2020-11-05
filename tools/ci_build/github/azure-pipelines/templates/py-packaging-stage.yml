@@ -630,7 +630,7 @@ stages:
     - job: Windows_py_GPU_Wheels
       workspace:
         clean: all
-      pool: 'Win-GPU-2019'
+      pool: 'TestGPU1'
       timeoutInMinutes:  120
       variables:
         CUDA_VERSION: '10.2'
