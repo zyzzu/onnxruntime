@@ -294,7 +294,8 @@ Status UpsampleLinear(const T* input,
 // This is the common use-case where the 4-D input (batched multi-channel images)
 // is usually of shape [N, C, H, W] and the scales are [1.0, 1.0, height_scale, width_scale]
 template <typename T>
-void UpsampleBilinear(int64_t batch_size,
+void UpsampleBilinear(OpKernelContext* context,
+                      int64_t batch_size,
                       int64_t num_channels,
                       int64_t input_height,
                       int64_t input_width,
@@ -371,8 +372,11 @@ void UpsampleBilinear(int64_t batch_size,
     }
   }
 
+  concurrency::ThreadPool* tp = context->GetOperatorThreadPool();
   for (int64_t n = 0; n < batch_size; ++n) {
-    for (int64_t c = 0; c < num_channels; ++c) {
+    //    for (int64_t c = 0; c < num_channels; ++c) {
+      concurrency::ThreadPool::TrySimpleParallelFor(tp, num_channels,
+      [&](std::ptrdiff_t ) {
       for (int64_t y = 0; y < output_height; ++y) {
         for (int64_t x = 0; x < output_width; ++x) {
           // when use_extrapolation is set and original index of x or y is out of the dim range
@@ -397,7 +401,7 @@ void UpsampleBilinear(int64_t batch_size,
       }
       Xdata += input_height * input_width;
       Ydata += output_width * output_height;
-    }
+    } );
   }
 }
 
@@ -659,7 +663,7 @@ Status Upsample<T>::BaseCompute(OpKernelContext* context,
 
       AllocatorPtr alloc;
       ORT_RETURN_IF_ERROR(context->GetTempSpaceAllocator(&alloc));
-      UpsampleBilinear(batch_size, num_channels, input_height, input_width, output_height, output_width,
+      UpsampleBilinear(context, batch_size, num_channels, input_height, input_width, output_height, output_width,
                        is_2D ? scales[0] : scales[2], is_2D ? scales[1] : scales[3], roi,
                        use_extrapolation_, extrapolation_value_, X->template Data<T>(),
                        Y->template MutableData<T>(), alloc, get_original_coordinate_);
