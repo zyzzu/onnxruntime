@@ -306,8 +306,8 @@ void UpsampleBilinear(OpKernelContext* context,
                       const std::vector<float>& roi,
                       bool use_extrapolation,
                       float extrapolation_value,
-                      const T* Xdata,
-                      T* Ydata,
+                      const T* const XdataBase,
+                      T* const YdataBase,
                       AllocatorPtr& alloc,
                       GetOriginalCoordinateFunc get_original_coordinate) {
   std::vector<float> y_original;
@@ -374,34 +374,35 @@ void UpsampleBilinear(OpKernelContext* context,
 
   concurrency::ThreadPool* tp = context->GetOperatorThreadPool();
   for (int64_t n = 0; n < batch_size; ++n) {
-    //    for (int64_t c = 0; c < num_channels; ++c) {
-      concurrency::ThreadPool::TrySimpleParallelFor(tp, num_channels,
-      [&](std::ptrdiff_t ) {
-      for (int64_t y = 0; y < output_height; ++y) {
-        for (int64_t x = 0; x < output_width; ++x) {
-          // when use_extrapolation is set and original index of x or y is out of the dim range
-          // then use extrapolation_value as the output value.
-          if (use_extrapolation &&
-              ((y_original[y] < 0 || y_original[y] > static_cast<float>(input_height - 1)) ||
-               (x_original[x] < 0 || x_original[x] > static_cast<float>(input_width - 1)))) {
-            Ydata[output_width * y + x] = static_cast<T>(extrapolation_value);
-            continue;
-          }
+    concurrency::ThreadPool::TrySimpleParallelFor(tp, num_channels,
+                                                  [&](std::ptrdiff_t c) {
+                                                    const T* Xdata = XdataBase + (n*num_channels + c) * (input_height * input_width);
+                                                    T* Ydata = YdataBase + (n*num_channels + c) * (output_height * output_width);
+                                                    for (int64_t y = 0; y < output_height; ++y) {
+                                                      for (int64_t x = 0; x < output_width; ++x) {
+                                                        // when use_extrapolation is set and original index of x or y is out of the dim range
+                                                        // then use extrapolation_value as the output value.
+                                                        if (use_extrapolation &&
+                                                            ((y_original[y] < 0 || y_original[y] > static_cast<float>(input_height - 1)) ||
+                                                             (x_original[x] < 0 || x_original[x] > static_cast<float>(input_width - 1)))) {
+                                                          Ydata[output_width * y + x] = static_cast<T>(extrapolation_value);
+                                                          continue;
+                                                        }
 
-          T X11 = Xdata[input_width_mul_y1[y] + in_x1[x]];
-          T X21 = Xdata[input_width_mul_y1[y] + in_x2[x]];
-          T X12 = Xdata[input_width_mul_y2[y] + in_x1[x]];
-          T X22 = Xdata[input_width_mul_y2[y] + in_x2[x]];
+                                                        T X11 = Xdata[input_width_mul_y1[y] + in_x1[x]];
+                                                        T X21 = Xdata[input_width_mul_y1[y] + in_x2[x]];
+                                                        T X12 = Xdata[input_width_mul_y2[y] + in_x1[x]];
+                                                        T X22 = Xdata[input_width_mul_y2[y] + in_x2[x]];
 
-          Ydata[output_width * y + x] = static_cast<T>(dx2[x] * dy2[y] * X11 +
-                                                       dx1[x] * dy2[y] * X21 +
-                                                       dx2[x] * dy1[y] * X12 +
-                                                       dx1[x] * dy1[y] * X22);
-        }
-      }
-      Xdata += input_height * input_width;
-      Ydata += output_width * output_height;
-    } );
+                                                        Ydata[output_width * y + x] = static_cast<T>(dx2[x] * dy2[y] * X11 +
+                                                                                                     dx1[x] * dy2[y] * X21 +
+                                                                                                     dx2[x] * dy1[y] * X12 +
+                                                                                                     dx1[x] * dy1[y] * X22);
+                                                      }
+                                                    }
+                                                    Xdata += input_height * input_width;
+                                                    Ydata += output_width * output_height;
+                                                  } );
   }
 }
 
