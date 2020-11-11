@@ -7,17 +7,9 @@ jobs:
   steps:
     #- template: templates/set-test-data-variables-step.yml
     #
-    
-    - script: '$(Build.SourcesDirectory)/onnxruntime/python/tools/tensorrt/perf/perf.sh "onnx-zoo-models"'
-      displayName: 'Command Line Script 1'
-      workingDirectory: '$(Build.SourcesDirectory)/onnxruntime/python/tools/tensorrt/perf/'
 
     - script: '$(Build.SourcesDirectory)/onnxruntime/python/tools/tensorrt/perf/perf.sh "many-models"'
       displayName: 'Command Line Script 2'
-      workingDirectory: '$(Build.SourcesDirectory)/onnxruntime/python/tools/tensorrt/perf/'
-
-    - script: '$(Build.SourcesDirectory)/onnxruntime/python/tools/tensorrt/perf/perf.sh "partner-models"'
-      displayName: 'Command Line Script 3'
       workingDirectory: '$(Build.SourcesDirectory)/onnxruntime/python/tools/tensorrt/perf/'
 
     - script: 'mkdir $(Build.SourcesDirectory)/Artifact && cp -r $(Build.SourcesDirectory)/onnxruntime/python/tools/tensorrt/perf/result/ $(Build.SourcesDirectory)/Artifact' 
