@@ -210,8 +210,8 @@ static void TestDefaultOptimizerGraphBuilder(OptimizerGraphConfig config, Graph&
       GetOptimizerBuilderRegistry(), config, GetOptInfoMap());
 
   OptimizerOutputKeyMap<std::string> opt_graph_outputs;
-  std::unordered_set<std::string> opt_initializer_names;
-  ASSERT_STATUS_OK(optimizer_graph_builder.Build(graph, opt_initializer_names, opt_graph_outputs));
+  std::unordered_map<std::string, std::vector<std::string>> weight_to_opt_mapping;
+  ASSERT_STATUS_OK(optimizer_graph_builder.Build(graph, weight_to_opt_mapping, opt_graph_outputs));
 
   auto op_counts = CountOpsInGraph(graph, false);
 
@@ -275,8 +275,8 @@ static void TestAllreduceOptimizerGraphBuilder(OptimizerGraphConfig config, Grap
       GetOptimizerBuilderRegistry(), config, GetOptInfoMap());
 
   OptimizerOutputKeyMap<std::string> opt_graph_outputs;
-  std::unordered_set<std::string> opt_initializer_names;
-  ASSERT_STATUS_OK(optimizer_graph_builder.Build(graph, opt_initializer_names, opt_graph_outputs));
+  std::unordered_map<std::string, std::vector<std::string>> weight_to_opt_mapping;
+  ASSERT_STATUS_OK(optimizer_graph_builder.Build(graph, weight_to_opt_mapping, opt_graph_outputs));
 
   auto op_counts = CountOpsInGraph(graph, false);
 
@@ -314,8 +314,8 @@ static void TestAdasumOptimizerGraphBuilder(OptimizerGraphConfig config, Graph& 
       GetOptimizerBuilderRegistry(), config, GetOptInfoMap());
 
   OptimizerOutputKeyMap<std::string> opt_graph_outputs;
-  std::unordered_set<std::string> opt_initializer_names;
-  ASSERT_STATUS_OK(optimizer_graph_builder.Build(graph, opt_initializer_names, opt_graph_outputs));
+  std::unordered_map<std::string, std::vector<std::string>> weight_to_opt_mapping;
+  ASSERT_STATUS_OK(optimizer_graph_builder.Build(graph, weight_to_opt_mapping, opt_graph_outputs));
 
   auto op_counts = CountOpsInGraph(graph, false);
 
@@ -468,8 +468,8 @@ static void TestZeROOptimizerGraphBuilder(OptimizerGraphConfig config, Graph& gr
       GetOptimizerBuilderRegistry(), config, GetOptInfoMap());
 
   OptimizerOutputKeyMap<std::string> opt_graph_outputs;
-  std::unordered_set<std::string> opt_initializer_names;
-  ASSERT_STATUS_OK(optimizer_graph_builder.Build(graph, opt_initializer_names, opt_graph_outputs));
+  std::unordered_map<std::string, std::vector<std::string>> weight_to_opt_mapping;
+  ASSERT_STATUS_OK(optimizer_graph_builder.Build(graph, weight_to_opt_mapping, opt_graph_outputs));
 
   auto op_counts = CountOpsInGraph(graph, false);
 
