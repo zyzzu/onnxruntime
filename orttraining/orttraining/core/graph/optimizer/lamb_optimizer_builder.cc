@@ -15,7 +15,7 @@ namespace training {
 Status LambOptimizerBuilder::Build(
     const OptimizerBuilderConfig& config,
     GraphAugmenter::GraphDefs& graph_defs,
-    std::vector<ONNX_NAMESPACE::TensorProto>& new_external_initializers,
+    std::unordered_map<std::string, std::vector<ONNX_NAMESPACE::TensorProto>>& weight_to_opt_mapping,
     std::vector<ArgDef>& output_weight_argdefs,
     std::vector<ArgDef>& output_gradient_argdefs) const {
   const auto& weight_argdefs = config.weight_argdefs;
@@ -75,7 +75,7 @@ Status LambOptimizerBuilder::Build(
   } else {
     step_tensor_proto = CreateTensorProto<int64_t>(step_tensor_name, 1);
   }
-  new_external_initializers.emplace_back(step_tensor_proto);
+  weight_to_opt_mapping["shared_optimizer_state"] = {CreateTensorProto<int64_t>(step_tensor_name, 1)};
   input_argdefs.emplace_back(ArgDef(step_tensor_name));
 
   // Add the first output, which is the updated step.
@@ -204,6 +204,7 @@ Status LambOptimizerBuilder::Build(
                                 ONNX_NAMESPACE::TensorProto_DataType::TensorProto_DataType_FLOAT16 : 
                                 ONNX_NAMESPACE::TensorProto_DataType::TensorProto_DataType_FLOAT;
 
+      weight_to_opt_mapping[weight_name] = {};
       // m1 & m2 & m1_new & m2_new
       const std::vector<std::string> moments_prefixes({"Moment_1", "Moment_2"});
       for (const auto& moment_prefix : moments_prefixes) {
@@ -232,7 +233,7 @@ Status LambOptimizerBuilder::Build(
         moment_type_proto->mutable_tensor_type()->set_elem_type(element_type);
 
         // Store momentum tensor to initializer list.
-        new_external_initializers.emplace_back(std::move(moment_tensor_proto));
+        weight_to_opt_mapping[weight_name].emplace_back(std::move(moment_tensor_proto));
 
         // Add momentums to the input and output list of the Lamb node.
         input_argdefs.emplace_back(ArgDef(gradient_moment_name, moment_type_proto));
