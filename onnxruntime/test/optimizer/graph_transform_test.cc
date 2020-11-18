@@ -143,9 +143,10 @@ TEST_F(GraphTransformationTests, ConstantFolding) {
   std::unique_ptr<CPUExecutionProvider> e =
       onnxruntime::make_unique<CPUExecutionProvider>(CPUExecutionProviderInfo());
   onnxruntime::GraphTransformerManager graph_transformation_mgr{5};
+  std::unordered_set<std::string> compatible_execution_providers = {};
   std::unordered_set<std::string> excluded_initializers = {};
   graph_transformation_mgr.Register(
-      onnxruntime::make_unique<ConstantFolding>(*e.get(), {}, excluded_initializers),
+      onnxruntime::make_unique<ConstantFolding>(*e.get(), compatible_execution_providers, excluded_initializers),
       TransformerLevel::Level1);
 
   ASSERT_STATUS_OK(graph_transformation_mgr.ApplyTransformers(graph, TransformerLevel::Level1, *logger_));
@@ -164,9 +165,10 @@ TEST_F(GraphTransformationTests, ConstantFoldingNodesOnDifferentEP) {
   std::unique_ptr<CPUExecutionProvider> e =
       onnxruntime::make_unique<CPUExecutionProvider>(CPUExecutionProviderInfo());
   onnxruntime::GraphTransformerManager graph_transformation_mgr{5};
+  std::unordered_set<std::string> compatible_execution_providers = {};
   std::unordered_set<std::string> excluded_initializers = {};
   graph_transformation_mgr.Register(
-      onnxruntime::make_unique<ConstantFolding>(*e.get(), {}, excluded_initializers),
+      onnxruntime::make_unique<ConstantFolding>(*e.get(), compatible_execution_providers, excluded_initializers),
       TransformerLevel::Level1);
 
   // assign all nodes to CUDA. the constant folding should override this to perform the constant folding on cpu
