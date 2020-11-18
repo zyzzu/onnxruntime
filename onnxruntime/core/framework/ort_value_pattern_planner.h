@@ -19,7 +19,9 @@ class ExecutionPlanBase;
 class OrtValuePatternPlanner {
  public:
   explicit OrtValuePatternPlanner(const ExecutionPlanBase& execution_plan);
-  common::Status TraceAllocation(int ort_value_idx, const std::vector<size_t>& program_counter_start, const std::vector<size_t>& program_counter_end, size_t size);
+#ifdef ENABLE_TRAINING
+  common::Status TraceAllocation(int ort_value_idx, const AllocPlanPerValue::ProgramCounter& counter, size_t size);
+#endif
   common::Status TraceAllocation(int ort_value_idx, size_t size);
   common::Status TraceFree(int ort_value_index);
   common::Status GeneratePatterns(MemoryPatternGroup* out);

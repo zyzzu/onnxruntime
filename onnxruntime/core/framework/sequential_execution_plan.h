@@ -31,8 +31,38 @@ struct AllocPlanPerValue {
   // if the value is used in async kernel, a fence object would be created
   // note the fence object would be shared between MLValues reusing the same buffer
   bool create_fence_if_async{false};
-  std::vector<size_t> program_counter_start;
-  std::vector<size_t> program_counter_end;
+
+  // TODO: Should ProgramCounter be part of AllocPlanPerValue or standalone with a more meaningful name?
+  // Could maybe rename AllocPlanPerValue to OrtValueAllocPlan while we're at it
+  class ProgramCounter {
+   public:
+    ProgramCounter() = default;
+    void AddStart(size_t start) {
+      ORT_ENFORCE(starts_.size() == ends_.size(), "Previous entry was not terminated.");
+      ORT_ENFORCE(starts_.empty() || start > ends_.back(), "Invalid 'start'. Value is smaller than previous 'end'.");
+      starts_.push_back(start);
+    }
+
+    void AddEnd(size_t end) {
+      ORT_ENFORCE(starts_.size() == ends_.size() + 1, "No matching 'start' entry.");
+      ORT_ENFORCE(end >= starts_.back(), "Invalid 'end'. Value is larger than 'start'.");
+      ends_.push_back(end);
+    }
+
+    // return true if there are entries, and the number of start/end pairs match
+    bool HasValidEntries() const {
+      return !starts_.empty() && starts_.size() == ends_.size();
+    }
+
+    const std::vector<size_t>& Starts() const { return starts_; }
+    const std::vector<size_t>& Ends() const { return ends_; }
+
+   private:
+    std::vector<size_t> starts_;
+    std::vector<size_t> ends_;
+  };
+
+  ProgramCounter program_counter;
 
  public:
   AllocPlanPerValue() : location(CPU, Invalid) {}
