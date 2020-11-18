@@ -1,6 +1,7 @@
 import argparse
 import logging
 import torch
+import time
 from torchvision import datasets, transforms
 
 import onnxruntime
@@ -24,6 +25,7 @@ class NeuralNet(torch.nn.Module):
 
 def train(args, model, device, optimizer, loss_fn, train_loader, epoch):
     model.train()
+    start_time = time.time()
     for iteration, (data, target) in enumerate(train_loader):
         if iteration == args.train_steps:
             break
@@ -47,9 +49,12 @@ def train(args, model, device, optimizer, loss_fn, train_loader, epoch):
 
         # Stats
         if iteration % args.log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+            curr_time = time.time()
+            elapsed_time = curr_time - start_time
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\tExecution time: {:.4f}'.format(
                 epoch, iteration * len(data), len(train_loader.dataset),
-                100. * iteration / len(train_loader), loss))
+                100. * iteration / len(train_loader), loss, elapsed_time))
+            start_time = curr_time
 
 
 def test(args, model, device, loss_fn, test_loader):

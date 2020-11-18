@@ -4,7 +4,7 @@
 #pragma once
 
 #include <string>
-#include <unordered_set>
+#include <unordered_map>
 
 namespace onnxruntime {
 namespace training {
@@ -32,6 +32,7 @@ struct ModuleGradientGraphBuilderConfiguration {
  */
 struct SplitGraphsInfo {
   std::vector<std::string> user_input_names{};
+  std::unordered_map<std::string, std::string> user_input_grad_names_map{};
   std::vector<std::string> initializer_names_to_train{};
   std::vector<std::string> initializer_grad_names_to_train{};
   std::vector<std::string> user_output_names{};

@@ -168,10 +168,12 @@ class ORTModule(torch.nn.Module):
                 onnx.save(self._onnx_backward, self._save_onnx_prefix + '_backward.onnx')
 
             # TODO: Consider moving this to the backend. We don't want to append '_grad' to get correct tensor names
-            self._onnx_graphs_types = ORTModule._get_io_info_from_onnx_graph(self._onnx_forward, self._onnx_graphs_info)
+            # self._onnx_graphs_types = ORTModule._get_io_info_from_onnx_graph(self._onnx_forward, self._onnx_graphs_info)
 
-            self._forward_session = onnxruntime.InferenceSession(self._onnx_forward.SerializeToString())
-            self._backward_session = onnxruntime.InferenceSession(self._onnx_backward.SerializeToString())
+            sess_options = onnxruntime.SessionOptions()
+            sess_options.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_DISABLE_ALL
+            self._forward_session = onnxruntime.InferenceSession(self._onnx_forward.SerializeToString(), sess_options)
+            self._backward_session = onnxruntime.InferenceSession(self._onnx_backward.SerializeToString(), sess_options)
 
             # IO binding
             self._forward_io_binding = self._forward_session.io_binding()
@@ -217,6 +219,7 @@ class ORTModule(torch.nn.Module):
                 ctx_intermediates = tuple(self._forward_output_buffers[name] \
                     for name in self._onnx_graphs_info.intermediate_tensor_names)
                 ctx.save_for_backward(*[*ctx_inputs, *ctx_initializers, *ctx_intermediates])
+                ctx.set_materialize_grads(False)
 
                 # Return model output
                 outputs = tuple(self._forward_output_buffers[name] for name in self._onnx_graphs_info.user_output_names)
@@ -245,7 +248,9 @@ class ORTModule(torch.nn.Module):
                 self._backward_session.run_with_iobinding(self._backward_io_binding)
 
                 # Return input and initializer gradients
-                results = [torch.tensor([1])] * len(self._onnx_graphs_info.user_input_names)
+                results = [self._backward_output_buffers[self._onnx_graphs_info.user_input_grad_names_map[input_name]] \
+                    if input_name in self._onnx_graphs_info.user_input_grad_names_map else None \
+                    for input_name in self._onnx_graphs_info.user_input_names]
                 results += [self._backward_output_buffers[name] \
                     for name in self._onnx_graphs_info.initializer_grad_names_to_train]
                 return tuple(results)
@@ -362,7 +367,7 @@ class ORTModule(torch.nn.Module):
         # Ignore optional *inputs explicitly specified as None
         sig = signature(module.forward)
         all_input_names = sig.parameters.keys()
-        input_names = [name for idx, name in enumerate(all_input_names) if inputs[idx] is not None]
+        input_names = [name for idx, name in enumerate(all_input_names) if idx < len(inputs) and inputs[idx] is not None]
 
         # TODO: Support contrib OPs support? user model has no hint
         # from onnxruntime.training import register_custom_ops_pytorch_exporter
@@ -412,6 +417,7 @@ class ORTModule(torch.nn.Module):
     def _get_io_info_from_onnx_graph(model, graphs_info):
         type_map = {key: None for key in [
             *graphs_info.user_input_names,
+            *[grad_name for _, grad_name in graphs_info.user_input_grad_names_map.items()],
             *graphs_info.initializer_names_to_train,
             *graphs_info.initializer_grad_names_to_train,
             *graphs_info.user_output_names,

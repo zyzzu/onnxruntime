@@ -32,6 +32,7 @@ def train(model, optimizer, scheduler, train_dataloader, epoch, device, args):
 
     # Measure how long the training epoch takes.
     t0 = time.time()
+    start_time = t0
 
     # Reset the total loss for this epoch.
     total_loss = 0
@@ -102,10 +103,12 @@ def train(model, optimizer, scheduler, train_dataloader, epoch, device, args):
         # Progress update every 40 batches.
         if step % args.log_interval == 0 and not step == 0:
             # Calculate elapsed time in minutes.
-            elapsed = format_time(time.time() - t0)
+            curr_time = time.time()
+            elapsed_time = curr_time - start_time
 
             # Report progress.
-            print(f'Batch {step} of {len(train_dataloader)}. Elapsed: {elapsed}. Loss: {loss.item()}')
+            print(f'Batch {step} of {len(train_dataloader)}. Execution time: {elapsed_time:.4f}. Loss: {loss.item()}')
+            start_time = curr_time
 
         # Accumulate the training loss over all of the batches so that we can
         # calculate the average loss at the end. `loss` is a Tensor containing a

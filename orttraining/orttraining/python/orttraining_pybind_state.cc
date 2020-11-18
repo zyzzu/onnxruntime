@@ -354,6 +354,7 @@ void addObjectMethodsForTraining(py::module& m) {
       m, "SplitGraphsInfo", R"pbdoc(The information of split graphs for frontend.)pbdoc");
   split_graphs_info.def(py::init())
       .def_readwrite("user_input_names", &SplitGraphsInfo::user_input_names)
+      .def_readwrite("user_input_grad_names_map", &SplitGraphsInfo::user_input_grad_names_map)
       .def_readwrite("initializer_names_to_train", &SplitGraphsInfo::initializer_names_to_train)
       .def_readwrite("initializer_grad_names_to_train", &SplitGraphsInfo::initializer_grad_names_to_train)
       .def_readwrite("user_output_names", &SplitGraphsInfo::user_output_names)

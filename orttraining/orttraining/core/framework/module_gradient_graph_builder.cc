@@ -147,20 +147,21 @@ Status ModuleGradientGraphBuilder::BuildAndSplit(std::istream& model_istream,
     output_args.emplace_back(gradient_graph.GetNodeArg(output_name));
   }
 
+  // Add input gradients to graph outputs if it's required.
+  for (const auto& input_name : config.input_names_require_grad) {
+    std::string input_gradient_name = input_name + "_grad";
+    if (output_names.find(input_gradient_name) != output_names.end()) {
+      split_graphs_info_.user_input_grad_names_map[input_name] = input_gradient_name;
+      output_args.emplace_back(gradient_graph.GetNodeArg(input_gradient_name));
+    }
+  }
+
   // Add initializer gradients to graph outputs.
   for (const auto& initializer_name : split_graphs_info_.initializer_names_to_train) {
     std::string initializer_gradient_name = initializer_name + "_grad";
     if (output_names.find(initializer_gradient_name) != output_names.end()) {
       split_graphs_info_.initializer_grad_names_to_train.emplace_back(initializer_gradient_name);
       output_args.emplace_back(gradient_graph.GetNodeArg(initializer_gradient_name));
-    }
-  }
-
-  // Add input gradients to graph outputs if it's required.
-  for (const auto& input_name : config.input_names_require_grad) {
-    std::string input_gradient_name = input_name + "_grad";
-    if (output_names.find(input_gradient_name) != output_names.end()) {
-      output_args.emplace_back(gradient_graph.GetNodeArg(input_gradient_name));
     }
   }
 
