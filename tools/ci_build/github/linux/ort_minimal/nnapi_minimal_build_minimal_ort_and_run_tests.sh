@@ -31,7 +31,6 @@ python3 $ORT_ROOT/tools/ci_build/build.py \
     --build_dir $MIN_BUILD_DIR \
     --config Debug \
     --skip_submodule_sync \
-    --parallel \
     --cmake_generator=Ninja \
     --use_nnapi \
     --android \
@@ -39,7 +38,6 @@ python3 $ORT_ROOT/tools/ci_build/build.py \
     --android_ndk_path $ANDROID_HOME/ndk-bundle \
     --android_abi=x86_64 \
     --android_api=29 \
-    --build_java \
     --minimal_build extended \
     --disable_rtti \
     --disable_ml_ops \
