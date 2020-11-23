@@ -31,6 +31,7 @@ python3 $ORT_ROOT/tools/ci_build/build.py \
     --build_dir $MIN_BUILD_DIR \
     --config Debug \
     --skip_submodule_sync \
+    --parallel \
     --cmake_generator=Ninja \
     --use_nnapi \
     --android \
