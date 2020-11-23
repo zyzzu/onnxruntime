@@ -29,7 +29,6 @@ python3 $ORT_ROOT/tools/ci_build/build.py \
     --skip_submodule_sync \
     --parallel \
     --cmake_generator=Ninja \
-    --skip_tests \
     --use_nnapi \
     --android \
     --android_sdk_path $ANDROID_HOME \
@@ -42,7 +41,8 @@ python3 $ORT_ROOT/tools/ci_build/build.py \
     --disable_ml_ops \
     --disable_exceptions \
     --include_ops_by_model $TMPDIR/.test_data/models_to_include/ \
-    --include_ops_by_config $ORT_ROOT/onnxruntime\test\testdata\reduced_ops_via_config.config
+    --include_ops_by_config $ORT_ROOT/onnxruntime/test/testdata/reduced_ops_via_config.config \
+    --skip_tests
 
 # Start the Android Emulator
 /bin/bash $ORT_ROOT/tools/ci_build/github/android/start_android_emulator.sh
