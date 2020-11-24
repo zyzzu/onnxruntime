@@ -23,22 +23,13 @@ Status LambOptimizerBuilder::Build(
     std::vector<ArgDef>& output_weight_argdefs,
     std::vector<ArgDef>& output_gradient_argdefs) const {
   return Build(weight_argdefs, gradient_argdefs,
-<<<<<<< 021253669fe9ae4059cb6132c47ee2fa06e21834
-               gradient_norm_argdef, gradient_norm_finite_argdef,
-               opt_configs, graph_defs,
-               new_external_initializers, output_weight_argdefs,
-               output_gradient_argdefs,
-               // gradient clipping is enabled by default for Lamb.
-               true, /*enable_grad_clipping*/
-               {} /* shared_optim_state */);
-=======
         gradient_norm_argdef, gradient_norm_finite_argdef,
         opt_configs, graph_defs,
         weight_to_opt_mapping, output_weight_argdefs,
         output_gradient_argdefs,
         // gradient clipping is enabled by default for Lamb.
-        true /*enable_grad_clipping*/);
->>>>>>> Add backend API GetOptimizerState and GetModelState
+        true, /*enable_grad_clipping*/
+        {} /* shared_optim_state */);
 }
 
 Status LambOptimizerBuilder::Build(
@@ -48,18 +39,14 @@ Status LambOptimizerBuilder::Build(
     const ArgDef* gradient_norm_finite_argdef,
     const std::vector<OptimizerNodeConfig>& opt_configs,
     GraphAugmenter::GraphDefs& graph_defs,
-<<<<<<< 021253669fe9ae4059cb6132c47ee2fa06e21834
-    std::vector<ONNX_NAMESPACE::TensorProto>& new_external_initializers,
-=======
-    std::unordered_map<std::string, std::vector<TensorProto>>& weight_to_opt_mapping,
->>>>>>> Add backend API GetOptimizerState and GetModelState
+    std::unordered_map<std::string, std::vector<ONNX_NAMESPACE::TensorProto>>& weight_to_opt_mapping,
     std::vector<ArgDef>& output_weight_argdefs,
     std::vector<ArgDef>& output_gradient_argdefs,
     bool enable_grad_clipping) const {
   return Build(weight_argdefs, gradient_argdefs,
                gradient_norm_argdef, gradient_norm_finite_argdef,
                opt_configs, graph_defs,
-               new_external_initializers, output_weight_argdefs,
+               weight_to_opt_mapping, output_weight_argdefs,
                output_gradient_argdefs, enable_grad_clipping,
                {} /* shared_optim_state */);
 }
@@ -71,7 +58,7 @@ Status LambOptimizerBuilder::Build(
     const ArgDef* gradient_norm_finite_argdef,
     const std::vector<OptimizerNodeConfig>& opt_configs,
     GraphAugmenter::GraphDefs& graph_defs,
-    std::vector<TensorProto>& new_external_initializers,
+    std::unordered_map<std::string, std::vector<ONNX_NAMESPACE::TensorProto>>& weight_to_opt_mapping,
     std::vector<ArgDef>& output_weight_argdefs,
     std::vector<ArgDef>& output_gradient_argdefs,
     bool enable_grad_clipping,
@@ -116,7 +103,6 @@ Status LambOptimizerBuilder::Build(
   // At the end of each Lamb call, the update count may be increased by one.
   const std::string step_tensor_name = "Step";  // per weight optimizer requires a per weight update count
   // Add step as an initializer.
-<<<<<<< 021253669fe9ae4059cb6132c47ee2fa06e21834
   TensorProto step_tensor_proto;
   if (shared_optim_state.find(step_tensor_name) != shared_optim_state.end()) {
     const auto& initial_state_it = shared_optim_state.find(step_tensor_name);
@@ -126,10 +112,7 @@ Status LambOptimizerBuilder::Build(
   } else {
     step_tensor_proto = CreateTensorProto<int64_t>(step_tensor_name, 1);
   }
-  new_external_initializers.emplace_back(step_tensor_proto);
-=======
   weight_to_opt_mapping["shared_optimizer_state"] = {CreateTensorProto<int64_t>(step_tensor_name, 1)};
->>>>>>> Add backend API GetOptimizerState and GetModelState
   input_argdefs.emplace_back(ArgDef(step_tensor_name));
 
   // Add the first output, which is the updated step.
