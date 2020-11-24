@@ -211,8 +211,9 @@ Status QLinearConv::Compute(OpKernelContext* context) const {
   ORT_ENFORCE(IsScalarOr1ElementVector(Y_scale),
               "QLinearConv : result scale must be a scalar or 1D tensor of size 1");
 
-  auto X_scale_value = *(X_scale->template Data<float>());
-  auto Y_scale_value = *(Y_scale->template Data<float>());
+  const float X_scale_value = *(X_scale->template Data<float>());
+  const float Y_scale_value = *(Y_scale->template Data<float>());
+  const float X_over_Y_scale_value = X_scale_value / Y_scale_value;
 
   std::vector<float> output_scales;
   const auto& W_scale_shape = W_scale->Shape();
@@ -222,7 +223,7 @@ Status QLinearConv::Compute(OpKernelContext* context) const {
     const auto* W_scale_data = W_scale->template Data<float>();
     output_scales.resize(static_cast<size_t>(W_scale_size));
     for (int64_t i = 0; i < W_scale_size; i++) {
-      output_scales[i] = (X_scale_value * W_scale_data[i] / Y_scale_value);
+      output_scales[i] = W_scale_data[i] * X_over_Y_scale_value;
     }
   } else {
     return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT, "QLinearConv : filter scale shape invalid");
