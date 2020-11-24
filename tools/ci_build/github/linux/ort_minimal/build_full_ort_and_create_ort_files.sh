@@ -6,8 +6,6 @@
 set -e
 set -x
 
-echo $BUILD_REASON
-
 # Validate the operator kernel registrations. The ORT model uses hashes for kernel registrations, so if these
 # are incorrect we will produce a model that will break when the registrations are fixed.
 python3 /onnxruntime_src/tools/ci_build/op_registration_validator.py
