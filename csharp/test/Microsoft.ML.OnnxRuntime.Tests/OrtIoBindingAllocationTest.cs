@@ -1,9 +1,8 @@
-﻿// Copyright (c) Microsoft Corporation. All rights reserved.
-// Licensed under the MIT License.
-
-using Microsoft.ML.OnnxRuntime.Tensors;
+﻿using Microsoft.ML.OnnxRuntime.Tensors;
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using Xunit;
 using static Microsoft.ML.OnnxRuntime.Tests.InferenceTest;
 
@@ -48,9 +47,6 @@ namespace Microsoft.ML.OnnxRuntime.Tests
                 var inputTensor = tuple.Item3;
                 var outputData = tuple.Item4;
                 dispList.Add(session);
-                var runOptions = new RunOptions();
-                dispList.Add(runOptions);
-
                 var inputMeta = session.InputMetadata;
                 var outputMeta = session.OutputMetadata;
                 var outputTensor = new DenseTensor<float>(outputData, outputMeta[outputName].Dimensions);
@@ -73,7 +69,7 @@ namespace Microsoft.ML.OnnxRuntime.Tests
                 {
                     ioBinding.BindInput(inputName, fixedInputBuffer);
                     ioBinding.BindOutput(outputName, Tensors.TensorElementType.Float, outputShape, ortAllocationOutput);
-                    using (var outputs = session.RunWithBindingAndNames(runOptions, ioBinding))
+                    using (var outputs = session.RunWithBindingAndNames(new RunOptions(), ioBinding))
                     {
                         Assert.Equal(1, outputs.Count);
                         var output = outputs.ElementAt(0);
@@ -88,7 +84,7 @@ namespace Microsoft.ML.OnnxRuntime.Tests
                 {
                     ioBinding.BindInput(inputName, Tensors.TensorElementType.Float, inputShape, ortAllocationInput);
                     ioBinding.BindOutput(outputName, Tensors.TensorElementType.Float, outputShape, ortAllocationOutput);
-                    using (var outputs = session.RunWithBindingAndNames(runOptions, ioBinding))
+                    using (var outputs = session.RunWithBindingAndNames(new RunOptions(), ioBinding))
                     {
                         Assert.Equal(1, outputs.Count);
                         var output = outputs.ElementAt(0);

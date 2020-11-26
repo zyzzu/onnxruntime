@@ -90,14 +90,14 @@ namespace Microsoft.ML.OnnxRuntime
         public static OrtValue CreateTensorValueWithData(OrtMemoryInfo memInfo, TensorElementType elementType,
                                                          long[] shape,
                                                          IntPtr dataBuffer,
-                                                         long bufferLength)
+                                                         uint bufferLength)
         {
             Type type;
             int width;
             TensorElementTypeConverter.GetTypeAndWidth(elementType, out type, out width);
-            if(width < 1)
+            if(width == 0)
             {
-                throw new OnnxRuntimeException(ErrorCode.InvalidArgument, "Unsupported data type (such as string)");
+                throw new OnnxRuntimeException(ErrorCode.InvalidArgument, "Unknown tensor type");
             }
 
             var shapeSize = ArrayUtilities.GetSizeForShape(shape);
