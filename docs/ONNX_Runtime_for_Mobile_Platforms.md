@@ -154,7 +154,7 @@ A minimal build has the following limitations currently:
     - Model must be converted to ORT format
   - No support for runtime optimizations
     - Optimizations should be performed prior to conversion to ORT format
-  - Execution providers that statically register kernels (e.g. ORT CPU Execution Provider) are supported by default 
+  - Execution providers that statically register kernels (e.g. ONNX Runtime CPU Execution Provider) are supported by default 
   - Limited support for runtime partitioning (assigning nodes in a model to specific execution providers)
     - Execution providers that statically register kernels and will be used at runtime MUST be enabled when creating the ORT format model
     - Execution providers that compile nodes are optionally supported, and nodes they create will be correctly partitioned at runtime
