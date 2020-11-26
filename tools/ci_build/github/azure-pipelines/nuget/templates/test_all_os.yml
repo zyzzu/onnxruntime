@@ -1,9 +1,3 @@
 # test NuGet package on Win, Linux and MacOS
 parameters:
   Skipx86Tests: 'false'
-
-jobs:
-- template: test_win.yml
-  parameters:
-    AgentPool : 'Win-CPU-2019'
-    Skipx86Tests : ${{ parameters.Skipx86Tests }}
