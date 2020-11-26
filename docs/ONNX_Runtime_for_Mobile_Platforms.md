@@ -122,16 +122,16 @@ session = onnxruntime.InferenceSession(<path to model>, so)
 
 ## Using NNAPI with ONNX Runtime Mobile
 
-Using the NNAPI Execution Provider on Android platforms is now supported by ONNX Runtime Mobile. A minimal build targeting Android with NNAPI support must be created. An ORT format model that only uses ONNX operators is also recommended as a starting point.
-
-For a more in-depth analysis of the performance considerations when using NNAPI with an ORT format model please see [ONNX Runtime Mobile: Performance Considerations When Using NNAPI](ONNX_Runtime_Mobile_NNAPI_perf_considerations.md). 
+Using the NNAPI Execution Provider on Android platforms is now supported by ONNX Runtime Mobile. It is recommended to limit the ORT format model to using ONNX operators if NNAPI will be used at runtime. A minimal build targeting Android that includes NNAPI support must also be created.
 
 ### Limit ORT format model to ONNX operators
 
-The NNAPI Execution Provider is only able to execute ONNX operators using NNAPI. When creating the ORT format model it is recommended to limit the optimization level to 'basic' so that custom internal ONNX Runtime operators are not added by the 'extended' optimizations. This will ensure that the maximum number of nodes can be executed using NNAPI. See the [graph optimization](ONNX_Runtime_Graph_Optimizations.md) documentation for details on the optimization levels.
+The NNAPI Execution Provider is only able to execute ONNX operators using NNAPI, so when creating the ORT format model it is recommended to limit the optimization level to 'basic' so that custom internal ONNX Runtime operators are not added by the 'extended' optimizations. This will ensure that the maximum number of nodes can be executed using NNAPI. See the [graph optimization](ONNX_Runtime_Graph_Optimizations.md) documentation for details on the optimization levels.
 
 To limit the optimization level when creating the ORT format models using `tools\python\convert_onnx_models_to_ort.py` as per the above [instructions](#1-Create-ORT-format-model-and-configuration-file-with-required-operators), add `--optimization_level basic` to the arguments.
   - e.g. `python <ORT repository root>/tools/python/convert_onnx_models_to_ort.py --optimization_level basic /models`
+
+For further explanation on how the optimization level affects how many nodes can be assigned to NNAPI, and some advanced options if your model is especially performance sensitive, please see [here](Minimal_Build__Advanced_Usage_with_NNAPI.md).
 
 ### Create a minimal build for Android with NNAPI support
 
