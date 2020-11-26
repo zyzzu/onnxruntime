@@ -229,4 +229,5 @@ jobs:
     displayName: 'Clean Agent Directories'
     condition: always()
 
+- template: test_all_os.yml
 
