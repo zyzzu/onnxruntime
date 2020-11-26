@@ -32,7 +32,8 @@ Below is an example of the changes that occur in _basic_ and _extended_ optimiza
 
 <img align="center" src="images/mnist_optimization.png" alt="Changes to nodes from basic and extended optimizations."/>
 
-If we were to load the result of these optimizations as ORT format models on an Android device, all nodes would execute using the CPU EP by default. 
+If we were to load the result of these optimizations as ORT format models, all nodes would execute using the CPU EP by default. 
+
 
 ### Outcome of loading an optimized ORT format model with NNAPI enabled
 
@@ -44,7 +45,7 @@ If the NNAPI EP is not enabled, or can not process a node, the node will be exec
 
 Below is an example for the MNIST model comparing what happens to the ORT format model created with _basic_ or _extended_ optimizations when loaded with the NNAPI EP enabled.
 
-As the _basic_ level optimizations result in a model that only uses ONNX operators, the NNAPI EP is able to handle the majority of the model in a single function, as NNAPI can execute all the Conv, Relu and MaxPool nodes at once.
+As the _basic_ level optimizations result in a model that only uses ONNX operators, the NNAPI EP is able to handle the majority of the model in a single function, as NNAPI can execute all the Conv, Relu and MaxPool nodes in a single NNAPI model as they are all connected.
 
 The _extended_ level optimizations introduced the custom FusedConv nodes, resulting in two functions using NNAPI, each handling a single MaxPool node. As the NNAPI EP is only aware of ONNX operators it ignores the FusedConv nodes. The performance of this model is likely to be significantly worse than running it using only the CPU EP due to the device copies between CPU and NNAPI.
 
