@@ -155,3 +155,78 @@ jobs:
      cp $(Build.BinariesDirectory)/RelWithDebInfo/libcustom_op_library.dylib $(Build.ArtifactStagingDirectory)/testdata
      cd $cwd
 
+- job: NuGet_Packaging
+  workspace:
+    clean: all
+  pool: 'Win-CPU-2019'
+  dependsOn:
+  - Windows_CI_Dev
+  - Windows_CI_Dev_x86
+  - Linux_CI_Dev
+  - MacOS_CI_Dev
+  condition: succeeded()
+  steps:  
+
+  - task: DownloadPipelineArtifact@0
+    displayName: 'Download Pipeline Artifact - NuGet'
+    inputs:
+      artifactName: 'drop-nuget'
+      targetPath: '$(Build.BinariesDirectory)/nuget-artifact'
+
+
+  - task: DownloadPipelineArtifact@0
+    displayName: 'Download Pipeline Artifact - Win-x86'
+    inputs:
+      artifactName: 'drop-win-x86-zip'
+      targetPath: '$(Build.BinariesDirectory)/nuget-artifact'
+
+  - task: DownloadPipelineArtifact@0
+    displayName: 'Download Pipeline Artifact - Win-arm64'
+    inputs:
+      artifactName: 'drop-win-arm64-zip'
+      targetPath: '$(Build.BinariesDirectory)/nuget-artifact'
+
+  - task: DownloadPipelineArtifact@0
+    displayName: 'Download Pipeline Artifact - Win-arm'
+    inputs:
+      artifactName: 'drop-win-arm-zip'
+      targetPath: '$(Build.BinariesDirectory)/nuget-artifact'
+
+  - task: DownloadPipelineArtifact@0
+    displayName: 'Download Pipeline Artifact - Linux'
+    inputs:
+      artifactName: 'drop-linux'
+      targetPath: '$(Build.BinariesDirectory)/nuget-artifact'
+
+  - task: DownloadPipelineArtifact@0
+    displayName: 'Download Pipeline Artifact - MacOS'
+    inputs:
+      artifactName: 'drop-osx'
+      targetPath: '$(Build.BinariesDirectory)/nuget-artifact'
+
+  - template: bundle_dlls.yml
+
+  - template: ../../templates/esrp_nuget.yml
+    parameters:
+      DisplayName: 'ESRP - sign NuGet package'
+      FolderPath: '$(Build.ArtifactStagingDirectory)'
+      DoEsrp: ${{ parameters.DoEsrp }}
+
+  - template: ../../templates/validate-nuget.yml
+    parameters:
+      NugetPath: '$(Build.ArtifactStagingDirectory)'
+      NugetPackage: 'Microsoft.ML.OnnxRuntime.*nupkg'
+      PlatformsSupported: 'win-x64,win-x86,linux-x64,osx-x64'
+      VerifyNugetSigning: ${{ parameters.DoEsrp }}
+
+  - task: PublishPipelineArtifact@0
+    displayName: 'Publish Pipeline NuGet Artifact'
+    inputs:
+      artifactName: 'drop-signed-nuget'
+      targetPath: '$(Build.ArtifactStagingDirectory)'
+
+  - task: mspremier.PostBuildCleanup.PostBuildCleanup-task.PostBuildCleanup@3
+    displayName: 'Clean Agent Directories'
+    condition: always()
+
+
