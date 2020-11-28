@@ -52,10 +52,23 @@ static void RunTrainingSessionLoadOptimTests(std::string optim_name, bool mixed_
   ORT_ENFORCE(training_session->GetStateTensors(training_state).IsOK());
   const auto& data_transfer_manager = training_session->GetDataTransferManager();
 
+  std::unordered_map<std::string, NameMLValMap> model_state_tensors;
+  ORT_ENFORCE(training_session->GetModelState(model_state_tensors, true).IsOK());
+  
+  std::unordered_map<std::string, NameMLValMap> optimizer_state_tenors;
+  ORT_ENFORCE(training_session->GetOptimizerState(optimizer_state_tenors).IsOK());
+
+  // std::unordered_map<std::string, std::unordered_map<std::string, std::vector<int>>> part_info_map;
+  // ORT_ENFORCE(training_session->GetPartitionInfoMap(part_info_map).IsOK());
+
   NameMLValMap model_state{};
   TrainingSession::OptimizerState actual_optimizer_state{};
   SeparateStateTensors(training_state, model_state, actual_optimizer_state);
-  VerifyOptimizerState(data_transfer_manager, init_optimizer_state, actual_optimizer_state);
+  // TODO get model states from graph
+  //VerifyModelState(data_transfer_manager, model_state, model_state_tensors, mixed_precision);
+  VerifyModelState(model_state_tensors, mixed_precision);
+  //VerifyOptimizerState(data_transfer_manager, init_optimizer_state, actual_optimizer_state);
+  VerifyOptimizerState(data_transfer_manager, init_optimizer_state, optimizer_state_tenors);
 }
 
 TEST(TrainingSessionTest, LoadOptimState_FullPrecision_FP32Moments_Adam) {

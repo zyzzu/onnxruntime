@@ -167,6 +167,28 @@ void VerifyOptimizerState(const DataTransferManager& data_transfer_manager, cons
   }
 }
 
+static void VerifyModelState(
+    // const DataTransferManager& data_transfer_manager,
+    // const NameMLValMap& expected_state,
+    std::unordered_map<std::string, NameMLValMap>& model_state_tensors,
+    bool mixed_precision) {
+  const auto& mp_tenors = model_state_tensors.find("full_precision");
+  ORT_ENFORCE(mp_tenors != model_state_tensors.end());
+  if (mixed_precision) {
+    const auto& mp_tenors = model_state_tensors.find("mixed_precision");
+    ORT_ENFORCE(mp_tenors != model_state_tensors.end());
+  }
+  // for (const auto& actual_state_it: model_state_tensors) {
+  //   //VerifyState(data_transfer_manager, expected_state, actual_state_it.second);
+  //   // for (const auto& a_state_it : actual_state_it.second) {
+  //   //   std::string key = a_state_it.first;
+  //   //   const auto& e_state_it = expected_state.find(key);
+  //   //   ORT_ENFORCE(e_state_it != expected_state.end());
+  //     //VerifyState(data_transfer_manager, e_state_it, a_state_it.second);
+  //   // }
+  // }
+}
+
 std::unordered_set<std::string> GetModelOutputNames(const InferenceSession& session) {
   const auto outputs_result = session.GetModelOutputs();
   ORT_ENFORCE(outputs_result.first.IsOK(), "Failed to get model outputs: ", outputs_result.first.ErrorMessage());
