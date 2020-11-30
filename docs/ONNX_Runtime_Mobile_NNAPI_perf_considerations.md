@@ -32,9 +32,6 @@ Below is an example of the changes that occur in _basic_ and _extended_ optimiza
 
 <img align="center" src="images/mnist_optimization.png" alt="Changes to nodes from basic and extended optimizations."/>
 
-If we were to load the result of these optimizations as ORT format models, all nodes would execute using the CPU EP by default. 
-
-
 ### Outcome of loading an optimized ORT format model with NNAPI enabled
 
 If the NNAPI EP is enabled, it is given an opportunity to select the nodes it can execute after the model is loaded. When doing so it will group as many nodes together as possible to minimize the overhead of copying data between the CPU and NNAPI to execute the nodes. Each group of nodes can be considered as a sub-graph. The more nodes in each sub-graph, and the fewer sub-graphs, the better the performance will be.
@@ -45,9 +42,9 @@ If the NNAPI EP is not enabled, or can not process a node, the node will be exec
 
 Below is an example for the MNIST model comparing what happens to the ORT format model created with _basic_ or _extended_ optimizations when loaded with the NNAPI EP enabled.
 
-As the _basic_ level optimizations result in a model that only uses ONNX operators, the NNAPI EP is able to handle the majority of the model in a single function, as NNAPI can execute all the Conv, Relu and MaxPool nodes in a single NNAPI model as they are all connected.
+As the _basic_ level optimizations result in a model that only uses ONNX operators, the NNAPI EP is able to handle the majority of the model as NNAPI can execute the Conv, Relu and MaxPool nodes. This can be done using a single NNAPI model as all the nodes NNAPI can handle are connected. We would expect performance gains from using NNAPI with this model, as the overhead of the device copies between CPU and NNAPI for a single NNAPI node is likely to be exceeded by the time saved executing multiple operations using NNAPI in a single NNAPI model.
 
-The _extended_ level optimizations introduced the custom FusedConv nodes, which the NNAPI EP ignores as it only looks for ONNX operators that it can handle. This results in two nodes using NNAPI, each handling a single MaxPool node. The performance of this model is likely to be significantly worse than running it using only the CPU EP due to the device copies between CPU and NNAPI.
+The _extended_ level optimizations introduce the custom FusedConv nodes, which the NNAPI EP ignores as it will only take nodes that are using ONNX operators that NNAPI can handle. This results in two nodes using NNAPI, each handling a single MaxPool operation. The performance of this model is likely to be adversely affected if the NNAPI EP enabled, as the overhead of the device copies between CPU and NNAPI (which are required before and after each of the two NNAPI nodes) is unlikely to be exceeded by the time saved executing a single MaxPool operation using NNAPI. Better performance may be obtainable by disabling the NNAPI EP so that all nodes in the model are executed using the CPU EP.
 
 <img align="center" src="images/mnist_optimization_with_nnapi.png" alt="Changes to nodes by NNAPI depending on optimization level of input.">
 
@@ -68,7 +65,7 @@ If using an ORT format model with _basic_ level optimizations and NNAPI yields t
 
 An NNAPI-aware ORT format model will keep all nodes from the ONNX model that can be executed using NNAPI, and allow _extended_ optimizations to be applied to any remaining nodes.
 
-For our MNIST model that would mean the nodes in the red shading are kept, and nodes in the green shading could have _extended_ optimizations applied to them.
+For our MNIST model that would mean that after the _basic_ optimizations are applied, the nodes in the red shading are kept as-is, and nodes in the green shading could have _extended_ optimizations applied to them.
 
 <img align="center" src="images/nnapi_aware_ort_format_model.png" alt="Show nodes that are preserved as NNAPI can execute them, and nodes that are considered by extended optimizations.">
 
