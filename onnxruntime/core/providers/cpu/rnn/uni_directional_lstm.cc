@@ -297,6 +297,10 @@ void UniDirectionalLstm<T>::Compute(const gsl::span<const T>& inputs_arg,
     // after the first step this will switch to the output from the previous step
     span_T_const_iter previous_state = batched_hidden_state_one_step.cbegin() + seq_start * hidden_size_;
 
+
+    // Enter a parallel section spanning the series of GEMMs across the steps
+    onnxruntime::concurrency::ThreadPool::ParallelSection ps(ttp);
+
     // run through steps sequentially
     for (int step = 0; step < max_sequence_length; step++) {
 #if defined(DUMP_MATRIXES)
