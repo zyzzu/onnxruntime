@@ -82,18 +82,19 @@ void GetSortedIndices(
 
 template <typename T>
 IAllocatorUniquePtr<T> GetOffsetsFromCounts(
+    cudaStream_t stream,
     const CudaScratchBufferAllocator& allocator,
     const T* counts, int32_t num_counts) {
   auto offsets = allocator.GetScratchBuffer<T>(num_counts);
   size_t temp_storage_size_bytes = 0;
   CUDA_CALL_THROW(cub::DeviceScan::ExclusiveSum(
       nullptr, temp_storage_size_bytes,
-      counts, offsets.get(), num_counts));
+      counts, offsets.get(), num_counts, stream));
 
   auto temp_storage = allocator.GetScratchBuffer<void>(temp_storage_size_bytes);
   CUDA_CALL_THROW(cub::DeviceScan::ExclusiveSum(
       temp_storage.get(), temp_storage_size_bytes,
-      counts, offsets.get(), num_counts));
+      counts, offsets.get(), num_counts, stream));
 
   return offsets;
 }
@@ -324,22 +325,23 @@ void PartialSumsImpl(
 
   // compute partial segment offsets per segment
   auto per_segment_partial_segment_offsets = GetOffsetsFromCounts(
-      allocator, per_segment_partial_segment_counts.get(), num_segments);
+      stream, allocator, per_segment_partial_segment_counts.get(), num_segments);
 
   SegmentIndex_t host_num_partial_segments = 0;
   {
     SegmentIndex_t last_segment_partial_segment_offset = 0,
                    last_segment_partial_segment_count = 0;
     // CPU/GPU sync!
-    CUDA_CALL_THROW(cudaMemcpy(
+    CUDA_CALL_THROW(cudaMemcpyAsync(
         &last_segment_partial_segment_offset,
         &per_segment_partial_segment_offsets.get()[num_segments - 1],
-        sizeof(SegmentIndex_t), cudaMemcpyDeviceToHost));
+        sizeof(SegmentIndex_t), cudaMemcpyDeviceToHost, stream));
     // CPU/GPU sync!
-    CUDA_CALL_THROW(cudaMemcpy(
+    CUDA_CALL_THROW(cudaMemcpyAsync(
         &last_segment_partial_segment_count,
         &per_segment_partial_segment_counts.get()[num_segments - 1],
-        sizeof(SegmentIndex_t), cudaMemcpyDeviceToHost));
+        sizeof(SegmentIndex_t), cudaMemcpyDeviceToHost, stream));
+    CUDA_CALL_THROW(cudaStreamSynchronize(stream));
     host_num_partial_segments =
         last_segment_partial_segment_offset + last_segment_partial_segment_count;
   }
@@ -348,7 +350,7 @@ void PartialSumsImpl(
   auto partial_segment_offsets = allocator.GetScratchBuffer<GatheredIndexIndex_t>(host_num_partial_segments);
   {
     const auto blocks_per_grid = CeilDiv(num_segments, GridDim::maxThreadsPerBlock);
-    ComputePartialSegmentOffsetsKernel<<<blocks_per_grid, GridDim::maxThreadsPerBlock>>>(
+    ComputePartialSegmentOffsetsKernel<<<blocks_per_grid, GridDim::maxThreadsPerBlock, 0, stream>>>(
         partial_segment_offsets.get(),
         per_segment_partial_segment_counts.get(),
         per_segment_partial_segment_offsets.get(),
@@ -369,7 +371,7 @@ void PartialSumsImpl(
       const dim3 blocks_per_grid(
           CeilDiv(host_num_partial_segments * num_gathered_per_index_warp_size_multiple, threads_per_block),
           num_batches);
-      ComputePartialSegmentSumsKernel<<<blocks_per_grid, threads_per_block>>>(
+      ComputePartialSegmentSumsKernel<<<blocks_per_grid, threads_per_block, 0, stream>>>(
           dY_indices_sorted,
           dY_data,
           num_gathered_indices,
@@ -385,7 +387,7 @@ void PartialSumsImpl(
       const dim3 blocks_per_grid(
           CeilDiv(num_segments * num_gathered_per_index_warp_size_multiple, threads_per_block),
           num_batches);
-      ComputeSegmentSumsAndScatterKernel<<<blocks_per_grid, threads_per_block>>>(
+      ComputeSegmentSumsAndScatterKernel<<<blocks_per_grid, threads_per_block, 0, stream>>>(
           dX_indices_sorted,
           dX_data,
           num_gathered_per_index,
@@ -436,8 +438,9 @@ void Impl(
         num_segments.get(), num_gathered_indices, stream));
 
     // CPU/GPU sync!
-    CUDA_CALL_THROW(cudaMemcpy(
-        &host_num_segments, num_segments.get(), sizeof(SegmentIndex_t), cudaMemcpyDeviceToHost));
+    CUDA_CALL_THROW(cudaMemcpyAsync(
+        &host_num_segments, num_segments.get(), sizeof(SegmentIndex_t), cudaMemcpyDeviceToHost, stream));
+    CUDA_CALL_THROW(cudaStreamSynchronize(stream));
   }
 
   // get largest segment size and use that to select implementation
@@ -456,8 +459,9 @@ void Impl(
         segment_counts.get(), max_segment_count.get(), host_num_segments, stream));
 
     // CPU/GPU sync!
-    CUDA_CALL_THROW(cudaMemcpy(
-        &host_max_segment_count, max_segment_count.get(), sizeof(GatheredIndexIndex_t), cudaMemcpyDeviceToHost));
+    CUDA_CALL_THROW(cudaMemcpyAsync(
+        &host_max_segment_count, max_segment_count.get(), sizeof(GatheredIndexIndex_t), cudaMemcpyDeviceToHost, stream));
+    CUDA_CALL_THROW(cudaStreamSynchronize(stream));
   }
 
   constexpr GatheredIndexIndex_t kMaxSegmentSizeThreshold = 32;
@@ -468,7 +472,7 @@ void Impl(
         num_gathered_indices, num_gathered_per_index, gather_dimension_size, num_batches);
   } else {
     auto segment_offsets = GetOffsetsFromCounts(
-        allocator, segment_counts.get(), host_num_segments);
+        stream, allocator, segment_counts.get(), host_num_segments);
     segment_counts.reset();
 
     PartialSumsImpl(
