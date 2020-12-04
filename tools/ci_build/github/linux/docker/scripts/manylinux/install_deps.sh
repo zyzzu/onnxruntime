@@ -103,9 +103,12 @@ do
 done
 
 cd /tmp/src
-GetFile 'https://sourceware.org/pub/valgrind/valgrind-3.16.1.tar.bz2' /tmp/src/valgrind-3.16.1.tar.bz2
-tar -jxvf valgrind-3.16.1.tar.bz2
-cd valgrind-3.16.1
+#GetFile 'https://sourceware.org/pub/valgrind/valgrind-3.16.1.tar.bz2' /tmp/src/valgrind-3.16.1.tar.bz2
+#tar -jxvf valgrind-3.16.1.tar.bz2
+#cd valgrind-3.16.1
+git clone git://sourceware.org/git/valgrind.git
+cd valgrind
+./autogen.sh
 ./configure --prefix=/usr --libdir=/usr/lib64 --enable-only64bit --enable-tls
 make -j$(getconf _NPROCESSORS_ONLN)
 make install
