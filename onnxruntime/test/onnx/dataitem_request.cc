@@ -14,6 +14,8 @@
 #include <core/session/onnxruntime_cxx_api.h>
 
 #include <memory>
+#include <iostream>
+#include <fstream>
 
 namespace onnxruntime {
 namespace test {
@@ -135,6 +137,7 @@ std::pair<EXECUTE_RESULT, TIME_SPEC> DataTaskRequestContext::RunImpl() {
     i++;
   }
 
+  const std::string& case_name = test_case_.GetTestCaseName();
   EXECUTE_RESULT res = EXECUTE_RESULT::SUCCESS;
   for (auto& output : expected_output_values) {
     const std::string& output_name = output.first;
@@ -145,7 +148,24 @@ std::pair<EXECUTE_RESULT, TIME_SPEC> DataTaskRequestContext::RunImpl() {
       LOGF_DEFAULT(ERROR, "cannot find %s in the outputs", output_name.c_str());
       break;
     }
+
     OrtValue* actual_output_value = iter->second;
+
+    const std::string file_name = case_name + "_" + output_name + ".output";
+    std::ofstream output_file;
+    output_file.open(file_name);
+    auto o = Ort::Unowned<Ort::Value>{actual_output_value};
+    auto info = o.GetTensorTypeAndShapeInfo();
+    std::vector<int64_t> shape = info.GetShape();
+    size_t size = std::accumulate(shape.cbegin(), shape.cend(), 1, std::multiplies<int64_t>());
+    LOGF_DEFAULT(WARNING, "output file name: %s, and size: %zu", file_name.c_str(), size);
+
+    const float* float_data = actual_output_value->Get<Tensor>().template Data<float>();
+    for (size_t i = 0; i < size; i++) {
+      output_file << float_data[i] << std::endl;
+    }
+    output_file.close();
+
     std::pair<COMPARE_RESULT, std::string> ret =
         CompareOrtValue(*actual_output_value, *expected_output_value, per_sample_tolerance,
                         relative_per_sample_tolerance, post_procesing);

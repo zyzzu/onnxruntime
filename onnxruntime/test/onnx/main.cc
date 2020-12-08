@@ -282,11 +282,10 @@ int real_main(int argc, char* argv[], Ort::Env& env) {
 
   std::vector<std::unique_ptr<ITestCase>> owned_tests;
   {
-    double per_sample_tolerance = 1e-3;
+    double per_sample_tolerance = 1e-6;
     // when cuda is enabled, set it to a larger value for resolving random MNIST test failure
     // when openvino is enabled, set it to a larger value for resolving MNIST accuracy mismatch
-    double relative_per_sample_tolerance = enable_cuda ? 0.017 : enable_openvino ? 0.009
-                                                                                 : 1e-3;
+    double relative_per_sample_tolerance = enable_cuda ? 0.017 : enable_openvino ? 0.009 : 1e-6;
 
     Ort::SessionOptions sf;
 
