@@ -46,6 +46,7 @@ class ONNXCalibrater:
         self.white_nodes = white_nodes
         self.augmented_model_path = augmented_model_path
         self.input_name_to_nodes = {}
+        self.output_name_to_node = {}
 
     def augment_graph(self):
         '''
@@ -164,19 +165,51 @@ class ONNXCalibrater:
                 else:
                     self.input_name_to_nodes[input_name].append(node)
 
-    def calculate_scale_zeropoint(self, next_node, rmin, rmax):
+    def _get_output_name_to_node(self, model):
+        for node in model.graph.node:
+            for output_name in node.output:
+                self.output_name_to_node[output_name] = node
+
+    def get_decisional_child(self, curr_node, tensor_name):
+        ch = None
+        if tensor_name in self.input_name_to_nodes:
+            children = self.input_name_to_nodes[tensor_name]
+            if len(children) == 1:
+                child = children[0]
+                if child.op_type == 'Concat' or child.op_type == 'Relu' or child.op_type == 'Clip':
+                    ch = child
+            elif (len(children) > 1 and curr_node.op_type != 'Split' and
+                    any(ch.op_type == 'Concat' for ch in children) and
+                    all(ch.op_type != 'Relu' and ch.op_type != 'Clip' for ch in children)):
+                concat_children = [ch for ch in children if ch.op_type == 'Concat']
+                if len(concat_children) == 1:
+                    ch = concat_children[0]
+        if ch:
+            further = self.get_decisional_child(ch, ch.output[0])
+            return further if further else ch
+        return None
+
+
+    def calculate_scale_zeropoint(self, curr_node, tensor_name, quantization_thresholds):
+        node_thresholds = quantization_thresholds[tensor_name]
 
         zp_and_scale = []
         # adjust rmin and rmax such that 0 is included in the range. This is required
         # to make sure zero can be uniquely represented.
-        rmin = min(rmin, 0)
-        rmax = max(rmax, 0)
+        rmin = min(node_thresholds[0], 0)
+        rmax = max(node_thresholds[1], 0)
 
+        next_node = self.get_decisional_child(curr_node, tensor_name)
         # We update the output range min and max when next node is clip or relu
         # With this technique we can remove these 2 ops and
         # reduce the output range which in turn helps to improve accuracy
         if next_node:
-            if next_node.op_type == 'Clip':
+            if next_node.op_type == 'Concat':
+                child_output_name = next_node.output[0]
+                child_node_thresholds = quantization_thresholds[child_output_name]
+                rmin = min(child_node_thresholds[0], 0)
+                rmax = max(child_node_thresholds[1], 0)
+            elif next_node.op_type == 'Clip':
                 clip_min = next_node.attribute[0].f
                 clip_max = next_node.attribute[1].f
                 if rmin < clip_min:
@@ -224,15 +257,12 @@ class ONNXCalibrater:
         model = onnx.load(self.model_path)
 
         self._get_input_name_to_nodes(model)
+        self._get_output_name_to_node(model)
 
         for tensor_name in quantization_thresholds.keys():
             child = None
-            if tensor_name in self.input_name_to_nodes:
-                children = self.input_name_to_nodes[tensor_name]
-                if (len(children) == 1):
-                    child = children[0]
-            node_thresholds = quantization_thresholds[tensor_name]
-            node_params = self.calculate_scale_zeropoint(child, node_thresholds[0], node_thresholds[1])
+            curr_node = self.output_name_to_node[tensor_name]
+            node_params = self.calculate_scale_zeropoint(curr_node, tensor_name, quantization_thresholds)
             quantization_params[tensor_name] = node_params
 
         return quantization_params
