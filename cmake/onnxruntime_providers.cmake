@@ -71,6 +71,10 @@ if(onnxruntime_USE_TENSORRT)
   set(PROVIDERS_TENSORRT onnxruntime_providers_tensorrt)
   list(APPEND ONNXRUNTIME_PROVIDER_NAMES tensorrt)
 endif()
+if(onnxruntime_USE_COREML)
+  #set(PROVIDERS_COREML onnxruntime_providers_coreml)
+  #list(APPEND ONNXRUNTIME_PROVIDER_NAMES coreml)
+endif()
 if(onnxruntime_USE_NNAPI_BUILTIN)
   set(PROVIDERS_NNAPI onnxruntime_providers_nnapi)
   list(APPEND ONNXRUNTIME_PROVIDER_NAMES nnapi)
@@ -654,6 +658,25 @@ if (onnxruntime_USE_OPENVINO)
           ARCHIVE  DESTINATION ${CMAKE_INSTALL_LIBDIR}
           LIBRARY  DESTINATION ${CMAKE_INSTALL_LIBDIR}
           RUNTIME  DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
+
+if (onnxruntime_USE_COREML)
+  set(COREML_PROTO_ROOT ${PROJECT_SOURCE_DIR}/external/coremltools/mlmodel/format)
+
+  file(GLOB coreml_proto_srcs CONFIGURE_DEPENDS
+    "${COREML_PROTO_ROOT}/*.proto"
+  )
+
+  add_library(onnxruntime_coreml_proto ${coreml_proto_srcs})
+  target_include_directories(onnxruntime_coreml_proto PUBLIC $<TARGET_PROPERTY:protobuf::libprotobuf,INTERFACE_INCLUDE_DIRECTORIES> "${CMAKE_CURRENT_BINARY_DIR}")
+  target_compile_definitions(onnxruntime_coreml_proto PUBLIC $<TARGET_PROPERTY:protobuf::libprotobuf,INTERFACE_COMPILE_DEFINITIONS>)
+
+  set(_src_prefix "external/coremltools/mlmodel/format/")
+  onnxruntime_protobuf_generate(
+          #APPEND_PATH
+          #GEN_SRC_PREFIX ${_src_prefix}
+          IMPORT_DIRS ${COREML_PROTO_ROOT}
+          TARGET onnxruntime_coreml_proto)
 endif()
 
 if (onnxruntime_USE_NNAPI_BUILTIN)
