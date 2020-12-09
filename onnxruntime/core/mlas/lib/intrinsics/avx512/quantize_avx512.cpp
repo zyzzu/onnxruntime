@@ -122,16 +122,49 @@ Return Value:
   auto MaximumValueVector = _mm512_set1_ps(float(MaximumValue - ZeroPoint));
   auto ZeroPointVector = _mm512_set1_epi32(ZeroPoint);
 
-  while (N >= 16) {
-    auto FloatVector = _mm512_loadu_ps(Input);
-    auto IntegerVector = MlasQuantizeLinearVector(FloatVector, ScaleVector,
-                                                  MinimumValueVector, MaximumValueVector, ZeroPointVector);
+  while (N >= 64) {
+    auto FloatVector0 = _mm512_loadu_ps(Input);
+    auto FloatVector1 = _mm512_loadu_ps(Input + 16);
+    auto FloatVector2 = _mm512_loadu_ps(Input + 32);
+    auto FloatVector3 = _mm512_loadu_ps(Input + 48);
 
-    MlasQuantizeLinearPackBytes<OutputType>(IntegerVector, Output);
+    FloatVector0 = _mm512_div_ps(FloatVector0, ScaleVector);
+    FloatVector1 = _mm512_div_ps(FloatVector1, ScaleVector);
+    FloatVector2 = _mm512_div_ps(FloatVector2, ScaleVector);
+    FloatVector3 = _mm512_div_ps(FloatVector3, ScaleVector);
 
-    Input += 16;
-    Output += 16;
-    N -= 16;
+    FloatVector0 = _mm512_max_ps(FloatVector0, MinimumValueVector);
+    FloatVector1 = _mm512_max_ps(FloatVector1, MinimumValueVector);
+    FloatVector2 = _mm512_max_ps(FloatVector2, MinimumValueVector);
+    FloatVector3 = _mm512_max_ps(FloatVector3, MinimumValueVector);
+
+    FloatVector0 = _mm512_min_ps(FloatVector0, MaximumValueVector);
+    FloatVector1 = _mm512_min_ps(FloatVector1, MaximumValueVector);
+    FloatVector2 = _mm512_min_ps(FloatVector2, MaximumValueVector);
+    FloatVector3 = _mm512_min_ps(FloatVector3, MaximumValueVector);
+
+    auto IntegerVector0 = _mm512_cvtps_epi32(FloatVector0);
+    auto IntegerVector1 = _mm512_cvtps_epi32(FloatVector1);
+    auto IntegerVector2 = _mm512_cvtps_epi32(FloatVector2);
+    auto IntegerVector3 = _mm512_cvtps_epi32(FloatVector3);
+
+    IntegerVector0 = _mm512_add_epi32(IntegerVector0, ZeroPointVector);
+    IntegerVector1 = _mm512_add_epi32(IntegerVector1, ZeroPointVector);
+    IntegerVector2 = _mm512_add_epi32(IntegerVector2, ZeroPointVector);
+    IntegerVector3 = _mm512_add_epi32(IntegerVector3, ZeroPointVector);
+
+    auto ByteVector0 = _mm512_cvtsepi32_epi8 (IntegerVector0);
+    auto ByteVector1 = _mm512_cvtsepi32_epi8 (IntegerVector1);
+    auto ByteVector2 = _mm512_cvtsepi32_epi8 (IntegerVector2);
+    auto ByteVector3 = _mm512_cvtsepi32_epi8 (IntegerVector3);
+    _mm_storeu_si128((__m128i*)Output, ByteVector0);
+    _mm_storeu_si128((__m128i*)Output+16, ByteVector1);
+    _mm_storeu_si128((__m128i*)Output+32, ByteVector2);
+    _mm_storeu_si128((__m128i*)Output+48, ByteVector3);
+
+    Input += 64;
+    Output += 64;
+    N -= 64;
   }
 
   for (size_t n = 0; n < N; n++) {
