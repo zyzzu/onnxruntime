@@ -671,10 +671,7 @@ if (onnxruntime_USE_COREML)
   target_include_directories(onnxruntime_coreml_proto PUBLIC $<TARGET_PROPERTY:protobuf::libprotobuf,INTERFACE_INCLUDE_DIRECTORIES> "${CMAKE_CURRENT_BINARY_DIR}")
   target_compile_definitions(onnxruntime_coreml_proto PUBLIC $<TARGET_PROPERTY:protobuf::libprotobuf,INTERFACE_COMPILE_DEFINITIONS>)
 
-  set(_src_prefix "external/coremltools/mlmodel/format/")
   onnxruntime_protobuf_generate(
-          #APPEND_PATH
-          #GEN_SRC_PREFIX ${_src_prefix}
           IMPORT_DIRS ${COREML_PROTO_ROOT}
           TARGET onnxruntime_coreml_proto)
 endif()
