@@ -9,6 +9,7 @@
 #include "core/framework/tensorprotoutils.h"
 #include "core/util/math.h"
 #include "onnx/defs/attr_proto_util.h"
+#include "orttraining/core/session/training_session.h"
 
 namespace onnxruntime {
 namespace training {
@@ -75,7 +76,7 @@ Status LambOptimizerBuilder::Build(
   } else {
     step_tensor_proto = CreateTensorProto<int64_t>(step_tensor_name, 1);
   }
-  weight_to_opt_mapping["shared_optimizer_state"] = {CreateTensorProto<int64_t>(step_tensor_name, 1)};
+  weight_to_opt_mapping[onnxruntime::training::SHARED_OPTIMIZER_STATES_KEY] = {step_tensor_proto};
   input_argdefs.emplace_back(ArgDef(step_tensor_name));
 
   // Add the first output, which is the updated step.
