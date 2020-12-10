@@ -199,7 +199,7 @@ if args.precision != 'fp32' or args.optimize_onnx:
     print(f"optimized fp32 model saved to {optimized_model_path}")
 
     if args.precision == 'fp16':
-        optimizer.convert_model_float32_to_float16(cast_input_output=False)
+        optimizer.convert_model_float32_to_float16(cast_input_output=True)
         optimized_model_path = model_name + "_fp16.onnx"
         optimizer.save_model_to_file(optimized_model_path)
         print(f"optimized fp16 model saved to {optimized_model_path}")
