@@ -10,7 +10,7 @@
 #include "core/framework/provider_options_utils.h"
 #include "core/graph/graph_utils.h"
 #include "core/providers/cuda/cuda_allocator.h"
-#include "core/providers/cuda/cuda_common.h"
+#include "core/providers/cuda/cuda_kernel.h"
 #include "core/providers/cuda/cuda_fence.h"
 #include "core/providers/cuda/gpu_data_transfer.h"
 
@@ -1894,7 +1894,7 @@ CUDAExecutionProvider::GetCapability(const onnxruntime::GraphViewer& graph,
   // For CUDA EP, exclude the subgraph that is preferred to be placed in CPU
   // These are usually shape related computation subgraphs
   // Following logic can be extended for other EPs
-  std::unordered_set<NodeIndex> cpu_nodes = GetCpuPreferedNodes(graph, Type(), kernel_registries, candidates);
+  std::unordered_set<NodeIndex> cpu_nodes = GetCpuPreferredNodes(graph, Type(), kernel_registries, candidates);
 
   std::vector<std::unique_ptr<ComputeCapability>> result;
   for (auto& node_index : candidates) {
