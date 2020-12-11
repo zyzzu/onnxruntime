@@ -62,7 +62,7 @@ contrib_ops_files = [
                     'conv_transpose_with_dynamic_pads.h',
                     'cuda_contrib_kernels.cc',
                     'cuda_contrib_kernels.h',
-                    'inverse.cc'
+                    'inverse.cc',
 ]
 
 core_ops_files = [
@@ -211,6 +211,8 @@ core_ops_files = [
                 'cuda_common.h',
                 'cuda_execution_provider.cc',
                 'cuda_execution_provider.h',
+                'cuda_memory_check.cc',
+                'cuda_memory_check.h',
                 'cuda_fence.cc',
                 'cuda_fence.h',
                 'cuda_fwd.h',
