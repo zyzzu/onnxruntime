@@ -1905,6 +1905,8 @@ Status Graph::UpdateShapeInference(Node& node) {
 GSL_SUPPRESS(f .23)  // spurious warning about inferred_type never being checked for null
 Status Graph::InferAndVerifyTypeMatch(Node& node, const OpSchema& op, const ResolveOptions& options) {
   auto& node_name = node.Name();
+  LOGS(logger_, WARNING) << "node_name ="
+                               << node_name;
 
   // if we're building a graph we permit outer scope node args to have no type
   // as the 'real' Resolve at runtime will have type inferencing
